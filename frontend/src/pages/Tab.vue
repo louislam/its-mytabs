@@ -1,13 +1,17 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
-import {ScrollMode, StaveProfile} from "@coderline/alphatab";
+import { ScrollMode, StaveProfile } from "@coderline/alphatab";
+import {connectSocketIO} from "../app.js";
+import {defineComponent} from "vue";
+import {BDropdown, BDropdownDivider, BDropdownItem} from "bootstrap-vue-next";
 
 /**
  * @type {alphaTab.AlphaTabApi}
  */
 let api;
 
-export default {
+export default defineComponent({
+    components: {BDropdownDivider, BDropdownItem, BDropdown},
     data() {
         return {
             title: "",
@@ -15,12 +19,14 @@ export default {
         };
     },
     async mounted() {
+        connectSocketIO();
+        
         await this.initContainer();
         await this.initYoutube("VuKSlOT__9s");
 
         // Space key to play/pause
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') {
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") {
                 e.preventDefault();
                 this.playPause();
             }
@@ -33,6 +39,8 @@ export default {
     },
     methods: {
         playPause() {
+            api.settings.player.scrollMode = ScrollMode.Continuous; 
+            api.updateSettings(); 
             api?.playPause();
         },
 
@@ -58,11 +66,11 @@ export default {
                             scoreWords: false,
                             scoreMusic: false,
                             scoreWordsAndMusic: false,
-                            scoreCopyright: false
-                        }
+                            scoreCopyright: false,
+                        },
                     },
                     core: {
-                        file: "/test.gp",
+                        file: "/tabs/test.gp",
                         tracks: [2],
                         fontDirectory: "/font/",
                         engine: "html5",
@@ -71,39 +79,42 @@ export default {
                         enablePlayer: true,
                         enableCursor: true,
                         enableUserInteraction: true,
-                        soundFont: '/soundfont/sonivox.sf2',
-                        nativeBrowserSmoothScroll: true,
-                        scrollMode: ScrollMode.Off ,
+                        soundFont: "/soundfont/sonivox.sf2",
+                        //nativeBrowserSmoothScroll: true,
+                        scrollMode: ScrollMode.Off,
                         scrollOffsetY: -50,
                         playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
                     },
                     display: {
                         staveProfile: StaveProfile.Tab,
                         resources: {
-                            staffLineColor: '#6D6D6D',
-                            barSeparatorColor: '#6D6D6D',
-                            mainGlyphColor: '#A4A4A4',
-                            secondaryGlyphColor: '#A4A4A4',
-                            scoreInfoColor: '#A4A4A4',
-                            barNumberColor: '#6D6D6D',
-                            tablatureFont: 'bold 14px Arial',
+                            staffLineColor: "#6D6D6D",
+                            barSeparatorColor: "#6D6D6D",
+                            mainGlyphColor: "#A4A4A4",
+                            secondaryGlyphColor: "#A4A4A4",
+                            scoreInfoColor: "#A4A4A4",
+                            barNumberColor: "#6D6D6D",
+                            tablatureFont: "bold 14px Arial",
                         },
-                    }
+                    },
                 });
 
-                api.scoreLoaded.on(score => {
+                api.scoreLoaded.on((score) => {
                     this.applyColors(score);
 
                     this.title = api.score.title;
                     this.artist = api.score.artist;
 
-                    // set scrollMode
-                    api.settings.player.scrollMode = ScrollMode.Continuous;
-
+                    // Apply sync points
+                    const syncPoints = [
+                        { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": 3000 },
+                    ];
+                    score.applyFlatSyncPoints(syncPoints);
                     resolve();
                 });
             });
         },
+        
         destroyContainer() {
             api?.destroy();
             api = undefined;
@@ -130,22 +141,18 @@ export default {
                                     const color = alphaTab.model.Color.fromJson("#00DD00");
                                     beat.style.colors.set(
                                         alphaTab.model.BeatSubElement.StandardNotationTuplet,
-                                        color
+                                        color,
                                     );
                                     beat.style.colors.set(
                                         alphaTab.model.BeatSubElement.StandardNotationBeams,
-                                        color
+                                        color,
                                     );
                                 }
 
                                 for (const note of beat.notes) {
                                     note.style = new alphaTab.model.NoteStyle();
-                                    note.style.colors.set(alphaTab.model.NoteSubElement.StandardNotationNoteHead,
-                                        stringColors[note.string]
-                                    );
-                                    note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber,
-                                        stringColors[note.string]
-                                    );
+                                    note.style.colors.set(alphaTab.model.NoteSubElement.StandardNotationNoteHead, stringColors[note.string]);
+                                    note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
                                 }
                             }
                         }
@@ -160,7 +167,7 @@ export default {
 
             const playerElement = this.$refs.youtube;
 
-            const tag = document.createElement('script');
+            const tag = document.createElement("script");
             tag.src = "https://www.youtube.com/player_api";
             playerElement.parentNode.insertBefore(tag, playerElement);
 
@@ -170,24 +177,24 @@ export default {
             await youtubeApiReady.promise;
 
             const youtubePlayerReady = Promise.withResolvers();
-            let currentTimeInterval  = 0;
+            let currentTimeInterval = 0;
             const player = new YT.Player(playerElement, {
-                height: '360',
-                width: '640',
-                videoId: videoID ,
-                playerVars: { 'autoplay': 0 }, // we do not want autoplay
+                height: "360",
+                width: "640",
+                videoId: videoID,
+                playerVars: { "autoplay": 0 }, // we do not want autoplay
                 events: {
-                    'onReady': (e) => {
+                    "onReady": (e) => {
                         youtubePlayerReady.resolve();
                     },
 
                     // when the player state changes we update alphatab accordingly.
-                    'onStateChange': (e) => {
+                    "onStateChange": (e) => {
                         //
                         switch (e.data) {
                             case YT.PlayerState.PLAYING:
                                 currentTimeInterval = window.setInterval(() => {
-                                    api.player.output.updatePosition(player.getCurrentTime() * 1000)
+                                    api.player.output.updatePosition(player.getCurrentTime() * 1000);
                                 }, 50);
                                 api.play();
                                 break;
@@ -203,19 +210,18 @@ export default {
                                 break;
                         }
                     },
-                    'onPlaybackRateChange': (e) => {
+                    "onPlaybackRateChange": (e) => {
                         api.playbackSpeed = e.data;
                     },
-                    'onError': (e) => {
+                    "onError": (e) => {
                         youtubePlayerReady.reject(e);
                     },
-                }
+                },
             });
 
             await youtubePlayerReady.promise;
 
-            console.log(api.player.output.handler);
-
+            let initialSeek = -1;
             const alphaTabYoutubeHandler = {
                 get backingTrackDuration() {
                     return player.getDuration() * 1000;
@@ -233,26 +239,41 @@ export default {
                     player.setVolume(value * 100);
                 },
                 seekTo(time) {
-                    player.seekTo(time / 1000);
+                    if (
+                        player.getPlayerState() !== YT.PlayerState.PAUSED &&
+                        player.getPlayerState() !== YT.PlayerState.PLAYING
+                    ) {
+                        initialSeek = time / 1000;
+                    } else {
+                        player.seekTo(time / 1000);
+                    }
                 },
                 play() {
-                    console.log("play youtube");
                     player.playVideo();
+                    if (initialSeek >= 0) {
+                        player.seekTo(initialSeek);
+                        initialSeek = -1;
+                    }
                 },
                 pause() {
                     player.pauseVideo();
-                }
+                },
             };
+
             api.player.output.handler = alphaTabYoutubeHandler;
-            console.log(api.player.output)
-        }
-    }
-};
+        },
+    },
+});
 
 if (import.meta.hot) {
-    import.meta.hot.on('vite:afterUpdate', () => {
-        console.log("Hot update - reloading page");
-        window.location.reload();
+    import.meta.hot.on("vite:afterUpdate", () => {
+        console.log("Hot update - reloading page to reset AlphaTab");
+        
+        // tab page only
+        const isTabPage = window.location.pathname.startsWith("/tab/");
+        if (isTabPage) {
+            window.location.reload();
+        }
     });
 }
 </script>
@@ -263,28 +284,80 @@ if (import.meta.hot) {
         <h2>{{ artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
 
-        <button @click="playPause">Play/Pause</button>
+
         <div ref="youtube"></div>
+        
+        <div class="toolbar">
+
+            <div>
+                <b-dropdown id="dropdown-1" text="Instruments">
+                    <b-dropdown-item>
+                        Bass <button>Test</button>
+                    </b-dropdown-item>
+                    <b-dropdown-item>Second Action</b-dropdown-item>
+                    <b-dropdown-item>Third Action</b-dropdown-item>
+                    <b-dropdown-divider></b-dropdown-divider>
+                    <b-dropdown-item active>Active action</b-dropdown-item>
+                    <b-dropdown-item disabled>Disabled action</b-dropdown-item>
+                </b-dropdown>
+            </div>
+
+            <div>
+                <b-dropdown id="dropdown-1" text="Music" class="me-4">
+                    <b-dropdown-item>Youtube</b-dropdown-item>
+                    <b-dropdown-item>Synth</b-dropdown-item>
+                    <b-dropdown-item>bass.mp3</b-dropdown-item>
+                </b-dropdown>
+            </div>
+            
+            <button class="btn btn-primary" @click="playPause">Play/Pause</button>
+            <button class="btn btn-primary" @click="playPause">Loop</button>
+            <button class="btn btn-primary" @click="playPause">Count in</button>
+            <!--<button class="btn btn-primary" @click="playPause">Edit Info</button>-->
+        </div>
     </div>
 </template>
 
 <style scoped lang="scss">
-    .main {
-        width: 95%;
-        margin: auto;
-        color: #D6D6D6;
-    }
+$toolbar-height: 75px;
 
-    h1 {
-        text-align: center;
-        font-size: 45px;
-        font-weight: 300;
-        line-height: 45px;
-        word-break: break-word;
-    }
+.main {
+    width: 95%;
+    color: #d6d6d6;
+    margin: 0 auto $toolbar-height auto;
+}
 
-    h2 {
-        text-align: center;
-        margin-bottom: 0;
-    }
+.toolbar {
+    height: $toolbar-height;
+    padding: 20px 30px;
+    display: flex;
+    align-items: center;
+    flex-grow: 4;
+    column-gap: 10px;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #3C3B40;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10000;
+}
+
+.youtube {
+    margin-top: 20px;
+
+}
+
+h1 {
+    text-align: center;
+    font-size: 45px;
+    font-weight: 300;
+    line-height: 45px;
+    word-break: break-word;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 0;
+}
 </style>

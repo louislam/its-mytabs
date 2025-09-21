@@ -1,26 +1,3 @@
 {
-    "unstable": [
-        "fmt-component"
-    ],
-
-    // Run `deno fmt` to format your code
-    "fmt": {
-        "indentWidth": 4,
-        "semiColons": true,
-        "singleQuote": false,
-        "lineWidth": 200
-    },
-
-    // Lint
-    "lint": {
-        "rules": {
-            "tags": ["recommended"],
-            "exclude": [
-                "prefer-const",
-                "no-process-global",
-                "require-await",
-                "no-unused-vars"
-            ]
-        }
-    }
+    "lock": false
 }

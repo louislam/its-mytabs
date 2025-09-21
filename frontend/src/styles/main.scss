@@ -1,0 +1,45 @@
+@import "vars.scss";
+@import "bootstrap/scss/bootstrap";
+@import "bootstrap-vue-next/dist/bootstrap-vue-next.css";
+
+.at-cursor-beat {
+    background: rgba(20, 148, 27, 0.8);
+    width: 3px;
+}
+
+.at-highlight * {
+    fill: #0078ff;
+    stroke: #0078ff;
+}
+
+.at-cursor-bar {
+    //background: rgba(255, 255, 255, 0.05);
+}
+
+.at-selection div {
+    background: rgba(64, 64, 255, 0.1);
+}
+
+@include color-mode(dark) {
+
+}
+
+@include color-mode(light) {
+
+}
+
+a {
+    text-decoration: none;
+}
+
+/*
+.form-control {
+    background-color: $akaigrid-dark;
+
+    &:focus {
+        background-color: darken($akaigrid-dark, 10%);
+        border-color: $akai;
+        box-shadow: 0 0 0 0.2rem rgba($akai, 0.25);
+    }
+}*/
+

@@ -1,0 +1,41 @@
+{
+    "unstable": [
+        "fmt-component"
+    ],
+
+    "tasks": {
+        "dev:frontend": "cd frontend && deno run dev",
+        "dev:backend": "NODE_ENV=development deno run --allow-all --watch backend/main.ts"
+    },
+
+    "lock": false,
+
+    // Run `deno fmt` to format your code
+    "fmt": {
+        "indentWidth": 4,
+        "semiColons": true,
+        "singleQuote": false,
+        "lineWidth": 200
+    },
+
+    // Lint
+    "lint": {
+        "rules": {
+            "tags": ["recommended"],
+            "exclude": [
+                "prefer-const",
+                "no-process-global",
+                "require-await",
+                "no-unused-vars"
+            ]
+        }
+    },
+
+    "imports": {
+        "@hono/hono": "jsr:@hono/hono@^4.9.8",
+        "@hono/node-server": "npm:@hono/node-server@^1.19.3",
+        "@types/sanitize-filename": "npm:@types/sanitize-filename@^1.6.3",
+        "sanitize-filename": "npm:sanitize-filename@^1.6.3",
+        "socket.io": "npm:socket.io@^4.8.1"
+    }
+}

@@ -4,7 +4,7 @@
     "version": "0.0.0",
     "type": "module",
     "scripts": {
-        "dev": "vite",
+        "dev": "NODE_ENV=development vite",
         "build": "vue-tsc -b && vite build",
         "preview": "vite preview"
     },
@@ -12,13 +12,23 @@
 
     },
     "devDependencies": {
-        "@vitejs/plugin-vue": "^6.0.1",
-        "@vue/tsconfig": "^0.8.1",
-        "sass-embedded": "^1.92.1",
+        "@fortawesome/fontawesome-svg-core": "7.0.1",
+        "@fortawesome/free-regular-svg-icons": "7.0.1",
+        "@fortawesome/free-solid-svg-icons": "7.0.1",
+        "@fortawesome/vue-fontawesome": "3.1.2",
+        "@kyvg/vue3-notification": "~3.4.1",
+        "@vitejs/plugin-vue": "~6.0.1",
+        "@vue/tsconfig": "~0.8.1",
+        "sass-embedded": "~1.78.0",
         "typescript": "~5.8.3",
-        "vite": "^7.1.6",
+        "vite": "~7.1.6",
         "vue-tsc": "^3.0.7",
-        "@coderline/alphatab": "^1.6.3",
-        "vue": "^3.5.21"
+        "@coderline/alphatab": "~1.6.3",
+        "vue": "~3.5.21",
+        "vue-router": "~4.5.1",
+        "vue-i18n": "~11.1.12",
+        "socket.io-client": "~4.8.1",
+        "bootstrap": "5.3.8",
+        "bootstrap-vue-next": "~0.40.4"
     }
 }
