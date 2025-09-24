@@ -4,6 +4,10 @@ import { alphaTab } from "@coderline/alphatab/vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+    build: {
+        outDir: "../dist",
+        emptyOutDir: true,
+    },
     plugins: [
         vue(),
         alphaTab({

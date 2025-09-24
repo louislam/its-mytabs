@@ -17,3 +17,16 @@ app.use(i18n);
 app.use(createBootstrap()); // Important
 app.component("FontAwesomeIcon", FontAwesomeIcon);
 app.mount("#app");
+
+// HMR is not working properly with AlphaTab, so we do a full reload on update
+if (import.meta.hot) {
+    import.meta.hot.on("vite:afterUpdate", () => {
+        console.log("Hot update - reloading page to reset AlphaTab");
+
+        // tab page only
+        const isTabPage = window.location.pathname.startsWith("/tab/");
+        if (isTabPage) {
+            window.location.reload();
+        }
+    });
+}

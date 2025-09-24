@@ -1,28 +1,31 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import {connectSocketIO} from "../app.js";
-import {defineComponent} from "vue";
-import {BDropdown, BDropdownDivider, BDropdownItem} from "bootstrap-vue-next";
-
-/**
- * @type {alphaTab.AlphaTabApi}
- */
-let api;
+import { connectSocketIO } from "../app.js";
+import { defineComponent } from "vue";
+import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 
 export default defineComponent({
-    components: {BDropdownDivider, BDropdownItem, BDropdown},
+    components: { BDropdownDivider, BDropdownItem, BDropdown },
     data() {
         return {
             title: "",
             artist: "",
+            /**
+             * @type {alphaTab.AlphaTabApi}
+             */
+            api: null,
+            /**
+             * @type {SocketIOClient.Socket}
+             */
+            socket: null,
         };
     },
     async mounted() {
-        connectSocketIO();
-        
         await this.initContainer();
         await this.initYoutube("VuKSlOT__9s");
+        //await this.initSocketIO();
+        //await this.initMPC()
 
         // Space key to play/pause
         window.addEventListener("keydown", (e) => {
@@ -39,14 +42,14 @@ export default defineComponent({
     },
     methods: {
         playPause() {
-            api.settings.player.scrollMode = ScrollMode.Continuous; 
-            api.updateSettings(); 
-            api?.playPause();
+            this.api.settings.player.scrollMode = ScrollMode.Continuous;
+            this.api.updateSettings();
+            this.api.playPause();
         },
 
         initContainer() {
             return new Promise((resolve, reject) => {
-                if (api) {
+                if (this.api) {
                     this.destroyContainer();
                 }
 
@@ -54,7 +57,7 @@ export default defineComponent({
                     reject(new Error("Container element not found"));
                 }
 
-                api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
+                this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
                         rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
                         //rhythmHeight: 30,
@@ -99,11 +102,11 @@ export default defineComponent({
                     },
                 });
 
-                api.scoreLoaded.on((score) => {
+                this.api.scoreLoaded.on((score) => {
                     this.applyColors(score);
 
-                    this.title = api.score.title;
-                    this.artist = api.score.artist;
+                    this.title = this.api.score.title;
+                    this.artist = this.api.score.artist;
 
                     // Apply sync points
                     const syncPoints = [
@@ -114,10 +117,10 @@ export default defineComponent({
                 });
             });
         },
-        
+
         destroyContainer() {
-            api?.destroy();
-            api = undefined;
+            this.api?.destroy();
+            this.api = undefined;
         },
 
         // Style the score with custom colors
@@ -161,9 +164,25 @@ export default defineComponent({
             }
         },
 
+        async initSocketIO() {
+            if (this.socket) {
+                this.socket.disconnect();
+                this.socket = null;
+            }
+            this.socket = connectSocketIO();
+
+            this.socket.on("connect", () => {
+                console.log("Connected to server");
+            });
+
+            this.socket.on("disconnect", () => {
+                console.log("Disconnected from server");
+            });
+        },
+
         async initYoutube(videoID) {
-            api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
-            api.updateSettings();
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
+            this.api.updateSettings();
 
             const playerElement = this.$refs.youtube;
 
@@ -194,24 +213,24 @@ export default defineComponent({
                         switch (e.data) {
                             case YT.PlayerState.PLAYING:
                                 currentTimeInterval = window.setInterval(() => {
-                                    api.player.output.updatePosition(player.getCurrentTime() * 1000);
+                                    this.api.player.output.updatePosition(player.getCurrentTime() * 1000);
                                 }, 50);
-                                api.play();
+                                this.api.play();
                                 break;
                             case YT.PlayerState.ENDED:
                                 window.clearInterval(currentTimeInterval);
-                                api.stop();
+                                this.api.stop();
                                 break;
                             case YT.PlayerState.PAUSED:
                                 window.clearInterval(currentTimeInterval);
-                                api.pause();
+                                this.api.pause();
                                 break;
                             default:
                                 break;
                         }
                     },
                     "onPlaybackRateChange": (e) => {
-                        api.playbackSpeed = e.data;
+                        this.api.playbackSpeed = e.data;
                     },
                     "onError": (e) => {
                         youtubePlayerReady.reject(e);
@@ -260,22 +279,64 @@ export default defineComponent({
                 },
             };
 
-            api.player.output.handler = alphaTabYoutubeHandler;
+            this.api.player.output.handler = alphaTabYoutubeHandler;
+        },
+
+        async initSynth() {
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
+            this.api.updateSettings();
+        },
+
+        async initMPC() {
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
+            this.api.updateSettings();
+
+            // check if connected to socket
+
+            // websocket get info first
+            this.socket.emit("waitMPC");
+
+            const handler = {
+                get backingTrackDuration() {
+                    return 0;
+                },
+                get playbackRate() {
+                    return player.getPlaybackRate();
+                },
+                set playbackRate(value) {
+                    player.setPlaybackRate(value);
+                },
+                get masterVolume() {
+                    return player.getVolume() / 100;
+                },
+                set masterVolume(value) {
+                    player.setVolume(value * 100);
+                },
+                seekTo(time) {
+                    if (
+                        player.getPlayerState() !== YT.PlayerState.PAUSED &&
+                        player.getPlayerState() !== YT.PlayerState.PLAYING
+                    ) {
+                        initialSeek = time / 1000;
+                    } else {
+                        player.seekTo(time / 1000);
+                    }
+                },
+                play() {
+                    player.playVideo();
+                    if (initialSeek >= 0) {
+                        player.seekTo(initialSeek);
+                        initialSeek = -1;
+                    }
+                },
+                pause() {
+                },
+            };
+
+            this.api.player.output.handler = handler;
         },
     },
 });
-
-if (import.meta.hot) {
-    import.meta.hot.on("vite:afterUpdate", () => {
-        console.log("Hot update - reloading page to reset AlphaTab");
-        
-        // tab page only
-        const isTabPage = window.location.pathname.startsWith("/tab/");
-        if (isTabPage) {
-            window.location.reload();
-        }
-    });
-}
 </script>
 
 <template>
@@ -284,11 +345,9 @@ if (import.meta.hot) {
         <h2>{{ artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
 
-
         <div ref="youtube"></div>
-        
-        <div class="toolbar">
 
+        <div class="toolbar">
             <div>
                 <b-dropdown id="dropdown-1" text="Instruments">
                     <b-dropdown-item>
@@ -309,7 +368,7 @@ if (import.meta.hot) {
                     <b-dropdown-item>bass.mp3</b-dropdown-item>
                 </b-dropdown>
             </div>
-            
+
             <button class="btn btn-primary" @click="playPause">Play/Pause</button>
             <button class="btn btn-primary" @click="playPause">Loop</button>
             <button class="btn btn-primary" @click="playPause">Count in</button>
@@ -335,7 +394,7 @@ $toolbar-height: 75px;
     flex-grow: 4;
     column-gap: 10px;
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid #3C3B40;
+    border-bottom: 1px solid #3c3b40;
     position: fixed;
     bottom: 0;
     left: 0;
@@ -345,7 +404,6 @@ $toolbar-height: 75px;
 
 .youtube {
     margin-top: 20px;
-
 }
 
 h1 {

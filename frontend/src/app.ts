@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 export function connectSocketIO() {
-    return io(getBaseURL());
+    return io(baseURL());
 }
 
 /**
@@ -9,7 +9,7 @@ export function connectSocketIO() {
  * Mainly used for dev, because the backend and the frontend are in different ports.
  * @returns Base URL
  */
-function getBaseURL(): string {
+export function baseURL(): string {
     const env = process.env.NODE_ENV;
     if (env === "development") {
         return location.protocol + "//" + location.hostname + ":47777";

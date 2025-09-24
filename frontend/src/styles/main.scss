@@ -21,25 +21,32 @@
 }
 
 @include color-mode(dark) {
+    .form-control {
+        background-color: $dark1;
 
+        &:focus {
+            background-color: darken($dark1, 10%);
+            border-color: $dark1;
+            box-shadow: 0 0 0 0.2rem rgba($dark1, 0.25);
+        }
+    }
 }
 
-@include color-mode(light) {
-
-}
+@include color-mode(light) {}
 
 a {
     text-decoration: none;
+    transition: color 0.2s;
 }
 
-/*
-.form-control {
-    background-color: $akaigrid-dark;
-
-    &:focus {
-        background-color: darken($akaigrid-dark, 10%);
-        border-color: $akai;
-        box-shadow: 0 0 0 0.2rem rgba($akai, 0.25);
+.form-floating {
+    > label {
+        padding-left: 1.7rem;
     }
-}*/
+
+    > .form-control {
+        padding-left: 1.7rem;
+    }
+}
+
 

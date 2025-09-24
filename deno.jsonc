@@ -1,11 +1,14 @@
 {
     "unstable": [
-        "fmt-component"
+        "fmt-component",
+        "kv"
     ],
 
     "tasks": {
         "dev:frontend": "cd frontend && deno run dev",
-        "dev:backend": "NODE_ENV=development deno run --allow-all --watch backend/main.ts"
+        "dev:backend": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
+        "build:frontend": "cd frontend && deno run build",
+        "generate-better-auth": "deno run --allow-all --unstable npm:@better-auth/cli generate --config backend/auth.ts"
     },
 
     "lock": false,
@@ -32,10 +35,14 @@
     },
 
     "imports": {
-        "@hono/hono": "jsr:@hono/hono@^4.9.8",
-        "@hono/node-server": "npm:@hono/node-server@^1.19.3",
-        "@types/sanitize-filename": "npm:@types/sanitize-filename@^1.6.3",
-        "sanitize-filename": "npm:sanitize-filename@^1.6.3",
-        "socket.io": "npm:socket.io@^4.8.1"
+        "@hono/hono": "jsr:@hono/hono@~4.9.8",
+        "@hono/node-server": "npm:@hono/node-server@~1.19.3",
+        "@std/fs": "jsr:@std/fs@~1.0.19",
+        "@std/path": "jsr:@std/path@^1.1.2",
+        "@types/sanitize-filename": "npm:@types/sanitize-filename@~1.6.3",
+        "better-auth": "npm:better-auth@~1.3.14",
+        "sanitize-filename": "npm:sanitize-filename@~1.6.3",
+        "socket.io": "npm:socket.io@~4.8.1",
+        "zod": "npm:zod@~4.1.11"
     }
 }

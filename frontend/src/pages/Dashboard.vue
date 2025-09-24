@@ -1,73 +1,118 @@
-<script lang="ts">
-import {defineComponent} from 'vue'
-import {  BButton, BButtonGroup, BFormInput, BSpinner } from "bootstrap-vue-next";
+<script>
+import { defineComponent } from "vue";
+import { BButton, BButtonGroup, BFormInput, BSpinner } from "bootstrap-vue-next";
+import {authClient, isLoggedIn} from "../auth-client.ts";
+import { notify } from "@kyvg/vue3-notification";
+import Logo from "../components/Logo.vue";
 
 export default defineComponent({
     components: {
         BButton,
         BButtonGroup,
         BFormInput,
-        BSpinner
+        BSpinner,
+        Logo,
     },
-})
+    async mounted() {
+          if (!await isLoggedIn()) {
+              console.log("Not logged in, redirecting to login page");
+                this.$router.push("/login");
+          } else {
+                console.log("Logged in");
+          }
+    },
+    methods: {
+        async signOut() {
+            const res = await authClient.signOut();
+            this.$router.push("/login");
+        },
+    },
+});
 </script>
 
 <template>
-    <div class="container-fluid">
+    <div>
         <div class="my-navbar">
-            <router-link class="navbar-brand" to="/">
-                It's MyTabs
-            </router-link>
 
-            <!-- Toolbar -->
-            <div class="toolbar">
-                <router-link to="/">
-                    <font-awesome-icon :icon='["fas", "folder"]' /> My Tabs
-                </router-link>
-
-                <router-link to="/">
-                    <font-awesome-icon :icon='["fas", "file"]' /> New Tab
-                </router-link>
-
-                <router-link to="/">
-                    <font-awesome-icon :icon='["fas", "gear"]' /> Settings
-                </router-link>
-            </div>
+            <Logo />
             
+            <div class="toolbar">
+                <div class="left">
+                    <router-link to="/">
+                        <font-awesome-icon :icon='["fas", "folder"]' />
+                        Tabs
+                    </router-link>
+
+                    <router-link to="/new-tab">
+                        <font-awesome-icon :icon='["fas", "plus"]' />
+                        New Tab
+                    </router-link>
+
+                    <router-link to="/settings">
+                        <font-awesome-icon :icon='["fas", "gear"]' />
+                        Settings
+                    </router-link>
+                </div>
+
+                <div class="right">
+                    <a href="#" @click.prevent="signOut()">
+                        <font-awesome-icon :icon='["fas", "arrow-right-from-bracket"]' />
+                        Log out
+                    </a>
+                </div>
+            </div>
         </div>
-        
+
         <router-view />
     </div>
 </template>
 
 <style lang="scss" scoped>
+@import "../styles/vars.scss";
 
 .my-navbar {
-    padding: 20px 30px;
     margin-bottom: 20px;
+    border-bottom: 1px solid #3c3b40;
     display: flex;
+    justify-content: center;
     align-items: center;
-    justify-content: space-between;
-    column-gap: 10px;
-    // backdrop-filter: blur(10px);
-    border-bottom: 1px solid #3C3B40;
 
     [data-bs-theme="light"] & {
         border-bottom-color: #dadada;
     }
-    
+
     .toolbar {
-        flex-grow: 4;
+        padding: 0 30px 0 40px;
+        flex: 1;
         display: flex;
-        column-gap: 30px;
+        justify-content: space-between;
         
-        // from right
-        justify-content: flex-end;
-        
+        & > div {
+            flex-grow: 4;
+            display: flex;
+            column-gap: 50px;
+            
+            &.left {
+                justify-content: flex-start;
+            }
+            
+            &.right {
+                justify-content: flex-end;
+            }
+
+            & > a {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                // item from top to bottom
+                flex-direction: column;
+            }
+        }
+
         svg {
-            color: #3C3B40;
+            font-size: 20px;
         }
     }
 }
-
 </style>

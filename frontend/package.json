@@ -5,11 +5,11 @@
     "type": "module",
     "scripts": {
         "dev": "NODE_ENV=development vite",
-        "build": "vue-tsc -b && vite build",
+        "build": "vite build",
         "preview": "vite preview"
     },
     "dependencies": {
-
+        "better-auth": "~1.3.14"
     },
     "devDependencies": {
         "@fortawesome/fontawesome-svg-core": "7.0.1",
@@ -17,6 +17,7 @@
         "@fortawesome/free-solid-svg-icons": "7.0.1",
         "@fortawesome/vue-fontawesome": "3.1.2",
         "@kyvg/vue3-notification": "~3.4.1",
+        "@types/node": "^24.5.2",
         "@vitejs/plugin-vue": "~6.0.1",
         "@vue/tsconfig": "~0.8.1",
         "sass-embedded": "~1.78.0",
