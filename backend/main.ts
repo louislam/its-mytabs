@@ -1,13 +1,15 @@
 import { serve } from "@hono/node-server";
-import { Hono, MiddlewareHandler } from "@hono/hono";
+import { Hono, MiddlewareHandler, Context } from "@hono/hono";
 import * as fs from "@std/fs";
-import {auth, disableSignUp, isFinishSetup, isDisableSignUp} from "./auth.ts";
-import { SignUpSchema } from "./zod.ts";
-import { hasUser } from "./db.ts";
+import {auth, disableSignUp, isFinishSetup, isDisableSignUp, checkLogin} from "./auth.ts";
+import {SignUpSchema, TabInfo, TabInfoSchema} from "./zod.ts";
+import {hasUser, kv} from "./db.ts";
 import { cors } from '@hono/hono/cors'
 import { serveStatic } from '@hono/hono/deno'
 import {devOriginList, isDev} from "./util.ts";
 import * as path from "@std/path";
+import {supportedFormatList} from "./common.ts";
+import {createTab, deleteTab, getTab, getTabFilePath} from "./tab.ts";
 
 export async function main() {
     const frontendDir = "./dist";
@@ -46,7 +48,7 @@ export async function main() {
         }));
     }
 
-    // Better Auth routes
+    // Better-Auth routes
     app.all("/api/auth/*", (c) => {
         return auth.handler(c.req.raw);
     });
@@ -56,6 +58,7 @@ export async function main() {
         return c.json(isFinishSetup());
     });
 
+    // Register Admin account
     app.post("/register", async (c) => {
         try {
             if (hasUser()) {
@@ -78,6 +81,171 @@ export async function main() {
         }
     });
 
+    // New Tab
+    app.post("/api/new-tab", async (c) => {
+        try {
+            await checkLogin(c);
+
+            const form = await c.req.formData();
+            const file = form.get("file");
+
+            if (!(file instanceof File)) {
+                throw new Error("No file uploaded");
+            }
+
+            // Check file ext if in supportedFormatList
+            const fileName = file.name;
+            const ext = fileName.split('.').pop()?.toLowerCase();
+            if (!ext) {
+                throw new Error("File has no extension");
+            }
+
+            if (!supportedFormatList.includes(ext)) {
+                throw new Error("Unsupported file format: " + ext);
+            }
+
+            const title = form.get("title") || fileName;
+            const artist = form.get("artist") || "Unknown";
+
+            if (typeof title !== "string" || typeof artist !== "string") {
+                throw new Error("Invalid title or artist");
+            }
+
+            const arrayBuffer = await file.arrayBuffer();
+            let id = await createTab(new Uint8Array(arrayBuffer), ext, title, artist, fileName);
+
+
+            return c.json({
+                ok: true,
+                id,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Tab List
+    app.get("/api/tabs", async (c) => {
+        try {
+            await checkLogin(c);
+
+            const tabGenerator = kv.list({
+                prefix: ["tab"]
+            });
+
+            const tabList: TabInfo[] = [];
+
+            for await (const entry of tabGenerator) {
+                try {
+                    // add to head
+                    tabList.unshift(TabInfoSchema.parse(entry.value));
+                } catch (e) {
+                    console.warn("Invalid tab info in KV:", entry.key, entry.value);
+                }
+            }
+
+            return c.json({
+                ok: true,
+                tabs: tabList,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Delete Tab
+    app.delete("/api/tab/:id", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            await deleteTab(id);
+
+            return c.json({
+                ok: true,
+            });
+
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Serve tab file
+    app.get("/api/tab/:id/file", async (c) => {
+        try {
+
+            const id = parseInt(c.req.param("id") || "");
+
+            // Unfortunately AlphaTab does not support cookie auth, we need a short lived temp token to auth via query param
+            const tempToken = c.req.query("tempToken");
+
+            // Check kv for temp token
+            if (tempToken) {
+                const tokenData = await kv.get(["temp_token", tempToken]);
+                if (!tokenData.value) {
+                    throw new Error("Invalid or expired temp token");
+                }
+
+                if (tokenData.value !== id) {
+                    throw new Error("Temp token does not match tab ID");
+                }
+
+            } else {
+                await checkLogin(c);
+            }
+
+
+            const tab = await getTab(id);
+            const filePath = await getTabFilePath(tab);
+
+            // Check if file exists
+            if (! await fs.exists(filePath)) {
+                throw new Error("Tab file not found");
+            }
+
+            // serve the file
+            const file = await Deno.open(filePath, {
+                read: true
+            });
+
+            const encodedOriginalFilename = encodeURIComponent(tab.originalFilename);
+
+            return c.body(file.readable, 200, {
+                "Content-Type": "application/octet-stream",
+                "Content-Disposition": `attachment; filename="${encodedOriginalFilename}"`,
+            });
+
+        } catch (e) {
+            console.error(e)
+            return generalError(c, e);
+        }
+    });
+
+    // Generate temp token for tab file access
+    app.get("/api/tab/:id/temp-token", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+            const tab = await getTab(id);
+            const token = crypto.randomUUID();
+
+            await kv.set(["temp_token", token], tab.id, { expireIn: 10 });
+            return c.json({
+                ok: true,
+                token,
+            });
+
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     app.get("/", (c) => {
         return c.html(indexHTML);
     });
@@ -88,11 +256,32 @@ export async function main() {
         root: './dist',
     }));
 
+    // if /api/* not found, return 404
+    app.all("/api/*", (c) => {
+        return c.json({ error: "Not found" }, 404);
+    });
+
     // For SPA, always return index.html
     app.notFound((c) => {
         return c.html(indexHTML, 200);
     });
 }
+
+function generalError(c: Context, e: unknown) {
+    if (e instanceof Error) {
+        return c.json({
+            ok: false,
+            msg: e.message
+        }, 400);
+    } else {
+        return c.json({
+            ok: false,
+            msg: "Unknown error"
+        }, 400);
+    }
+}
+
+
 
 if (import.meta.main) {
     await main();

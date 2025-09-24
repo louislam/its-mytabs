@@ -17,7 +17,7 @@ export default defineComponent({
         };
     },
     async mounted() {
-        const res = await fetch(baseURL() + "/api/is-finish-setup");
+        const res = await fetch(baseURL + "/api/is-finish-setup");
         const isFinishSetup = await res.json();
         if (!isFinishSetup) {
             this.$router.push("/register");

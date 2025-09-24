@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {createRouter, createWebHistory, RouteRecordRaw} from "vue-router";
 
 import Layout from "./layouts/Layout.vue";
 import Dashboard from "./pages/Dashboard.vue";
@@ -8,8 +8,9 @@ import Register from "./pages/Register.vue";
 import Login from "./pages/Login.vue";
 import TabConfig from "./pages/TabConfig.vue";
 import Settings from "./pages/Settings.vue";
+import TabNew from "./pages/TabNew.vue";
 
-const routes = [
+const routes: RouteRecordRaw[] = [
     {
         path: "/empty",
         component: Layout,
@@ -25,12 +26,17 @@ const routes = [
                     },
                     {
                         name: "tabConfig",
-                        path: "/new-tab",
+                        path: "/tab/:id/config",
                         component: TabConfig,
                     },
                     {
+                        name: "tabNew",
+                        path: "/new-tab",
+                        component: TabNew,
+                    },
+                    {
                         name: "tab",
-                        path: "/tab/:requestPath",
+                        path: "/tab/:id",
                         component: Tab,
                     },
                     {

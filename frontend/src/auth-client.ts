@@ -2,7 +2,7 @@ import { createAuthClient } from "better-auth/vue";
 import { baseURL } from "./app.ts";
 
 export const authClient = createAuthClient({
-    baseURL: baseURL(),
+    baseURL: baseURL,
 });
 
 export async function isLoggedIn() {

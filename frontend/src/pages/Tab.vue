@@ -1,7 +1,7 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import { connectSocketIO } from "../app.js";
+import {baseURL, connectSocketIO} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 
@@ -19,11 +19,14 @@ export default defineComponent({
              * @type {SocketIOClient.Socket}
              */
             socket: null,
+            tabID: -1,
         };
     },
     async mounted() {
-        await this.initContainer();
-        await this.initYoutube("VuKSlOT__9s");
+        this.tabID = this.$route.params.id;
+        const tempToken = await this.getTempToken();
+        await this.initContainer(tempToken);
+        //await this.initYoutube("VuKSlOT__9s");
         //await this.initSocketIO();
         //await this.initMPC()
 
@@ -46,8 +49,22 @@ export default defineComponent({
             this.api.updateSettings();
             this.api.playPause();
         },
+        
+        async getTempToken() {
+            const fileURL = baseURL + `/api/tab/${this.tabID}/temp-token`;
 
-        initContainer() {
+            // fetch the file as array buffer
+            const response = await fetch(fileURL, { 
+                credentials: 'include' 
+            });
+            
+            if (!response.ok) {
+                throw new Error("Failed to get get temp token");
+            }
+            return (await response.json()).token;
+        },
+
+        initContainer(tempToken) {
             return new Promise((resolve, reject) => {
                 if (this.api) {
                     this.destroyContainer();
@@ -73,8 +90,8 @@ export default defineComponent({
                         },
                     },
                     core: {
-                        file: "/tabs/test.gp",
-                        tracks: [2],
+                        file: baseURL + `/api/tab/${this.tabID}/file?tempToken=${tempToken}`,
+                        track: [2],
                         fontDirectory: "/font/",
                         engine: "html5",
                     },
@@ -104,10 +121,8 @@ export default defineComponent({
 
                 this.api.scoreLoaded.on((score) => {
                     this.applyColors(score);
-
                     this.title = this.api.score.title;
                     this.artist = this.api.score.artist;
-
                     // Apply sync points
                     const syncPoints = [
                         { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": 3000 },
@@ -130,6 +145,8 @@ export default defineComponent({
                 2: alphaTab.model.Color.fromJson("#fff800"),
                 3: alphaTab.model.Color.fromJson("#0080ff"),
                 4: alphaTab.model.Color.fromJson("#e07b39"),
+                5: alphaTab.model.Color.fromJson("#2A8E08"),
+                6: alphaTab.model.Color.fromJson("#A349A4"),
             };
 
             // traverse hierarchy and apply colors as desired
@@ -362,7 +379,7 @@ export default defineComponent({
             </div>
 
             <div>
-                <b-dropdown id="dropdown-1" text="Music" class="me-4">
+                <b-dropdown id="dropdown-1" text="Audio Source" class="me-4">
                     <b-dropdown-item>Youtube</b-dropdown-item>
                     <b-dropdown-item>Synth</b-dropdown-item>
                     <b-dropdown-item>bass.mp3</b-dropdown-item>

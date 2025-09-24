@@ -1,4 +1,5 @@
 import * as fs from "@std/fs";
+import * as path from "@std/path";
 
 export async function getDataDir() {
     let dataDir = Deno.env.get("DATA_DIR") || "./data";
@@ -7,6 +8,14 @@ export async function getDataDir() {
 }
 
 export const dataDir = await getDataDir();
+
+export async function getTabDir() {
+    let dir = path.join(dataDir, "tabs");
+    await fs.ensureDir(dir);
+    return dir
+}
+
+export const tabDir = await getTabDir();
 
 export function isDev() {
     return process.env.NODE_ENV === "development";

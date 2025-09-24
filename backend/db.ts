@@ -11,7 +11,7 @@ if (!await fs.exists(dbPath)) {
 }
 
 export const db = new DatabaseSync(dbPath);
-export const kv = Deno.openKv(dbPath);
+export const kv = await Deno.openKv(dbPath);
 
 export function hasUser() {
     const row = db.prepare("SELECT COUNT(*) as count FROM user").get();

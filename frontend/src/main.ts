@@ -2,6 +2,8 @@ import { createApp } from "vue";
 
 import App from "./App.vue";
 import { FontAwesomeIcon } from "./icon.ts";
+
+// @ts-ignore No idea
 import { createBootstrap } from "bootstrap-vue-next";
 
 // Dependencies
@@ -14,7 +16,7 @@ import "./styles/main.scss";
 const app = createApp(App);
 app.use(router);
 app.use(i18n);
-app.use(createBootstrap()); // Important
+app.use(createBootstrap());
 app.component("FontAwesomeIcon", FontAwesomeIcon);
 app.mount("#app");
 

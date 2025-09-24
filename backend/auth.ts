@@ -7,6 +7,7 @@ import {devOriginList} from "./util.ts";
 import { createAuthMiddleware } from "better-auth/api";
 import * as path from "@std/path";
 import { dataDir } from "./util.ts";
+import { Context } from "@hono/hono";
 
 const configJSONPath = path.join(dataDir, "config.json");
 
@@ -71,6 +72,13 @@ export function isDisableSignUp() {
 
 export function disableSignUp() {
     auth.options.emailAndPassword.disableSignUp = true;
+}
+
+export async function checkLogin(c: Context) {
+    const session = await auth.api.getSession(c.req.raw);
+    if (!session) {
+        throw new Error("Not logged in");
+    }
 }
 
 async function generateRandomSecret() {
