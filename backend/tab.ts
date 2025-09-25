@@ -1,9 +1,8 @@
-import {tabDir} from "./util.ts";
+import { tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import {TabInfo, TabInfoSchema} from "./zod.ts";
-import {kv} from "./db.ts";
-
+import { TabInfo, TabInfoSchema } from "./zod.ts";
+import { kv } from "./db.ts";
 
 export async function createTab(tabFileData: Uint8Array, ext: string, title: string, artist: string, originalFilename: string) {
     const id = await getNextTabID();
@@ -48,7 +47,6 @@ export async function getNextTabID() {
     return maxID + 1;
 }
 
-
 export async function getTab(id: number) {
     if (isNaN(id)) {
         throw new Error("Invalid tab ID");
@@ -73,12 +71,12 @@ export async function deleteTab(id: number) {
         throw new Error("Tab not found");
     }
 
-    // Delete from KV
-    await kv.delete(["tab", id]);
-
     // Rename the directory to ./data/tabs/deleted/
     const oldPath = path.join(tabDir, id.toString());
     const newPath = path.join(tabDir, "deleted", id.toString());
     await fs.ensureDir(path.join(tabDir, "deleted"));
     await Deno.rename(oldPath, newPath);
+
+    // Delete from KV
+    await kv.delete(["tab", id]);
 }

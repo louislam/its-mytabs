@@ -12,7 +12,7 @@ export const dataDir = await getDataDir();
 export async function getTabDir() {
     let dir = path.join(dataDir, "tabs");
     await fs.ensureDir(dir);
-    return dir
+    return dir;
 }
 
 export const tabDir = await getTabDir();

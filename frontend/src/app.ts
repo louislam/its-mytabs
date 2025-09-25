@@ -1,4 +1,5 @@
 import { io } from "socket.io-client";
+import { midiProgramCodeList } from "../../backend/common.ts";
 
 export function connectSocketIO() {
     return io(baseURL);
@@ -19,3 +20,7 @@ export function getBaseURL(): string {
 }
 
 export const baseURL = getBaseURL();
+
+export function getInstrumentName(midiProgram: number) {
+    return midiProgramCodeList[midiProgram] || "(Unknown Instrument)";
+}

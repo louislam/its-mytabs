@@ -2,11 +2,11 @@
 import { defineComponent } from "vue";
 import { authClient } from "../auth-client.ts";
 import { notify } from "@kyvg/vue3-notification";
-import {baseURL} from "../app.js";
+import { baseURL } from "../app.js";
 import Logo from "../components/Logo.vue";
 
 export default defineComponent({
-    components: {Logo},
+    components: { Logo },
     data() {
         return {
             processing: false,
@@ -31,9 +31,9 @@ export default defineComponent({
                 });
                 return;
             }
-            
+
             this.processing = true;
-            const {data, error} = await authClient.signUp.email({
+            const { data, error } = await authClient.signUp.email({
                 email: this.email,
                 name: "Admin",
                 password: this.password,
@@ -47,7 +47,7 @@ export default defineComponent({
             } else {
                 this.$router.push("/");
             }
-            
+
             this.processing = false;
         },
     },
@@ -58,7 +58,7 @@ export default defineComponent({
     <div class="form-container" data-cy="setup-form">
         <div class="form">
             <form @submit.prevent="submit">
-                <div style="font-size: 28px; font-weight: bold;" class="mb-5 mt-5">
+                <div style="font-size: 28px; font-weight: bold" class="mb-5 mt-5">
                     It's MyTabs
                 </div>
 

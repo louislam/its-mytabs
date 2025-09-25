@@ -2,11 +2,11 @@
 import { defineComponent } from "vue";
 import { authClient } from "../auth-client.ts";
 import { notify } from "@kyvg/vue3-notification";
-import {baseURL} from "../app.js";
+import { baseURL } from "../app.js";
 import Logo from "../components/Logo.vue";
 
 export default defineComponent({
-    components: {Logo},
+    components: { Logo },
     data() {
         return {
             processing: false,
@@ -27,8 +27,8 @@ export default defineComponent({
         async submit() {
             this.processing = true;
             this.error = "";
-            
-            const {data, error} = await authClient.signIn.email({
+
+            const { data, error } = await authClient.signIn.email({
                 email: this.email,
                 password: this.password,
                 rememberMe: this.rememberMe,
@@ -46,7 +46,7 @@ export default defineComponent({
                     title: "Logged in successfully",
                 });
             }
-            
+
             this.processing = false;
         },
     },
@@ -57,7 +57,7 @@ export default defineComponent({
     <div class="form-container" data-cy="setup-form">
         <div class="form">
             <form @submit.prevent="submit">
-                <div style="font-size: 28px; font-weight: bold;" class="mb-5 mt-5">
+                <div style="font-size: 28px; font-weight: bold" class="mb-5 mt-5">
                     It's MyTabs
                 </div>
 
@@ -70,7 +70,7 @@ export default defineComponent({
                     <input id="floatingPassword" v-model="password" type="password" class="form-control" :placeholder='$t("Password")' required>
                     <label for="floatingPassword">{{ $t("Password") }}</label>
                 </div>
-                
+
                 <!-- Remember me -->
                 <div class="mt-3">
                     <div class="form-check form-check-inline">
@@ -80,7 +80,7 @@ export default defineComponent({
                         </label>
                     </div>
                 </div>
-                
+
                 <button class="w-100 btn btn-primary mt-3" type="submit" :disabled="processing">
                     {{ $t("Log in") }}
                 </button>
@@ -108,7 +108,4 @@ export default defineComponent({
     margin: auto;
     text-align: center;
 }
-
-
-
 </style>

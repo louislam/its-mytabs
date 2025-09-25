@@ -5,24 +5,26 @@ export default {
             type: Boolean,
             default: false,
         },
-    }
-}
+    },
+};
 </script>
 
 <template>
-    <router-link :class="{
-        'navbar-brand': true,
-        'inline': inline,
-    }" to="/">
+    <router-link
+        :class='
+            {
+                "navbar-brand": true,
+                "inline": inline,
+            }
+        '
+        to="/"
+    >
         <div>It's</div>
         <div>MyTabs</div>
     </router-link>
 </template>
 
 <style scoped lang="scss">
-
-
-
 .navbar-brand {
     $width: 100px;
 
@@ -33,7 +35,7 @@ export default {
     width: $width;
     height: $width;
     font-weight: bold;
-    font-size:20px;
+    font-size: 20px;
 
     // gradient primary color
     $startColor: #7e7edf;
@@ -48,7 +50,7 @@ export default {
     &:hover {
         opacity: 0.8;
     }
-    
+
     &.inline {
         display: inline-flex;
     }

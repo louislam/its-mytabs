@@ -1,7 +1,7 @@
 <script>
 import { defineComponent } from "vue";
 import { BButton, BButtonGroup, BFormInput, BSpinner } from "bootstrap-vue-next";
-import {authClient, isLoggedIn} from "../auth-client.ts";
+import { authClient, isLoggedIn } from "../auth-client.ts";
 import { notify } from "@kyvg/vue3-notification";
 import Logo from "../components/Logo.vue";
 
@@ -14,12 +14,12 @@ export default defineComponent({
         Logo,
     },
     async mounted() {
-          if (!await isLoggedIn()) {
-              console.log("Not logged in, redirecting to login page");
-                this.$router.push("/login");
-          } else {
-                console.log("Logged in");
-          }
+        if (!await isLoggedIn()) {
+            console.log("Not logged in, redirecting to login page");
+            this.$router.push("/login");
+        } else {
+            console.log("Logged in");
+        }
     },
     methods: {
         async signOut() {
@@ -33,9 +33,8 @@ export default defineComponent({
 <template>
     <div>
         <div class="my-navbar">
-
             <Logo />
-            
+
             <div class="toolbar">
                 <div class="left">
                     <router-link to="/">
@@ -86,16 +85,16 @@ export default defineComponent({
         flex: 1;
         display: flex;
         justify-content: space-between;
-        
+
         & > div {
             flex-grow: 4;
             display: flex;
             column-gap: 50px;
-            
+
             &.left {
                 justify-content: flex-start;
             }
-            
+
             &.right {
                 justify-content: flex-end;
             }

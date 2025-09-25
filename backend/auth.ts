@@ -3,7 +3,7 @@ import { db, hasUser } from "./db.ts";
 import * as fs from "@std/fs";
 import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
-import {devOriginList} from "./util.ts";
+import { devOriginList } from "./util.ts";
 import { createAuthMiddleware } from "better-auth/api";
 import * as path from "@std/path";
 import { dataDir } from "./util.ts";
@@ -21,16 +21,16 @@ export const auth = betterAuth({
     },
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
-            if(ctx.path.startsWith("/sign-up")){
+            if (ctx.path.startsWith("/sign-up")) {
                 const newSession = ctx.context.newSession;
-                if(newSession){
+                if (newSession) {
                     console.log("First user created: " + newSession.user.email);
                     console.log("Disable sign up after first user created");
                     disableSignUp();
                 }
             }
         }),
-    }
+    },
 });
 
 async function getSecretKey() {

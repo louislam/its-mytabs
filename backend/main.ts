@@ -1,15 +1,15 @@
 import { serve } from "@hono/node-server";
-import { Hono, MiddlewareHandler, Context } from "@hono/hono";
+import { Context, Hono, MiddlewareHandler } from "@hono/hono";
 import * as fs from "@std/fs";
-import {auth, disableSignUp, isFinishSetup, isDisableSignUp, checkLogin} from "./auth.ts";
-import {SignUpSchema, TabInfo, TabInfoSchema} from "./zod.ts";
-import {hasUser, kv} from "./db.ts";
-import { cors } from '@hono/hono/cors'
-import { serveStatic } from '@hono/hono/deno'
-import {devOriginList, isDev} from "./util.ts";
+import { auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup } from "./auth.ts";
+import { SignUpSchema, TabInfo, TabInfoSchema } from "./zod.ts";
+import { hasUser, kv } from "./db.ts";
+import { cors } from "@hono/hono/cors";
+import { serveStatic } from "@hono/hono/deno";
+import { devOriginList, isDev } from "./util.ts";
 import * as path from "@std/path";
-import {supportedFormatList} from "./common.ts";
-import {createTab, deleteTab, getTab, getTabFilePath} from "./tab.ts";
+import { supportedFormatList } from "./common.ts";
+import { createTab, deleteTab, getTab, getTabFilePath } from "./tab.ts";
 
 export async function main() {
     const frontendDir = "./dist";
@@ -30,7 +30,7 @@ export async function main() {
     }
 
     // Read index.html content
-    const indexHTML = await Deno.readTextFile(path.join(frontendDir, 'index.html'));
+    const indexHTML = await Deno.readTextFile(path.join(frontendDir, "index.html"));
     const app = new Hono();
 
     const httpServer = serve({
@@ -42,10 +42,13 @@ export async function main() {
 
     // CORS for development
     if (isDev()) {
-        app.use('/api/*', cors({
-            credentials: true,
-            origin: devOriginList,
-        }));
+        app.use(
+            "/api/*",
+            cors({
+                credentials: true,
+                origin: devOriginList,
+            }),
+        );
     }
 
     // Better-Auth routes
@@ -95,7 +98,7 @@ export async function main() {
 
             // Check file ext if in supportedFormatList
             const fileName = file.name;
-            const ext = fileName.split('.').pop()?.toLowerCase();
+            const ext = fileName.split(".").pop()?.toLowerCase();
             if (!ext) {
                 throw new Error("File has no extension");
             }
@@ -114,7 +117,6 @@ export async function main() {
             const arrayBuffer = await file.arrayBuffer();
             let id = await createTab(new Uint8Array(arrayBuffer), ext, title, artist, fileName);
 
-
             return c.json({
                 ok: true,
                 id,
@@ -130,7 +132,7 @@ export async function main() {
             await checkLogin(c);
 
             const tabGenerator = kv.list({
-                prefix: ["tab"]
+                prefix: ["tab"],
             });
 
             const tabList: TabInfo[] = [];
@@ -153,6 +155,26 @@ export async function main() {
         }
     });
 
+    // Get Tab
+    app.get("/api/tab/:id", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const tab = await getTab(id);
+
+            return c.json({
+                ok: true,
+                tab,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     // Delete Tab
     app.delete("/api/tab/:id", async (c) => {
         try {
@@ -167,7 +189,6 @@ export async function main() {
             return c.json({
                 ok: true,
             });
-
         } catch (e) {
             return generalError(c, e);
         }
@@ -176,7 +197,6 @@ export async function main() {
     // Serve tab file
     app.get("/api/tab/:id/file", async (c) => {
         try {
-
             const id = parseInt(c.req.param("id") || "");
 
             // Unfortunately AlphaTab does not support cookie auth, we need a short lived temp token to auth via query param
@@ -192,23 +212,21 @@ export async function main() {
                 if (tokenData.value !== id) {
                     throw new Error("Temp token does not match tab ID");
                 }
-
             } else {
                 await checkLogin(c);
             }
-
 
             const tab = await getTab(id);
             const filePath = await getTabFilePath(tab);
 
             // Check if file exists
-            if (! await fs.exists(filePath)) {
+            if (!await fs.exists(filePath)) {
                 throw new Error("Tab file not found");
             }
 
             // serve the file
             const file = await Deno.open(filePath, {
-                read: true
+                read: true,
             });
 
             const encodedOriginalFilename = encodeURIComponent(tab.originalFilename);
@@ -217,9 +235,8 @@ export async function main() {
                 "Content-Type": "application/octet-stream",
                 "Content-Disposition": `attachment; filename="${encodedOriginalFilename}"`,
             });
-
         } catch (e) {
-            console.error(e)
+            console.error(e);
             return generalError(c, e);
         }
     });
@@ -240,7 +257,6 @@ export async function main() {
                 ok: true,
                 token,
             });
-
         } catch (e) {
             return generalError(c, e);
         }
@@ -252,9 +268,12 @@ export async function main() {
 
     // Serve static files
     // @ts-ignore No idea why ts is complaining here
-    app.get("*", serveStatic({
-        root: './dist',
-    }));
+    app.get(
+        "*",
+        serveStatic({
+            root: "./dist",
+        }),
+    );
 
     // if /api/* not found, return 404
     app.all("/api/*", (c) => {
@@ -271,17 +290,15 @@ function generalError(c: Context, e: unknown) {
     if (e instanceof Error) {
         return c.json({
             ok: false,
-            msg: e.message
+            msg: e.message,
         }, 400);
     } else {
         return c.json({
             ok: false,
-            msg: "Unknown error"
+            msg: "Unknown error",
         }, 400);
     }
 }
-
-
 
 if (import.meta.main) {
     await main();

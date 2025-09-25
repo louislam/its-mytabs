@@ -1,4 +1,4 @@
-import {createRouter, createWebHistory, RouteRecordRaw} from "vue-router";
+import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 
 import Layout from "./layouts/Layout.vue";
 import Dashboard from "./pages/Dashboard.vue";

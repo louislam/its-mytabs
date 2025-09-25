@@ -1,9 +1,10 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import {baseURL, connectSocketIO} from "../app.js";
+import { baseURL, connectSocketIO, getInstrumentName } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
+import { notify } from "@kyvg/vue3-notification";
 
 export default defineComponent({
     components: { BDropdownDivider, BDropdownItem, BDropdown },
@@ -20,23 +21,44 @@ export default defineComponent({
              */
             socket: null,
             tabID: -1,
+            tracks: [],
+            showTrackList: false,
+            tab: {},
         };
+    },
+    computed: {
+        selectedTrack() {
+            if (this.api?.tracks && this.api.tracks.length > 0) {
+                return this.api.tracks[0].index;
+            } else {
+                return 0;
+            }
+        },
     },
     async mounted() {
         this.tabID = this.$route.params.id;
-        const tempToken = await this.getTempToken();
-        await this.initContainer(tempToken);
-        //await this.initYoutube("VuKSlOT__9s");
-        //await this.initSocketIO();
-        //await this.initMPC()
 
-        // Space key to play/pause
-        window.addEventListener("keydown", (e) => {
-            if (e.code === "Space") {
-                e.preventDefault();
-                this.playPause();
-            }
-        });
+        try {
+            await this.load(2);
+            //await this.initYoutube("VuKSlOT__9s");
+            //await this.initSocketIO();
+            //await this.initMPC()
+
+            // Space key to play/pause
+            window.addEventListener("keydown", (e) => {
+                if (e.code === "Space") {
+                    e.preventDefault();
+                    this.playPause();
+                }
+            });
+        } catch (e) {
+            notify({
+                type: "error",
+                title: "Error",
+                text: e.message,
+            });
+        }
+
         console.log("Mounted");
     },
     beforeUnmount() {
@@ -44,27 +66,54 @@ export default defineComponent({
         this.destroyContainer();
     },
     methods: {
+        async load(trackID) {
+            if (this.api) {
+                this.destroyContainer();
+            }
+            
+            const res = await fetch(baseURL + `/api/tab/${this.tabID}`, {
+                credentials: "include",
+            });
+            if (!res.ok) {
+                throw new Error("Failed to load tab info");
+            } else {
+                const tab = (await res.json()).tab;
+                if (tab) {
+                    this.tab = tab;
+                }
+            }
+
+            const tempToken = await this.getTempToken();
+            await this.initContainer(tempToken, trackID);
+        },
+        
         playPause() {
+            if (!this.api) return;
+
             this.api.settings.player.scrollMode = ScrollMode.Continuous;
             this.api.updateSettings();
             this.api.playPause();
         },
         
+        getFileURL(tempToken) {
+            return baseURL + `/api/tab/${this.tabID}/file?tempToken=${tempToken}`;
+        },
+
         async getTempToken() {
             const fileURL = baseURL + `/api/tab/${this.tabID}/temp-token`;
 
             // fetch the file as array buffer
-            const response = await fetch(fileURL, { 
-                credentials: 'include' 
+            const response = await fetch(fileURL, {
+                credentials: "include",
             });
-            
+
             if (!response.ok) {
                 throw new Error("Failed to get get temp token");
             }
             return (await response.json()).token;
         },
 
-        initContainer(tempToken) {
+        initContainer(tempToken, trackID) {
             return new Promise((resolve, reject) => {
                 if (this.api) {
                     this.destroyContainer();
@@ -73,7 +122,7 @@ export default defineComponent({
                 if (!(this.$refs.bassTabContainer instanceof HTMLElement)) {
                     reject(new Error("Container element not found"));
                 }
-
+                
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
                         rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
@@ -90,8 +139,8 @@ export default defineComponent({
                         },
                     },
                     core: {
-                        file: baseURL + `/api/tab/${this.tabID}/file?tempToken=${tempToken}`,
-                        track: [2],
+                        file: this.getFileURL(tempToken),
+                        tracks: [trackID],
                         fontDirectory: "/font/",
                         engine: "html5",
                     },
@@ -121,13 +170,25 @@ export default defineComponent({
 
                 this.api.scoreLoaded.on((score) => {
                     this.applyColors(score);
-                    this.title = this.api.score.title;
-                    this.artist = this.api.score.artist;
+
                     // Apply sync points
                     const syncPoints = [
                         { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": 3000 },
                     ];
                     score.applyFlatSyncPoints(syncPoints);
+
+                    this.tracks = [];
+                    
+                    // List all tracks
+                    score.tracks.forEach((track) => {
+                        console.log(track);
+                        this.tracks.push({
+                            id: track.index,
+                            altName: track.name,
+                            name: getInstrumentName(track.playbackInfo.program),
+                        });
+                    });
+
                     resolve();
                 });
             });
@@ -304,6 +365,9 @@ export default defineComponent({
             this.api.updateSettings();
         },
 
+        /**
+         * TODO
+         */
         async initMPC() {
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
@@ -352,30 +416,44 @@ export default defineComponent({
 
             this.api.player.output.handler = handler;
         },
+
+        /**
+         * As Docs suggested, I should use api.renderTrack() to change track
+         * But for some reason, some slide notes are not rendered correctly
+         * So I just reload the whole AlphaTab instance instead.
+         * @param trackID
+         * @returns {Promise<void>}
+         */
+        async changeTrack(trackID) {
+            await this.load(trackID);
+            this.showTrackList = false;
+        },
     },
 });
 </script>
 
 <template>
     <div class="main">
-        <h1>{{ title }}</h1>
-        <h2>{{ artist }}</h2>
+        <h1>{{ tab.title }}</h1>
+        <h2>{{ tab.artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
 
         <div ref="youtube"></div>
 
         <div class="toolbar">
-            <div>
-                <b-dropdown id="dropdown-1" text="Instruments">
-                    <b-dropdown-item>
-                        Bass <button>Test</button>
-                    </b-dropdown-item>
-                    <b-dropdown-item>Second Action</b-dropdown-item>
-                    <b-dropdown-item>Third Action</b-dropdown-item>
-                    <b-dropdown-divider></b-dropdown-divider>
-                    <b-dropdown-item active>Active action</b-dropdown-item>
-                    <b-dropdown-item disabled>Disabled action</b-dropdown-item>
-                </b-dropdown>
+            <div class="track-selector">
+                <div class="button" @click="showTrackList = !showTrackList">
+                    <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
+                    <span v-else>Loading...</span>
+                </div>
+
+                <div class="track-list" v-if="showTrackList">
+                    <div class="track" v-for="track in tracks" :key="track.id">
+                        <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
+                        <div class="list-button solo">Solo</div>
+                        <div class="list-button mute">Mute</div>
+                    </div>
+                </div>
             </div>
 
             <div>
@@ -395,6 +473,8 @@ export default defineComponent({
 </template>
 
 <style scoped lang="scss">
+@import "../styles/vars.scss";
+
 $toolbar-height: 75px;
 
 .main {
@@ -405,7 +485,7 @@ $toolbar-height: 75px;
 
 .toolbar {
     height: $toolbar-height;
-    padding: 20px 30px;
+    padding: 20px 15px;
     display: flex;
     align-items: center;
     flex-grow: 4;
@@ -434,5 +514,70 @@ h1 {
 h2 {
     text-align: center;
     margin-bottom: 0;
+}
+
+.track-selector {
+    position: relative;
+    $color: #32393e;
+
+    .button {
+        cursor: pointer;
+        padding: 10px 15px;
+        border-radius: 3px;
+        background-color: $color;
+        user-select: none;
+        transition: background-color 0.2s;
+        white-space: nowrap;
+
+        &:hover {
+            background-color: lighten($color, 10%);
+        }
+    }
+
+    .track-list {
+        position: absolute;
+        background-color: $color;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 3px;
+        bottom: 130%;
+        width: 400px;
+
+        .track {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+
+            $padding: 20px;
+            border-bottom: 1px solid darken($color, 5%);
+
+            .name {
+                flex-grow: 1;
+                font-weight: bold;
+                padding: $padding;
+                height: 100%;
+                border-right: 1px solid darken($color, 5%);
+
+                &:hover {
+                    background-color: lighten($color, 2%);
+                }
+            }
+
+            .list-button {
+                background-color: lighten($color, 10%);
+                border-right: 1px solid darken($color, 5%);
+                padding: $padding;
+                height: 100%;
+
+                &:hover {
+                    background-color: lighten($primary, 5%);
+                }
+
+                &.active {
+                    border-right-color: darken($color, 5%);
+                }
+            }
+        }
+    }
 }
 </style>

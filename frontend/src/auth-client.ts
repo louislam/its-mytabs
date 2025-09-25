@@ -7,5 +7,5 @@ export const authClient = createAuthClient({
 
 export async function isLoggedIn() {
     const session = await authClient.getSession();
-    return session.data !== null
+    return session.data !== null;
 }
