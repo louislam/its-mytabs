@@ -8,6 +8,8 @@
         "dev:frontend": "cd frontend && deno run dev",
         "dev:backend": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
         "build:frontend": "cd frontend && deno run build",
+        "start": "deno run --allow-all backend/main.ts",
+        "start-with-build": "deno task build:frontend && deno task start",
         "generate-better-auth": "deno run --allow-all --unstable npm:@better-auth/cli generate --config backend/auth.ts"
     },
 

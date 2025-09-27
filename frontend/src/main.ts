@@ -26,7 +26,9 @@ if (import.meta.hot) {
         console.log("Hot update - reloading page to reset AlphaTab");
 
         // tab page only
-        const isTabPage = window.location.pathname.startsWith("/tab/");
+        const isTabPage = window.location.pathname.startsWith("/tab/") &&
+            window.location.pathname.split("/").length === 3;
+        console.log(window.location.pathname)
         if (isTabPage) {
             window.location.reload();
         }

@@ -7,6 +7,7 @@ export default defineComponent({
     data() {
         return {
             tabList: [],
+            ready: false,
         };
     },
     async mounted() {
@@ -14,6 +15,7 @@ export default defineComponent({
             const res = await fetch(baseURL + "/api/tabs", { credentials: "include" });
             const data = await res.json();
             this.tabList = data.tabs;
+            this.ready = true;
         } catch (error) {
             notify({
                 text: error.message,
@@ -54,16 +56,17 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
-        <div class="mb-4 mt-5 ms-3">
+        <div class="mb-4 mt-5 ms-3" v-if="ready">
             Total Tabs: {{ tabList.length }}
         </div>
 
-        <div v-for="tab in tabList" :key="tab.id" class="tab-item p-3">
+        <div v-for="tab in tabList" :key="tab.id" class="tab-item p-3 rounded">
             <router-link class="info" :to="`/tab/${tab.id}`">
                 <div class="title">{{ tab.title }}</div>
                 <div class="artist">{{ tab.artist }}</div>
             </router-link>
 
+            <button class="btn btn-secondary me-2" @click="$router.push(`/tab/${tab.id}/edit/info`)">Edit</button>
             <button class="btn btn-danger" @click="deleteTab(tab.id, tab.title, tab.artist)">Delete</button>
         </div>
     </div>
@@ -76,7 +79,6 @@ export default defineComponent({
 
 .tab-item {
     display: flex;
-    border-radius: 30px;
     transition: background-color 0.1s;
 
     &:hover {

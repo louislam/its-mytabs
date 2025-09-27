@@ -25,8 +25,15 @@ const routes: RouteRecordRaw[] = [
                         component: Home,
                     },
                     {
-                        name: "tabConfig",
-                        path: "/tab/:id/config",
+                        path: "/tab/:id/edit/info",
+                        component: TabConfig,
+                    },
+                    {
+                        path: "/tab/:id/edit/audio",
+                        component: TabConfig,
+                    },
+                    {
+                        path: "/tab/:id/edit/tab-file",
                         component: TabConfig,
                     },
                     {

@@ -2,14 +2,31 @@ import { serve } from "@hono/node-server";
 import { Context, Hono, MiddlewareHandler } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup } from "./auth.ts";
-import { SignUpSchema, TabInfo, TabInfoSchema } from "./zod.ts";
+import {
+    SignUpSchema,
+    TabInfo,
+    TabInfoSchema,
+    UpdateTabInfoSchema,
+    YoutubeAddDataSchema,
+    YoutubeSaveRequestSchema
+} from "./zod.ts";
 import { hasUser, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
 import { devOriginList, isDev } from "./util.ts";
 import * as path from "@std/path";
 import { supportedFormatList } from "./common.ts";
-import { createTab, deleteTab, getTab, getTabFilePath } from "./tab.ts";
+import {
+    addYoutube,
+    createTab,
+    deleteTab,
+    getTab,
+    getTabFilePath,
+    getYoutubeList,
+    removeYoutube, updateTab,
+    updateYoutube
+} from "./tab.ts";
+import { ZodError } from "zod";
 
 export async function main() {
     const frontendDir = "./dist";
@@ -107,12 +124,16 @@ export async function main() {
                 throw new Error("Unsupported file format: " + ext);
             }
 
-            const title = form.get("title") || fileName;
-            const artist = form.get("artist") || "Unknown";
+            let title = form.get("title") || fileName;
+            let artist = form.get("artist") || "Unknown";
 
+            // Check title and artist type is string
             if (typeof title !== "string" || typeof artist !== "string") {
                 throw new Error("Invalid title or artist");
             }
+
+            title = title.trim();
+            artist = artist.trim();
 
             const arrayBuffer = await file.arrayBuffer();
             let id = await createTab(new Uint8Array(arrayBuffer), ext, title, artist, fileName);
@@ -126,7 +147,7 @@ export async function main() {
         }
     });
 
-    // Tab List
+    // Get Tab List
     app.get("/api/tabs", async (c) => {
         try {
             await checkLogin(c);
@@ -165,10 +186,34 @@ export async function main() {
             }
 
             const tab = await getTab(id);
+            const youtubeList = await getYoutubeList(id);
 
             return c.json({
                 ok: true,
                 tab,
+                youtubeList,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Edit Tab
+    app.post("/api/tab/:id", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const body = await c.req.json();
+            const data = UpdateTabInfoSchema.parse(body);
+
+            const tab = await getTab(id);
+            await updateTab(tab, data);
+            return c.json({
+                ok: true,
             });
         } catch (e) {
             return generalError(c, e);
@@ -189,6 +234,77 @@ export async function main() {
             return c.json({
                 ok: true,
             });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Add Youtube (/api/tab/${tabID}/youtube)
+    app.post("/api/tab/:id/youtube", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const body = await c.req.json();
+            const data = YoutubeAddDataSchema.parse(body);
+
+            await getTab(id);
+            await addYoutube(id, data.videoID);
+
+            return c.json({
+                ok: true,
+            });
+
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Save Youtube config (POST /api/tab/${tabID}/youtube/${videoID})
+    app.post("/api/tab/:id/youtube/:videoID", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            const videoID = c.req.param("videoID");
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const body = await c.req.json();
+            const data = YoutubeSaveRequestSchema.parse(body);
+
+            await getTab(id);
+            await updateYoutube(id, videoID, data);
+
+            return c.json({
+                ok: true,
+            });
+
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Remove Youtube (DELETE /api/tab/${tabID}/youtube/${videoID})
+    app.delete("/api/tab/:id/youtube/:videoID", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            const videoID = c.req.param("videoID");
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            await getTab(id);
+            await removeYoutube(id, videoID);
+
+            return c.json({
+                ok: true,
+            });
+
         } catch (e) {
             return generalError(c, e);
         }
@@ -284,10 +400,28 @@ export async function main() {
     app.notFound((c) => {
         return c.html(indexHTML, 200);
     });
+
+    function sigIntHandler() {
+        httpServer.close();
+        kv.close();
+        console.log("Server closed");
+        Deno.exit(1);
+    }
+
+    Deno.addSignalListener("SIGINT", sigIntHandler);
 }
 
 function generalError(c: Context, e: unknown) {
-    if (e instanceof Error) {
+   if (e instanceof ZodError) {
+       let message = "";
+       for (const issue of e.issues) {
+              message += `${issue.path.join(".")}: ${issue.message}\n`;
+       }
+       return c.json({
+           ok: false,
+           msg: message,
+       }, 400);
+   } else if (e instanceof Error) {
         return c.json({
             ok: false,
             msg: e.message,

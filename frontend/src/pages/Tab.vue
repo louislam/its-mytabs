@@ -1,13 +1,14 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import { baseURL, connectSocketIO, getInstrumentName } from "../app.js";
+import {baseURL, checkFetch, connectSocketIO, getInstrumentName} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
+import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
 
 export default defineComponent({
-    components: { BDropdownDivider, BDropdownItem, BDropdown },
+    components: {FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
     data() {
         return {
             title: "",
@@ -23,34 +24,44 @@ export default defineComponent({
             tabID: -1,
             tracks: [],
             showTrackList: false,
+            showAudioList: false,
             tab: {},
-        };
-    },
-    computed: {
-        selectedTrack() {
-            if (this.api?.tracks && this.api.tracks.length > 0) {
-                return this.api.tracks[0].index;
-            } else {
-                return 0;
-            }
-        },
-    },
-    async mounted() {
-        this.tabID = this.$route.params.id;
-
-        try {
-            await this.load(2);
-            //await this.initYoutube("VuKSlOT__9s");
-            //await this.initSocketIO();
-            //await this.initMPC()
-
-            // Space key to play/pause
-            window.addEventListener("keydown", (e) => {
+            playing: false,
+            enableCountIn: false,
+            enableMetronome: false,
+            enableBackingTrack: true,
+            isLooping: false,
+            ready: false,
+            selectedTrack: 0,
+            soloTrackID: -1,
+            muteTrackList: {},
+            currentAudio: "synth",
+            youtubeList: [],
+            youtubePlayer: null,
+            alphaTabYoutubeHandler: null,
+            keyEvents: (e) => {
                 if (e.code === "Space") {
                     e.preventDefault();
                     this.playPause();
                 }
-            });
+            },
+        };
+    },
+    computed: {
+
+    },
+    
+    // Mounted
+    async mounted() {
+        this.tabID = this.$route.params.id;
+
+        try {
+            const trackID = this.getConfig("trackID", 0);
+            
+            // Load the AlphaTab
+            await this.load(trackID);
+            
+            window.addEventListener("keydown", this.keyEvents);
         } catch (e) {
             notify({
                 type: "error",
@@ -64,6 +75,7 @@ export default defineComponent({
     beforeUnmount() {
         console.log("Before unmount");
         this.destroyContainer();
+        window.removeEventListener("keydown", this.keyEvents);
     },
     methods: {
         async load(trackID) {
@@ -74,25 +86,80 @@ export default defineComponent({
             const res = await fetch(baseURL + `/api/tab/${this.tabID}`, {
                 credentials: "include",
             });
-            if (!res.ok) {
-                throw new Error("Failed to load tab info");
-            } else {
-                const tab = (await res.json()).tab;
-                if (tab) {
-                    this.tab = tab;
-                }
+            
+            await checkFetch(res);
+
+            const data = await res.json();
+            if (data.tab) {
+                this.tab = data.tab;
+                this.youtubeList = data.youtubeList;
             }
 
             const tempToken = await this.getTempToken();
             await this.initContainer(tempToken, trackID);
+            
+            this.setConfig("trackID", trackID);
+        },
+        
+        countIn() {
+            if (!this.api) {
+                return
+            }
+
+            this.enableCountIn = !this.enableCountIn
+            
+            if (this.enableCountIn) {
+                this.api.countInVolume = 1;
+            } else {
+                this.api.countInVolume = 0;
+            }
+        },
+        
+        metronome() {
+            if (!this.api) {
+                return
+            }
+            this.enableMetronome = !this.enableMetronome;
+            
+            if (this.enableMetronome) {
+                this.api.metronomeVolume = 1;
+            } else {
+                this.api.metronomeVolume = 0;
+            }
+        },
+
+        loop() {
+            if (!this.api) {
+                return
+            }
+            this.isLooping = !this.isLooping;
+            this.api.isLooping = this.isLooping;
         },
         
         playPause() {
-            if (!this.api) return;
+            if (!this.api || !this.ready) {
+                return
+            }
 
             this.api.settings.player.scrollMode = ScrollMode.Continuous;
             this.api.updateSettings();
-            this.api.playPause();
+
+            this.playing = !this.playing;
+            
+            if (this.playing) {
+                this.api.play();
+            } else  {
+                this.api.pause();
+            }
+            
+        },
+        
+        pause() {
+            if (!this.api || !this.ready) {
+                return
+            }
+            this.playing = false;
+            this.api.pause();
         },
         
         getFileURL(tempToken) {
@@ -147,6 +214,7 @@ export default defineComponent({
                     player: {
                         enablePlayer: true,
                         enableCursor: true,
+                        enableAnimatedBeatCursor: false,
                         enableUserInteraction: true,
                         soundFont: "/soundfont/sonivox.sf2",
                         //nativeBrowserSmoothScroll: true,
@@ -168,28 +236,48 @@ export default defineComponent({
                     },
                 });
 
-                this.api.scoreLoaded.on((score) => {
+                // Score Loaded
+                this.api.scoreLoaded.on(async (score) => {
                     this.applyColors(score);
 
-                    // Apply sync points
-                    const syncPoints = [
-                        { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": 3000 },
-                    ];
-                    score.applyFlatSyncPoints(syncPoints);
 
-                    this.tracks = [];
+                    // Set Audio source
+                    this.currentAudio = this.getConfig("audio", "synth");
+                    if (this.currentAudio === "synth") {
+                        await this.initSynth();
+                    } else if (this.currentAudio === "backingTrack") {
+                        await this.initBackingTrack();
+                    } else if (this.currentAudio.startsWith("youtube-")) {
+                        const videoID = this.currentAudio.substring(8);
+                        await this.initYoutube(videoID);
+                    } else {
+                        // Unknown audio source, fallback to synth
+                        await this.initSynth();
+                    }
                     
+                    
+                    this.tracks = [];
+              
                     // List all tracks
                     score.tracks.forEach((track) => {
-                        console.log(track);
                         this.tracks.push({
                             id: track.index,
-                            altName: track.name,
                             name: getInstrumentName(track.playbackInfo.program),
+                            program: track.playbackInfo.program,
                         });
                     });
-
+                    
+                    this.enableBackingTrack = this.hasBackingTrack();
+                    this.selectedTrack = trackID;
+                    this.ready = true;
+                    
                     resolve();
+                });
+                
+                this.api.playerFinished.on(() => {
+                    if (!this.isLooping) {
+                        this.playing = false;
+                    }
                 });
             });
         },
@@ -197,6 +285,19 @@ export default defineComponent({
         destroyContainer() {
             this.api?.destroy();
             this.api = undefined;
+            this.ready = false;
+            this.playing = false;
+            this.soloTrackID = -1;
+            this.muteTrackList = {};
+            
+        },
+        
+        simpleSync(offset) {
+            // Apply sync points
+            const syncPoints = [
+                { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": offset },
+            ];
+            this.api.score.applyFlatSyncPoints(syncPoints);
         },
 
         // Style the score with custom colors
@@ -257,28 +358,85 @@ export default defineComponent({
                 console.log("Disconnected from server");
             });
         },
-
+        
         async initYoutube(videoID) {
+            this.closeAllList();
+            
+            if (!this.youtubePlayer) {
+                await this.initYoutubePlayer(videoID);
+            }
+            
+            // Get offset from youtubeList
+            let offset = 0;
+            for (const yt of this.youtubeList) {
+                if (yt.videoID === videoID) {
+                    offset = yt.simpleSync;
+                    break;
+                }
+            }
+
+            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
+            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
+            this.api.updateSettings();
+            this.simpleSync(offset);
+            
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
+            
+            this.api.player.output.handler = this.alphaTabYoutubeHandler;
+            
+            this.youtubePlayer.cueVideoById(videoID);
 
-            const playerElement = this.$refs.youtube;
+            this.currentAudio = "youtube-" + videoID;
+            this.setConfig("audio", this.currentAudio);
+            this.pause();
+        },
 
-            const tag = document.createElement("script");
-            tag.src = "https://www.youtube.com/player_api";
-            playerElement.parentNode.insertBefore(tag, playerElement);
+        async initYoutubePlayer(videoID) {
+            
+            const ytWarning = setTimeout(() => {
+                notify({
+                    type: "warning",
+                    title: "Warning",
+                    text: "If YouTube is taking too long to load, please refresh the page.",
+                });
+            }, 5000);
+            
+            this.$refs.youtube.innerHTML = "";
+            
+            const isScriptLoaded = typeof YT !=="undefined";
+            console.log("isScriptLoaded:", isScriptLoaded);
 
-            const youtubeApiReady = Promise.withResolvers();
-            window.onYouTubePlayerAPIReady = youtubeApiReady.resolve;
+            // Create playerElement inside this.$refs.youtube
+            const playerElement = document.createElement("div");
+            this.$refs.youtube.appendChild(playerElement);
+            
+           if (!isScriptLoaded) {
+               const tag = document.createElement("script");
+               tag.src = "https://www.youtube.com/player_api";
+               const firstScriptTag = document.getElementsByTagName('script')[0];
+               firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+               console.log("Loading YouTube API");
 
-            await youtubeApiReady.promise;
+               const youtubeApiReady = Promise.withResolvers();
+               window.onYouTubePlayerAPIReady = youtubeApiReady.resolve;
+               await youtubeApiReady.promise;
+               console.log("YouTube API ready");
 
+               // Now Youtube Script is loaded
+               // The YT object is now available globally, even if vue route changed. Be careful.
+
+           } else {
+               console.log("YouTube API already loaded");
+           }
+            
             const youtubePlayerReady = Promise.withResolvers();
             let currentTimeInterval = 0;
             const player = new YT.Player(playerElement, {
-                height: "360",
-                width: "640",
-                videoId: videoID,
+                height: "180",
+                width: "320",
+                //videoId: videoID,
                 playerVars: { "autoplay": 0 }, // we do not want autoplay
                 events: {
                     "onReady": (e) => {
@@ -291,17 +449,17 @@ export default defineComponent({
                         switch (e.data) {
                             case YT.PlayerState.PLAYING:
                                 currentTimeInterval = window.setInterval(() => {
-                                    this.api.player.output.updatePosition(player.getCurrentTime() * 1000);
+                                    this.api?.player?.output?.updatePosition(player.getCurrentTime() * 1000);
                                 }, 50);
-                                this.api.play();
+                                this.api?.play();
                                 break;
                             case YT.PlayerState.ENDED:
                                 window.clearInterval(currentTimeInterval);
-                                this.api.stop();
+                                this.api?.stop();
                                 break;
                             case YT.PlayerState.PAUSED:
                                 window.clearInterval(currentTimeInterval);
-                                this.api.pause();
+                                this.api?.pause();
                                 break;
                             default:
                                 break;
@@ -317,6 +475,7 @@ export default defineComponent({
             });
 
             await youtubePlayerReady.promise;
+            console.log("YouTube Player ready");
 
             let initialSeek = -1;
             const alphaTabYoutubeHandler = {
@@ -356,13 +515,37 @@ export default defineComponent({
                     player.pauseVideo();
                 },
             };
-
-            this.api.player.output.handler = alphaTabYoutubeHandler;
+            
+            this.youtubePlayer = player;
+            this.alphaTabYoutubeHandler = alphaTabYoutubeHandler;
+            clearTimeout(ytWarning);
         },
 
         async initSynth() {
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
+            this.currentAudio = "synth";
+            this.setConfig("audio", this.currentAudio);
+            this.pause();
+            this.closeAllList();
+        },
+        
+        async initBackingTrack() {
+            if (!this.hasBackingTrack()) {
+                notify({
+                    type: "error",
+                    title: "Error",
+                    text: "No backing track found in this tab.",
+                });
+                return;
+            }
+            
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledBackingTrack;
+            this.api.updateSettings();
+            this.currentAudio = "backingTrack";
+            this.setConfig("audio", this.currentAudio);
+            this.pause();
+            this.closeAllList();
         },
 
         /**
@@ -426,8 +609,89 @@ export default defineComponent({
          */
         async changeTrack(trackID) {
             await this.load(trackID);
-            this.showTrackList = false;
+            this.closeAllList();
         },
+        
+        showList(type) {
+            if (type === "track") {
+                this.showTrackList = !this.showTrackList;
+                this.showAudioList = false;
+            } else if (type === "audio") {
+                this.showAudioList = !this.showAudioList;
+                this.showTrackList = false;
+            }
+        },
+        
+        closeAllList() {
+            this.showTrackList = false;
+            this.showAudioList = false;
+        },
+
+        toggleSolo(trackID) {
+            if (!this.api) {
+                return;
+            }
+            
+            if (this.soloTrackID === trackID) {
+                this.api.changeTrackMute(this.api.score.tracks, false);
+                this.soloTrackID = -1;
+                this.muteTrackList = {};
+       
+            } else {
+                const muteList = [];
+                const soloList = [];
+
+                for (const track of this.api.score.tracks) {
+                    if (track.index !== trackID) {
+                        muteList.push(track);
+                        this.muteTrackList[track.index] = true;
+                    } else {
+                        soloList.push(track);
+                        this.muteTrackList[track.index] = false;
+                    }
+                }
+
+                this.api.changeTrackMute(muteList, true);
+                this.api.changeTrackMute(soloList, false);
+
+                this.soloTrackID = trackID;
+            }
+            
+       
+        },
+        
+        toggleMute(trackID) {
+            this.soloTrackID = -1;
+
+            this.muteTrackList[trackID] = !this.muteTrackList[trackID];
+            
+            const mute = this.muteTrackList[trackID];
+
+            this.api.changeTrackMute([
+                this.api.score.tracks[trackID]
+            ], mute);
+        },
+
+        edit() {
+            this.$router.push(`/tab/${this.tabID}/edit/info`);
+        },
+        
+        hasBackingTrack() {
+            return !!this.api.score.backingTrack
+        },
+        
+        setConfig(key, value) {
+            localStorage.setItem(`tab-${this.tabID}-${key}`, JSON.stringify(value));
+        },
+        
+        getConfig(key, defaultValue) {
+            const value = localStorage.getItem(`tab-${this.tabID}-${key}`);
+            if (value === null) {
+                return defaultValue;
+            }
+            return JSON.parse(value);
+        },
+
     },
 });
 </script>
@@ -437,38 +701,97 @@ export default defineComponent({
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
-
-        <div ref="youtube"></div>
+        
+        <div :class="{'yt-margin': currentAudio.startsWith(`youtube-`)}">
+            
+        </div>
 
         <div class="toolbar">
-            <div class="track-selector">
-                <div class="button" @click="showTrackList = !showTrackList">
+            <div class="track-selector selector">
+                <div class="button" @click="showList('track')">
                     <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
                     <span v-else>Loading...</span>
                 </div>
 
-                <div class="track-list" v-if="showTrackList">
-                    <div class="track" v-for="track in tracks" :key="track.id">
+                <div class="track-list list" v-if="showTrackList">
+                    <div class="p-2 text-end">
+                        <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
+                    </div>
+                    
+                    <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTrack === track.id }">
                         <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
-                        <div class="list-button solo">Solo</div>
-                        <div class="list-button mute">Mute</div>
+                        <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id}">Solo</div>
+                        <div class="list-button mute" @click="toggleMute(track.id)"  :class="{ active: muteTrackList[track.id]}">Mute</div>
                     </div>
                 </div>
             </div>
 
-            <div>
-                <b-dropdown id="dropdown-1" text="Audio Source" class="me-4">
-                    <b-dropdown-item>Youtube</b-dropdown-item>
-                    <b-dropdown-item>Synth</b-dropdown-item>
-                    <b-dropdown-item>bass.mp3</b-dropdown-item>
-                </b-dropdown>
+            <div class="audio-selector selector">
+                <div class="button" @click="showList('audio')">
+                    Audio
+                </div>
+
+                <div class="audio-list list" v-if="showAudioList">
+                    <div class="p-2 text-end">
+                        <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
+                    </div>
+                    
+                    <div class="audio item" @click="initSynth" :class="{ active: currentAudio === 'synth' }">
+                        <div class="name">Synth</div>
+                    </div>
+
+                    <div class="audio item" @click="initBackingTrack" :class="{ active: currentAudio === 'backingTrack' }" v-if="enableBackingTrack">
+                        <div class="name">Embedded Backing Track</div>
+                    </div>
+
+                    <div class="audio item" @click="initYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class="{ active: currentAudio === 'youtube-' + youtube.videoID }">
+                        <div class="name">Youtube: {{ youtube.videoID }}</div>
+                    </div>
+    
+                    <div class="ms-4 me-4 mt-3 mb-3">
+                        <router-link :to="`/tab/${tab.id}/edit/audio`">Add Youtube or Audio File...</router-link>
+                    </div>
+                    
+                </div>
             </div>
 
-            <button class="btn btn-primary" @click="playPause">Play/Pause</button>
-            <button class="btn btn-primary" @click="playPause">Loop</button>
-            <button class="btn btn-primary" @click="playPause">Count in</button>
-            <!--<button class="btn btn-primary" @click="playPause">Edit Info</button>-->
+            <button class="btn btn-primary" @click="playPause" :class="{active: playing }">
+                <span v-if="!playing">
+                    <font-awesome-icon :icon='["fas", "play"]' />
+                    Play
+                </span>
+                <span v-else>
+                    <font-awesome-icon :icon='["fas", "pause"]' />
+                    Pause
+                </span>
+            </button>
+            <button class="btn btn-secondary" @click="loop()" :class="{active: isLooping }">
+                <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
+                Loop
+            </button>
+            <button class="btn btn-secondary" @click="countIn()" :class="{active: enableCountIn }">
+                <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
+                Count in
+            </button>
+            <button class="btn btn-secondary" @click="metronome()"  :class="{active: enableMetronome }">
+                <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
+                Metronome
+            </button>
+
+            <div class="speed">
+                    Speed: <input type="number"  min="10" max="200" step="1" /> (%)
+            </div>
+
+            <div class="btn-edit">
+                <button class="btn btn-secondary" @click="edit()">
+                    Edit
+                </button>
+            </div>
+
+            <div ref="youtube" v-show="currentAudio.startsWith('youtube-')" class="youtube-player-container"></div>
         </div>
+
+
     </div>
 </template>
 
@@ -476,11 +799,17 @@ export default defineComponent({
 @import "../styles/vars.scss";
 
 $toolbar-height: 75px;
+$youtube-height: 200px;
 
 .main {
     width: 95%;
     color: #d6d6d6;
     margin: 0 auto $toolbar-height auto;
+}
+
+.yt-margin {
+    width: 1px;
+    height: $youtube-height !important;
 }
 
 .toolbar {
@@ -496,7 +825,36 @@ $toolbar-height: 75px;
     bottom: 0;
     left: 0;
     width: 100%;
-    z-index: 10000;
+    z-index: 1;
+    
+    .btn-edit {
+        flex-grow: 1;
+        text-align: right;
+    }
+    
+    .button, .btn {
+        height: 44px;
+    }
+    
+    .btn-secondary {
+        &.active {
+            //background-color: lighten($primary, 10%);
+        }
+    }
+    
+    .close {
+        cursor: pointer;
+        &:hover {
+            color: white;
+        }
+    }
+    
+    .youtube-player-container {
+        position: absolute;
+        bottom: 100%;
+        right: 0;
+        height: 180px;
+    }
 }
 
 .youtube {
@@ -516,10 +874,10 @@ h2 {
     margin-bottom: 0;
 }
 
-.track-selector {
-    position: relative;
-    $color: #32393e;
+$color: #32393e;
+$padding: 20px;
 
+.selector {
     .button {
         cursor: pointer;
         padding: 10px 15px;
@@ -533,8 +891,8 @@ h2 {
             background-color: lighten($color, 10%);
         }
     }
-
-    .track-list {
+    
+    .list {
         position: absolute;
         background-color: $color;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -542,15 +900,21 @@ h2 {
         border-radius: 3px;
         bottom: 130%;
         width: 400px;
-
-        .track {
+        overflow: hidden;
+        
+        // TODO: No matter how big it is, the tab cursor (z-index: 1000) is always on top of it for unknown reason.
+        z-index: 1;
+        
+        .item {
             cursor: pointer;
             display: flex;
             align-items: center;
-
-            $padding: 20px;
             border-bottom: 1px solid darken($color, 5%);
 
+            &.active {
+                background-color: lighten($color, 8%);
+            }
+            
             .name {
                 flex-grow: 1;
                 font-weight: bold;
@@ -561,6 +925,23 @@ h2 {
                 &:hover {
                     background-color: lighten($color, 2%);
                 }
+            }
+        }
+    }
+}
+
+.audio-selector {
+    position: relative;
+}
+
+.track-selector {
+    position: relative;
+    
+    .track-list {
+        .track {
+    
+            .name {
+ 
             }
 
             .list-button {
@@ -574,7 +955,7 @@ h2 {
                 }
 
                 &.active {
-                    border-right-color: darken($color, 5%);
+                    background-color: lighten($primary, 8%);
                 }
             }
         }
