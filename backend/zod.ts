@@ -53,3 +53,4 @@ export const YoutubeSaveRequestSchema = z.object({
     advancedSync,
 });
 export type YoutubeSaveRequest = z.infer<typeof YoutubeSaveRequestSchema>;
+

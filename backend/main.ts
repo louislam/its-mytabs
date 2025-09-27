@@ -10,7 +10,7 @@ import {
     YoutubeAddDataSchema,
     YoutubeSaveRequestSchema
 } from "./zod.ts";
-import { hasUser, kv } from "./db.ts";
+import {db, hasUser, kv} from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
 import { devOriginList, isDev } from "./util.ts";
@@ -401,14 +401,14 @@ export async function main() {
         return c.html(indexHTML, 200);
     });
 
-    function sigIntHandler() {
+    // Close Server event
+    Deno.addSignalListener("SIGINT", () => {
         httpServer.close();
         kv.close();
+        db.close();
         console.log("Server closed");
-        Deno.exit(1);
-    }
-
-    Deno.addSignalListener("SIGINT", sigIntHandler);
+        Deno.exit();
+    });
 }
 
 function generalError(c: Context, e: unknown) {

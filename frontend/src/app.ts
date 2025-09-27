@@ -2,6 +2,7 @@ import { io } from "socket.io-client";
 import { midiProgramCodeList } from "../../backend/common.ts";
 import {notify} from "@kyvg/vue3-notification";
 import * as alphaTab from '@coderline/alphatab';
+import {SettingSchema} from "./zod.ts";
 
 export function connectSocketIO() {
     return io(baseURL);
@@ -86,4 +87,46 @@ export function convertAlphaTexSyncPoint(alphaTexString: string) {
     importer.initFromString(alphaTexString, settings);
     const score = importer.readScore();
     return score.exportFlatSyncPoints();
+}
+
+export function getSetting() {
+    const savedSetting = localStorage.getItem("userSetting");
+    try {
+        const setting = JSON.parse(savedSetting);
+        return SettingSchema.parse(setting);
+    } catch (e) {
+        return SettingSchema.parse({});
+    }
+}
+
+export class ActionBuffer {
+    delay: number = 2000;
+    timer: ReturnType<typeof setTimeout> | null = null;
+    action: (() => void) | null = null;
+
+    constructor(delay: number) {
+        this.delay = delay;
+        this.timer = null;
+    }
+
+    run(action : () => void) {
+        if (this.timer) {
+            //If cold down not finished, place it in buffer
+            this.action = action;
+            console.log("Action buffered, still in cold down");
+        } else {
+            // If no timer, run immediately
+            action();
+            console.log("Action run, start cold down");
+            this.timer = setTimeout(() => {
+                // Cold down finished, run the buffered action if exists
+                if (this.action !== null) {
+                    this.action();
+                    console.log("Buffered action run after cold down");
+                }
+                this.timer = null;
+                this.action = null;
+            }, this.delay);
+        }
+    }
 }

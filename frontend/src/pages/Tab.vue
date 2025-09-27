@@ -1,11 +1,13 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import {baseURL, checkFetch, connectSocketIO, getInstrumentName} from "../app.js";
+import {ActionBuffer, baseURL, checkFetch, connectSocketIO, getInstrumentName, getSetting} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
 import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
+
+const speedActionBuffer = new ActionBuffer(2000);
 
 export default defineComponent({
     components: {FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
@@ -31,6 +33,7 @@ export default defineComponent({
             enableMetronome: false,
             enableBackingTrack: true,
             isLooping: false,
+            speed: 100,
             ready: false,
             selectedTrack: 0,
             soloTrackID: -1,
@@ -45,14 +48,106 @@ export default defineComponent({
                     this.playPause();
                 }
             },
+            setting: {},
         };
     },
     computed: {
+        animatedCursor() {
+            return this.setting.cursor === "animated";
+        }
+    },
+    
+    watch: {
+        playing() {
+            if (this.setting.cursor === "invisible" || this.setting.cursor === "bar") {
+                    const cursor = document.querySelector('.at-cursor-beat');
+                if (cursor) {
+                    if (this.playing) {
+                        console.log("Hide cursor");
+                        cursor.classList.add('invisible');
+                    } else {
+                        console.log("Show cursor");
+                        cursor.classList.remove('invisible');
+                    }
+                }
+            }
+        },
 
+        enableCountIn() {
+            if (this.enableCountIn) {
+                this.api.countInVolume = 1;
+            } else {
+                this.api.countInVolume = 0;
+            }
+            this.setConfig("enableCountIn", this.enableCountIn);
+        },
+        
+        enableMetronome() {
+            if (this.enableMetronome) {
+                this.api.metronomeVolume = 1;
+            } else {
+                this.api.metronomeVolume = 0;
+            }
+            this.setConfig("enableMetronome", this.enableMetronome);
+        },
+        
+        isLooping() {
+            this.api.isLooping = this.isLooping;
+            this.setConfig("isLooping", this.isLooping);
+        },
+        
+        speed(newVal) {
+            console.log("Speed changed to:", newVal);
+
+            let speed = newVal;
+            
+            if (typeof speed !== "number" || isNaN(speed)) {
+                speed = 100;
+            } else if (speed < 20) {
+                speed = 20;
+            } else if (speed > 1000) {
+                speed = 1000;
+            }
+
+            // Rate limit the speed change action
+            speedActionBuffer.run(() => {
+                this.api.playbackSpeed = parseFloat((speed / 100).toFixed(2));
+                this.setConfig("speed", speed);
+            })
+        },
+
+        // Switch Audio Source
+        async currentAudio() {
+            if (this.currentAudio === "synth") {
+                await this.initSynth();
+            } else if (this.currentAudio === "backingTrack") {
+                this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledBackingTrack;
+                this.api.updateSettings();
+                this.pause();
+                this.closeAllList();
+            } else if (this.currentAudio.startsWith("youtube-")) {
+                const videoID = this.currentAudio.substring(8);
+                await this.initYoutube(videoID);
+            } else {
+                // Unknown audio source, fallback to synth
+                await this.initSynth();
+                {{
+                    notify({
+                        type: "error",
+                        title: "Error",
+                        text: "Unknown audio source, fallback to synth.",
+                    });
+                }}
+                return;
+            }
+            
+            this.setConfig("audio", this.currentAudio);
+        }
     },
     
     // Mounted
     async mounted() {
+        this.setting = getSetting();
         this.tabID = this.$route.params.id;
 
         try {
@@ -102,38 +197,15 @@ export default defineComponent({
         },
         
         countIn() {
-            if (!this.api) {
-                return
-            }
-
-            this.enableCountIn = !this.enableCountIn
-            
-            if (this.enableCountIn) {
-                this.api.countInVolume = 1;
-            } else {
-                this.api.countInVolume = 0;
-            }
+            this.enableCountIn = !this.enableCountIn;
         },
         
         metronome() {
-            if (!this.api) {
-                return
-            }
             this.enableMetronome = !this.enableMetronome;
-            
-            if (this.enableMetronome) {
-                this.api.metronomeVolume = 1;
-            } else {
-                this.api.metronomeVolume = 0;
-            }
         },
 
         loop() {
-            if (!this.api) {
-                return
-            }
             this.isLooping = !this.isLooping;
-            this.api.isLooping = this.isLooping;
         },
         
         playPause() {
@@ -190,6 +262,23 @@ export default defineComponent({
                     reject(new Error("Container element not found"));
                 }
                 
+                let displayResources = {
+                    tablatureFont: "bold 14px Arial",
+                    barNumberColor: "#6D6D6D",
+                };
+
+              if (this.setting.scoreColor === "dark") {
+                  displayResources = {
+                      ...displayResources,
+                      staffLineColor: "#6D6D6D",
+                      barSeparatorColor: "#6D6D6D",
+                      mainGlyphColor: "#A4A4A4",
+                      secondaryGlyphColor: "#A4A4A4",
+                      scoreInfoColor: "#A4A4A4",
+                      barNumberColor: "#6D6D6D",
+                  }
+                }
+                
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
                         rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
@@ -213,8 +302,10 @@ export default defineComponent({
                     },
                     player: {
                         enablePlayer: true,
+                        
+                        // Always enable, so we can nagivate to any position
                         enableCursor: true,
-                        enableAnimatedBeatCursor: false,
+                        enableAnimatedBeatCursor: this.animatedCursor,
                         enableUserInteraction: true,
                         soundFont: "/soundfont/sonivox.sf2",
                         //nativeBrowserSmoothScroll: true,
@@ -223,38 +314,29 @@ export default defineComponent({
                         playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
                     },
                     display: {
-                        staveProfile: StaveProfile.Tab,
-                        resources: {
-                            staffLineColor: "#6D6D6D",
-                            barSeparatorColor: "#6D6D6D",
-                            mainGlyphColor: "#A4A4A4",
-                            secondaryGlyphColor: "#A4A4A4",
-                            scoreInfoColor: "#A4A4A4",
-                            barNumberColor: "#6D6D6D",
-                            tablatureFont: "bold 14px Arial",
-                        },
+                        staveProfile: this.getStaveProfile(),
+                        resources: displayResources,
                     },
                 });
 
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
                     this.applyColors(score);
-
-
+                    
                     // Set Audio source
                     this.currentAudio = this.getConfig("audio", "synth");
-                    if (this.currentAudio === "synth") {
-                        await this.initSynth();
-                    } else if (this.currentAudio === "backingTrack") {
-                        await this.initBackingTrack();
-                    } else if (this.currentAudio.startsWith("youtube-")) {
-                        const videoID = this.currentAudio.substring(8);
-                        await this.initYoutube(videoID);
-                    } else {
-                        // Unknown audio source, fallback to synth
-                        await this.initSynth();
-                    }
                     
+                    // Metronome
+                    this.enableMetronome = this.getConfig("enableMetronome", false);
+                    
+                    // Count in
+                    this.enableCountIn = this.getConfig("enableCountIn", false);
+         
+                    // Looping
+                    this.isLooping = this.getConfig("isLooping", false);
+                    
+                    // Speed
+                    this.speed = this.getConfig("speed", 100);
                     
                     this.tracks = [];
               
@@ -267,10 +349,18 @@ export default defineComponent({
                         });
                     });
                     
+                    // Bar cursor
+                    if (this.setting.cursor === "bar") {
+                        const barCursor = document.querySelector(".at-cursor-bar");
+                        console.log("barCursor:", barCursor);
+                        if (barCursor) {
+                            barCursor.classList.add("enable");
+                        }
+                    }
+                    
                     this.enableBackingTrack = this.hasBackingTrack();
                     this.selectedTrack = trackID;
                     this.ready = true;
-                    
                     resolve();
                 });
                 
@@ -289,7 +379,6 @@ export default defineComponent({
             this.playing = false;
             this.soloTrackID = -1;
             this.muteTrackList = {};
-            
         },
         
         simpleSync(offset) {
@@ -310,6 +399,10 @@ export default defineComponent({
                 5: alphaTab.model.Color.fromJson("#2A8E08"),
                 6: alphaTab.model.Color.fromJson("#A349A4"),
             };
+            
+            if (this.setting.scoreColor === "light") {
+                stringColors[2] = alphaTab.model.Color.fromJson("#b5a33a");
+            }
 
             // traverse hierarchy and apply colors as desired
             for (const track of score.tracks) {
@@ -331,11 +424,14 @@ export default defineComponent({
                                     );
                                 }
 
-                                for (const note of beat.notes) {
-                                    note.style = new alphaTab.model.NoteStyle();
-                                    note.style.colors.set(alphaTab.model.NoteSubElement.StandardNotationNoteHead, stringColors[note.string]);
-                                    note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
+                                if (this.setting.noteColor === "rocksmith") {
+                                    for (const note of beat.notes) {
+                                        note.style = new alphaTab.model.NoteStyle();
+                                        //note.style.colors.set(alphaTab.model.NoteSubElement.StandardNotationNoteHead, stringColors[note.string]);
+                                        note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
+                                    }
                                 }
+                         
                             }
                         }
                     }
@@ -358,12 +454,17 @@ export default defineComponent({
                 console.log("Disconnected from server");
             });
         },
-        
+
+
+        async audioYoutube(videoID) {
+            this.currentAudio = "youtube-" + videoID;
+        },
+
         async initYoutube(videoID) {
             this.closeAllList();
             
             if (!this.youtubePlayer) {
-                await this.initYoutubePlayer(videoID);
+                await this.initYoutubePlayer();
             }
             
             // Get offset from youtubeList
@@ -385,16 +486,12 @@ export default defineComponent({
             this.api.updateSettings();
             
             this.api.player.output.handler = this.alphaTabYoutubeHandler;
-            
             this.youtubePlayer.cueVideoById(videoID);
-
-            this.currentAudio = "youtube-" + videoID;
-            this.setConfig("audio", this.currentAudio);
+            this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
             this.pause();
         },
 
-        async initYoutubePlayer(videoID) {
-            
+        async initYoutubePlayer() {
             const ytWarning = setTimeout(() => {
                 notify({
                     type: "warning",
@@ -451,14 +548,17 @@ export default defineComponent({
                                 currentTimeInterval = window.setInterval(() => {
                                     this.api?.player?.output?.updatePosition(player.getCurrentTime() * 1000);
                                 }, 50);
+                                this.playing = true;
                                 this.api?.play();
                                 break;
                             case YT.PlayerState.ENDED:
                                 window.clearInterval(currentTimeInterval);
+                                this.playing = false;
                                 this.api?.stop();
                                 break;
                             case YT.PlayerState.PAUSED:
                                 window.clearInterval(currentTimeInterval);
+                                this.playing = false;
                                 this.api?.pause();
                                 break;
                             default:
@@ -483,9 +583,11 @@ export default defineComponent({
                     return player.getDuration() * 1000;
                 },
                 get playbackRate() {
+                    console.log("Get playback rate:", player.getPlaybackRate());
                     return player.getPlaybackRate();
                 },
                 set playbackRate(value) {
+                    console.log("Set playback rate:", value);
                     player.setPlaybackRate(value);
                 },
                 get masterVolume() {
@@ -520,17 +622,31 @@ export default defineComponent({
             this.alphaTabYoutubeHandler = alphaTabYoutubeHandler;
             clearTimeout(ytWarning);
         },
+        
+        getStaveProfile() {
+            if (this.setting.scoreStyle === "tab") {
+                return StaveProfile.Tab;
+            } else if (this.setting.scoreStyle === "score") {
+                return StaveProfile.Score;
+            } else if (this.setting.scoreStyle === "score-tab") {
+                return StaveProfile.ScoreTab;
+            } else {
+                return StaveProfile.Default;
+            }
+        },
+        
+        async audioSynth() {
+            this.currentAudio = "synth";
+        },
 
         async initSynth() {
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
-            this.currentAudio = "synth";
-            this.setConfig("audio", this.currentAudio);
             this.pause();
             this.closeAllList();
         },
         
-        async initBackingTrack() {
+        async audioBackingTrack() {
             if (!this.hasBackingTrack()) {
                 notify({
                     type: "error",
@@ -539,19 +655,13 @@ export default defineComponent({
                 });
                 return;
             }
-            
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledBackingTrack;
-            this.api.updateSettings();
             this.currentAudio = "backingTrack";
-            this.setConfig("audio", this.currentAudio);
-            this.pause();
-            this.closeAllList();
         },
 
         /**
          * TODO
          */
-        async initMPC() {
+        async initSocket() {
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
 
@@ -697,7 +807,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="main">
+    <div class="main" :class="{'light': this.setting.scoreColor === 'light'}">
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
@@ -736,15 +846,15 @@ export default defineComponent({
                         <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
                     </div>
                     
-                    <div class="audio item" @click="initSynth" :class="{ active: currentAudio === 'synth' }">
+                    <div class="audio item" @click="audioSynth" :class="{ active: currentAudio === 'synth' }">
                         <div class="name">Synth</div>
                     </div>
 
-                    <div class="audio item" @click="initBackingTrack" :class="{ active: currentAudio === 'backingTrack' }" v-if="enableBackingTrack">
+                    <div class="audio item" @click="audioBackingTrack" :class="{ active: currentAudio === 'backingTrack' }" v-if="enableBackingTrack">
                         <div class="name">Embedded Backing Track</div>
                     </div>
 
-                    <div class="audio item" @click="initYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class="{ active: currentAudio === 'youtube-' + youtube.videoID }">
+                    <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class="{ active: currentAudio === 'youtube-' + youtube.videoID }">
                         <div class="name">Youtube: {{ youtube.videoID }}</div>
                     </div>
     
@@ -779,7 +889,7 @@ export default defineComponent({
             </button>
 
             <div class="speed">
-                    Speed: <input type="number"  min="10" max="200" step="1" /> (%)
+                    Speed: <input type="number"  min="0" max="1000" step="1" v-model="speed" /> (%)
             </div>
 
             <div class="btn-edit">
@@ -801,10 +911,22 @@ export default defineComponent({
 $toolbar-height: 75px;
 $youtube-height: 200px;
 
+// Light Score
+
+
 .main {
     width: 95%;
     color: #d6d6d6;
     margin: 0 auto $toolbar-height auto;
+    
+    &.light {
+        background-color: #F1F1F1;
+        padding-top: 30px;
+        
+        h1, h2 {
+            color: #333;
+        }
+    }
 }
 
 .yt-margin {
@@ -826,6 +948,10 @@ $youtube-height: 200px;
     left: 0;
     width: 100%;
     z-index: 1;
+    
+    .light & {
+        background-color: rgba(33, 37, 41, 0.8);
+    }
     
     .btn-edit {
         flex-grow: 1;
