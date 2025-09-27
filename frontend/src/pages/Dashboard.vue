@@ -13,13 +13,13 @@ export default defineComponent({
         BSpinner,
         Logo,
     },
+    data() {
+        return {
+            isLoggedIn: false,
+        };
+    },
     async mounted() {
-        if (!await isLoggedIn()) {
-            console.log("Not logged in, redirecting to login page");
-            this.$router.push("/login");
-        } else {
-            console.log("Logged in");
-        }
+        this.isLoggedIn = await isLoggedIn();
     },
     methods: {
         async signOut() {
@@ -37,12 +37,12 @@ export default defineComponent({
 
             <div class="toolbar">
                 <div class="left">
-                    <router-link to="/">
+                    <router-link to="/" v-if="isLoggedIn">
                         <font-awesome-icon :icon='["fas", "folder"]' />
                         Tabs
                     </router-link>
 
-                    <router-link to="/new-tab">
+                    <router-link to="/new-tab" v-if="isLoggedIn">
                         <font-awesome-icon :icon='["fas", "plus"]' />
                         New Tab
                     </router-link>
@@ -54,10 +54,15 @@ export default defineComponent({
                 </div>
 
                 <div class="right">
-                    <a href="#" @click.prevent="signOut()">
+                    <a href="#" @click.prevent="signOut()" v-if="isLoggedIn">
                         <font-awesome-icon :icon='["fas", "arrow-right-from-bracket"]' />
                         Log out
                     </a>
+                    
+                    <router-link to="/login" v-else>
+                        <font-awesome-icon :icon='["fas", "arrow-right-to-bracket"]' />
+                        Log in
+                    </router-link>
                 </div>
             </div>
         </div>

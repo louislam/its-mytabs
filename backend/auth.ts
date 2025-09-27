@@ -75,10 +75,14 @@ export function disableSignUp() {
 }
 
 export async function checkLogin(c: Context) {
-    const session = await auth.api.getSession(c.req.raw);
-    if (!session) {
+    if (!await isLoggedIn(c)) {
         throw new Error("Not logged in");
     }
+}
+
+export async function isLoggedIn(c: Context) {
+    const session = await auth.api.getSession(c.req.raw);
+    return !!session;
 }
 
 async function generateRandomSecret() {

@@ -92,8 +92,12 @@ export async function updateTab(tab: TabInfo, data: UpdateTabInfo) {
     await kv.set(["tab", tab.id], tab);
 }
 
-export async function getTabFilePath(tab: TabInfo) {
+export function getTabFilePath(tab: TabInfo) {
     return path.join(tabDir, tab.id.toString(), tab.filename);
+}
+
+export function getTabFullFilePath(tab: TabInfo) {
+    return path.join(Deno.cwd(), getTabFilePath(tab));
 }
 
 export async function deleteTab(id: number) {

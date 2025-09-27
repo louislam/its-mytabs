@@ -2,15 +2,24 @@
 import { defineComponent } from "vue";
 import { notify } from "@kyvg/vue3-notification";
 import { baseURL } from "../app.js";
+import {isLoggedIn} from "../auth-client.js";
 
 export default defineComponent({
     data() {
         return {
             tabList: [],
             ready: false,
+            isLoggedIn: false,
         };
     },
     async mounted() {
+        this.isLoggedIn = await isLoggedIn();
+        
+        if (!this.isLoggedIn) {
+            this.$router.push("/login");
+            return;
+        }
+        
         try {
             const res = await fetch(baseURL + "/api/tabs", { credentials: "include" });
             const data = await res.json();

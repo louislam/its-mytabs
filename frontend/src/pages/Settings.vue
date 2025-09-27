@@ -39,20 +39,20 @@ export default defineComponent({
             <select id="scoreStyle" class="form-select" v-model="setting.scoreStyle">
                 <option value="tab">Tab</option>
                 <option value="score">Score</option>
-                <option value="score-tab">Score + Tab</option>
+                <option value="score-tab">Tab + Score</option>
             </select>
         </div>
         
         <!-- Score Color Dropdown -->
         <div class="mb-3">
-            <label for="scoreColor" class="form-label">Score Color</label>
+            <label for="scoreColor" class="form-label">Tab/Score Color</label>
             <select id="scoreColor" class="form-select" v-model="setting.scoreColor">
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
             </select>
         </div>
         
-        <h2 class="mt-5 mb-4">Assistants</h2>
+        <h2 class="mt-5 mb-4">Assists</h2>
         
         <!-- Note Color refer to SettingSchema   noteColor: z.enum(["rocksmith", "none"]).default("none"), -->
         <div class="mb-3">
@@ -73,6 +73,8 @@ export default defineComponent({
                 <option value="bar">Bar</option>
             </select>
         </div>
+        
+        <p class="text-secondary">Tips: If you want to check if the sync points is correct, "Cursor (Instant)" is a good indicator.</p>
         
         
     </div>

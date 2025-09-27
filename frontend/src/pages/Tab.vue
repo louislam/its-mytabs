@@ -6,6 +6,7 @@ import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
 import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
+import {isLoggedIn} from "../auth-client.js";
 
 const speedActionBuffer = new ActionBuffer(2000);
 
@@ -13,6 +14,7 @@ export default defineComponent({
     components: {FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
     data() {
         return {
+            isLoggedIn: false,
             title: "",
             artist: "",
             /**
@@ -59,6 +61,8 @@ export default defineComponent({
     
     watch: {
         playing() {
+            
+            // Hide the cursor when playing
             if (this.setting.cursor === "invisible" || this.setting.cursor === "bar") {
                     const cursor = document.querySelector('.at-cursor-beat');
                 if (cursor) {
@@ -69,6 +73,14 @@ export default defineComponent({
                         console.log("Show cursor");
                         cursor.classList.remove('invisible');
                     }
+                }
+            }
+
+            // Show the bar cursor if enabled
+            if (this.setting.cursor === "bar") {
+                const barCursor = document.querySelector(".at-cursor-bar");
+                if (barCursor) {
+                    barCursor.classList.add("enable");
                 }
             }
         },
@@ -131,13 +143,11 @@ export default defineComponent({
             } else {
                 // Unknown audio source, fallback to synth
                 await this.initSynth();
-                {{
-                    notify({
-                        type: "error",
-                        title: "Error",
-                        text: "Unknown audio source, fallback to synth.",
-                    });
-                }}
+                notify({
+                    type: "error",
+                    title: "Error",
+                    text: "Unknown audio source, fallback to synth.",
+                });
                 return;
             }
             
@@ -147,6 +157,7 @@ export default defineComponent({
     
     // Mounted
     async mounted() {
+        this.isLoggedIn = await isLoggedIn();
         this.setting = getSetting();
         this.tabID = this.$route.params.id;
 
@@ -182,8 +193,17 @@ export default defineComponent({
                 credentials: "include",
             });
             
-            await checkFetch(res);
-
+            try {
+                await checkFetch(res);
+            } catch (e) {
+                if (e.message === "Not logged in") {
+                    this.$router.push("/login");
+                    return;
+                } else {
+                    throw e;
+                }
+            }
+            
             const data = await res.json();
             if (data.tab) {
                 this.tab = data.tab;
@@ -348,15 +368,6 @@ export default defineComponent({
                             program: track.playbackInfo.program,
                         });
                     });
-                    
-                    // Bar cursor
-                    if (this.setting.cursor === "bar") {
-                        const barCursor = document.querySelector(".at-cursor-bar");
-                        console.log("barCursor:", barCursor);
-                        if (barCursor) {
-                            barCursor.classList.add("enable");
-                        }
-                    }
                     
                     this.enableBackingTrack = this.hasBackingTrack();
                     this.selectedTrack = trackID;
@@ -858,7 +869,7 @@ export default defineComponent({
                         <div class="name">Youtube: {{ youtube.videoID }}</div>
                     </div>
     
-                    <div class="ms-4 me-4 mt-3 mb-3">
+                    <div class="ms-4 me-4 mt-3 mb-3" v-if="isLoggedIn">
                         <router-link :to="`/tab/${tab.id}/edit/audio`">Add Youtube or Audio File...</router-link>
                     </div>
                     
@@ -879,20 +890,20 @@ export default defineComponent({
                 <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
                 Loop
             </button>
-            <button class="btn btn-secondary" @click="countIn()" :class="{active: enableCountIn }">
+            <button class="btn btn-secondary" @click="countIn()" :class="{active: enableCountIn, disabled: currentAudio !== 'synth' }">
                 <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
                 Count in
             </button>
-            <button class="btn btn-secondary" @click="metronome()"  :class="{active: enableMetronome }">
+            <button class="btn btn-secondary" @click="metronome()"  :class="{active: enableMetronome, disabled: currentAudio !== 'synth' }">
                 <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
                 Metronome
             </button>
 
             <div class="speed">
-                    Speed: <input type="number"  min="0" max="1000" step="1" v-model="speed" /> (%)
+                    Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
             </div>
 
-            <div class="btn-edit">
+            <div class="btn-edit" v-if="isLoggedIn">
                 <button class="btn btn-secondary" @click="edit()">
                     Edit
                 </button>
@@ -1085,6 +1096,15 @@ $padding: 20px;
                 }
             }
         }
+    }
+}
+
+.speed {
+    display: flex;
+    align-items: center;
+    
+    input {
+        border: 0;
     }
 }
 </style>

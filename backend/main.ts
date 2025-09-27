@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Context, Hono, MiddlewareHandler } from "@hono/hono";
 import * as fs from "@std/fs";
-import { auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup } from "./auth.ts";
+import {auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup, isLoggedIn} from "./auth.ts";
 import {
     SignUpSchema,
     TabInfo,
@@ -21,7 +21,7 @@ import {
     createTab,
     deleteTab,
     getTab,
-    getTabFilePath,
+    getTabFilePath, getTabFullFilePath,
     getYoutubeList,
     removeYoutube, updateTab,
     updateYoutube
@@ -179,19 +179,25 @@ export async function main() {
     // Get Tab
     app.get("/api/tab/:id", async (c) => {
         try {
-            await checkLogin(c);
             const id = parseInt(c.req.param("id"));
             if (isNaN(id)) {
                 throw new Error("Invalid tab ID");
             }
 
             const tab = await getTab(id);
+
+            if (!tab.public) {
+                await checkLogin(c);
+            }
+
             const youtubeList = await getYoutubeList(id);
+            const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(tab) : "";
 
             return c.json({
                 ok: true,
                 tab,
                 youtubeList,
+                filePath,
             });
         } catch (e) {
             return generalError(c, e);
@@ -328,12 +334,16 @@ export async function main() {
                 if (tokenData.value !== id) {
                     throw new Error("Temp token does not match tab ID");
                 }
+
+                // Delete the token after use
+                await kv.delete(["temp_token", tempToken]);
+
             } else {
                 await checkLogin(c);
             }
 
             const tab = await getTab(id);
-            const filePath = await getTabFilePath(tab);
+            const filePath = getTabFilePath(tab);
 
             // Check if file exists
             if (!await fs.exists(filePath)) {
@@ -360,12 +370,17 @@ export async function main() {
     // Generate temp token for tab file access
     app.get("/api/tab/:id/temp-token", async (c) => {
         try {
-            await checkLogin(c);
             const id = parseInt(c.req.param("id"));
             if (isNaN(id)) {
                 throw new Error("Invalid tab ID");
             }
+
             const tab = await getTab(id);
+
+            if (!tab.public) {
+                await checkLogin(c);
+            }
+
             const token = crypto.randomUUID();
 
             await kv.set(["temp_token", token], tab.id, { expireIn: 10 });

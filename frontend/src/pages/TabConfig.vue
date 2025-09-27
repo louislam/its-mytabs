@@ -2,8 +2,11 @@
 import { defineComponent } from "vue";
 import {baseURL, checkFetch, convertAlphaTexSyncPoint, generalError} from "../app.js";
 import { notify } from "@kyvg/vue3-notification";
+import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
+import { supportedFormatCommaString } from "../../../backend/common.js";
 
 export default defineComponent({
+    components: {Vue3Dropzone},
     data() {
         return {
             tabID: -1,
@@ -12,6 +15,8 @@ export default defineComponent({
             youtubeURL: "",
             youtubeList: [],
             is127001ip: false,
+            supportedFormatCommaString,
+            filePath: "",
         };
     },
     async mounted() {
@@ -34,9 +39,9 @@ export default defineComponent({
             });
             await checkFetch(res);
             const data = await res.json();
-            console.log(data)
             this.tab = data.tab;
             this.youtubeList = data.youtubeList;
+            this.filePath = data.filePath;
         },
         
         async submitInfo() {
@@ -296,9 +301,49 @@ export default defineComponent({
                 
             </div>
             
-            <div>
-                <h3>Audio files</h3>
+            <div class="mb-5">
+                <h3 class="mb-5">Audio files</h3>
+
+                <Vue3Dropzone
+                    v-model="files"
+                    :maxFileSize="100"
+                    :accept="supportedFormatCommaString"
+                    @error="dropzoneError"
+                >
+                    <template #title>
+                        Drop your tab here
+                    </template>
+                    <template #description> </template>
+                </Vue3Dropzone>
+
+                <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
             </div>
+            
+        </div>
+        
+        <!-- Tab File Page -->
+        <div v-else-if="this.page === 'tab-file'">
+            <h2 class="mt-4 mb-4">Method 1: Direct Edit</h2>
+            <p>
+                If you can access the file system, you can edit/replace the tab directly, the path is:<br />
+                <strong>{{ filePath }}</strong>
+            </p>
+            
+            <h2 class="mt-4 mb-4">Method 2: Upload and replace the tab file</h2>
+
+            <Vue3Dropzone
+                v-model="files"
+                :maxFileSize="100"
+                :accept="supportedFormatCommaString"
+                @error="dropzoneError"
+            >
+                <template #title>
+                    Drop your tab here
+                </template>
+                <template #description> </template>
+            </Vue3Dropzone>
+
+            <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
             
         </div>
         
