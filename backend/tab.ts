@@ -1,7 +1,7 @@
 import { tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeAddDataSchema, YoutubeData, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
+import { TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 
 export async function createTab(tabFileData: Uint8Array, ext: string, title: string, artist: string, originalFilename: string) {

@@ -1,12 +1,12 @@
 import { serve } from "@hono/node-server";
-import { Context, Hono, MiddlewareHandler } from "@hono/hono";
+import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
-import { auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup, isLoggedIn } from "./auth.ts";
+import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
 import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, YoutubeSaveRequestSchema } from "./zod.ts";
 import { db, hasUser, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { devOriginList, isDev } from "./util.ts";
+import {devOriginList, getFrontendDir, isDev, start} from "./util.ts";
 import * as path from "@std/path";
 import { supportedFormatList } from "./common.ts";
 import {
@@ -16,7 +16,7 @@ import {
 import { ZodError } from "zod";
 
 export async function main() {
-    const frontendDir = "./dist";
+    const frontendDir = getFrontendDir();
 
     if (!Deno.build.standalone) {
         // Check if the frontend directory exists
@@ -41,7 +41,13 @@ export async function main() {
         fetch: app.fetch,
         port: 47777,
     }, (info) => {
-        console.log(`Server running on http://localhost:${info.port}`);
+        const url = `http://localhost:${info.port}`;
+        console.log(`Server running on ${url}`);
+
+        if (Deno.build.standalone) {
+            start(url);
+        }
+
     });
 
     // CORS for development
@@ -426,7 +432,7 @@ export async function main() {
     app.get(
         "*",
         serveStatic({
-            root: "./dist",
+            root: path.join(frontendDir),
         }),
     );
 
@@ -443,14 +449,20 @@ export async function main() {
         return c.html(indexHTML, 200);
     });
 
-    // Close Server event
-    Deno.addSignalListener("SIGINT", () => {
+    const signalHandler = () => {
         httpServer.close();
         kv.close();
         db.close();
         console.log("Server closed");
         Deno.exit();
-    });
+    }
+
+    // Close Server event
+    Deno.addSignalListener("SIGINT", signalHandler);
+
+    if (Deno.build.os === "linux") {
+        Deno.addSignalListener("SIGTERM", signalHandler);
+    }
 }
 
 function generalError(c: Context, e: unknown) {

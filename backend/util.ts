@@ -1,5 +1,7 @@
 import * as fs from "@std/fs";
 import * as path from "@std/path";
+import { fileURLToPath } from "node:url";
+import childProcess from "node:child_process";
 
 export async function getDataDir() {
     let dataDir = Deno.env.get("DATA_DIR") || "./data";
@@ -29,3 +31,34 @@ export const devOriginList = [
     "http://localhost:5174",
     "http://localhost:5175",
 ];
+
+export function getFrontendDir(): string {
+    return path.join(getSourceDir(), "./dist");
+}
+
+/**
+ * After compiled, some files are inside the executable, so the path is different
+ */
+export function getSourceDir(): string {
+    if (Deno.build.standalone) {
+        // `..` go up one leve is the root. In case this file moved to another folder in the future, be careful
+        return path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+    } else {
+        return "./";
+    }
+}
+
+/**
+ * For cmd.exe's start command, escape the string
+ * @param str
+ */
+export function escapeString(str: string) {
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
+export function start(path: string) {
+    if (Deno.build.os === "windows") {
+        const escapedPath = escapeString(path);
+        childProcess.exec(`start "" ${escapedPath}`);
+    }
+}

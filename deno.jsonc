@@ -7,6 +7,7 @@
     "tasks": {
         "frontend-dev": "cd frontend && deno run dev",
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
+        "build-binary": "deno task build:frontend && deno run --allow-all extra/build.ts",
         "build:frontend": "cd frontend && deno run build",
         "start": "deno run --allow-all backend/main.ts",
         "start-with-build": "deno task build:frontend && deno task start",

@@ -1,13 +1,13 @@
 import * as fs from "@std/fs";
 import { DatabaseSync } from "node:sqlite";
 import * as path from "@std/path";
-import { dataDir } from "./util.ts";
+import {dataDir, getSourceDir} from "./util.ts";
 
 let dbPath = path.join(dataDir, "config.db");
 
 if (!await fs.exists(dbPath)) {
     console.log("Init Database");
-    await Deno.copyFile("./extra/config-template.db", dbPath);
+    await Deno.copyFile(path.join(getSourceDir(), "./extra/config-template.db"), dbPath);
 }
 
 export const db = new DatabaseSync(dbPath);
