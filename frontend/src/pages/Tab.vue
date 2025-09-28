@@ -1,7 +1,15 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import { ActionBuffer, baseURL, checkFetch, connectSocketIO, getInstrumentName, getSetting } from "../app.js";
+import {
+    ActionBuffer,
+    baseURL,
+    checkFetch,
+    connectSocketIO,
+    convertAlphaTexSyncPoint, generalError,
+    getInstrumentName,
+    getSetting
+} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
@@ -9,6 +17,7 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
 
 const speedActionBuffer = new ActionBuffer(2000);
+const syncOffsetActionBuffer = new ActionBuffer(1500);
 
 export default defineComponent({
     /**
@@ -25,7 +34,7 @@ export default defineComponent({
             isLoggedIn: false,
             title: "",
             artist: "",
-
+            youtube: {},
             tabID: -1,
             tracks: [],
             showTrackList: false,
@@ -52,6 +61,7 @@ export default defineComponent({
                 }
             },
             setting: {},
+            simpleSyncSecond: -1,
         };
     },
     computed: {
@@ -61,7 +71,55 @@ export default defineComponent({
     },
 
     watch: {
+        simpleSyncSecond(newVal, oldVal) {
+            if (!this.api || !this.youtube) {
+                return;
+            }
+            
+            this.pause();
+            
+            this.youtube.simpleSync = this.simpleSyncSecond * 1000;
+
+            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
+            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
+            this.api.updateSettings();
+
+            this.simpleSync(this.youtube.simpleSync);
+
+            // Restore
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
+            this.api.updateSettings();
+            this.api.player.output.handler = this.alphaTabYoutubeHandler;
+            
+            // Save
+            syncOffsetActionBuffer.run(() => {
+                if (oldVal !== -1) {
+                    this.saveYoutube();
+                }
+            });
+        },
+        
+        "youtube.simpleSync"() {
+            if (!this.api || !this.youtube) {
+                return;
+            }
+            this.simpleSyncSecond = parseFloat((this.youtube.simpleSync / 1000).toFixed(2));
+        },
+        
         playing() {
+            if (!this.api) {
+                return;
+            }
+            
+            if (this.playing) {
+                this.api.settings.player.scrollMode = ScrollMode.Continuous;
+                this.api.updateSettings();
+                this.api.play();
+            } else {
+                this.api.pause();
+            }
+            
             // Hide the cursor when playing
             if (this.setting.cursor === "invisible" || this.setting.cursor === "bar") {
                 const cursor = document.querySelector(".at-cursor-beat");
@@ -260,16 +318,16 @@ export default defineComponent({
                 return;
             }
 
-            this.api.settings.player.scrollMode = ScrollMode.Continuous;
-            this.api.updateSettings();
-
             this.playing = !this.playing;
 
-            if (this.playing) {
-                this.api.play();
-            } else {
-                this.api.pause();
+
+        },
+        
+        play() {
+            if (!this.api || !this.ready) {
+                return;
             }
+            this.playing = true;
         },
 
         pause() {
@@ -277,7 +335,6 @@ export default defineComponent({
                 return;
             }
             this.playing = false;
-            this.api.pause();
         },
 
         getFileURL(tempToken) {
@@ -433,6 +490,8 @@ export default defineComponent({
             this.isLooping = false;
             this.speed = 100;
             this.soloTrackID = -1;
+            this.youtube = {};
+            this.simpleSyncSecond = -1;
             this.muteTrackList = {};
         },
 
@@ -442,6 +501,12 @@ export default defineComponent({
                 { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": offset },
             ];
             this.api.score.applyFlatSyncPoints(syncPoints);
+        },
+        
+        advancedSync(syncPointsText) {
+            const syncPoints = convertAlphaTexSyncPoint(syncPointsText);
+            this.api.score.applyFlatSyncPoints(syncPoints);
+            console.log("Applying advanced sync points:", syncPoints);
         },
 
         // Style the score with custom colors
@@ -521,24 +586,27 @@ export default defineComponent({
                 await this.initYoutubePlayer();
             }
 
+            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
+            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
+            this.api.updateSettings(); 
+
             // Get offset from youtubeList
-            let offset = 0;
             for (const yt of this.youtubeList) {
                 if (yt.videoID === videoID) {
-                    offset = yt.simpleSync;
+                    this.youtube = yt;
+                    if (yt.syncMethod === "advanced") {
+                        this.advancedSync(yt.advancedSync);
+                    } else {
+                        this.simpleSync(yt.simpleSync);
+                    }
                     break;
                 }
             }
 
-            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
-            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
-            this.api.updateSettings();
-            this.simpleSync(offset);
-
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
-
+            
             this.api.player.output.handler = this.alphaTabYoutubeHandler;
             this.youtubePlayer.cueVideoById(videoID);
             this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
@@ -852,6 +920,28 @@ export default defineComponent({
             }
             return JSON.parse(value);
         },
+        
+        async saveYoutube() {
+            let res;
+            try {
+                res = await fetch(baseURL + `/api/tab/${this.tabID}/youtube/${this.youtube.videoID}`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        syncMethod: this.youtube.syncMethod,
+                        simpleSync: this.youtube.simpleSync,
+                        advancedSync: this.youtube.advancedSync,
+                    }),
+                });
+
+                await checkFetch(res);
+            } catch (e) {
+                generalError(e);
+            }  
+        },
     },
 });
 </script>
@@ -862,6 +952,7 @@ export default defineComponent({
         <h2>{{ tab.artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
 
+        <!-- Just add a margin, don't let youtube player overlay the tab -->
         <div :class='{ "yt-margin": currentAudio.startsWith(`youtube-`) }'></div>
 
         <div class="toolbar">
@@ -949,8 +1040,14 @@ export default defineComponent({
                     Edit
                 </button>
             </div>
-
-            <div ref="youtube" v-show='currentAudio.startsWith("youtube-")' class="youtube-player-container"></div>
+            
+            <div v-show='currentAudio.startsWith("youtube-")' class="youtube-player-container">
+                <!-- Simple sync edit -->
+                <div class="sync-offset ps-3 pe-3 p-2" v-if="youtube?.syncMethod === 'simple'">
+                    Sync Offset: <input type="number" class="form-control" min="-100000" max="100000" step="0.01" v-model="simpleSyncSecond" /> s
+                </div>
+                <div ref="youtube" class="player"></div>
+            </div>
         </div>
     </div>
 </template>
@@ -1028,7 +1125,30 @@ $youtube-height: 200px;
         position: absolute;
         bottom: 100%;
         right: 0;
-        height: 180px;
+        display: flex;
+        
+        // align bottom
+        align-items: flex-end;
+        
+        white-space: nowrap;
+        
+        .player {
+            height: 180px;
+        }
+        
+        .sync-offset {
+            color: white;
+            display: flex;
+            align-items: center;
+            background-color: $dark1;
+
+            input {
+                margin: 0 5px;
+                background-color: #32393e;
+                border: 1px solid #555b60;
+                color: white;
+            }
+        }
     }
 }
 

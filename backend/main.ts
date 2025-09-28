@@ -9,7 +9,10 @@ import { serveStatic } from "@hono/hono/deno";
 import { devOriginList, isDev } from "./util.ts";
 import * as path from "@std/path";
 import { supportedFormatList } from "./common.ts";
-import { addYoutube, createTab, deleteTab, getTab, getTabFilePath, getTabFullFilePath, getYoutubeList, removeYoutube, updateTab, updateYoutube } from "./tab.ts";
+import {
+    addYoutube, createTab, deleteTab, getTab, getTabFilePath, getTabFullFilePath, getYoutubeList, removeYoutube,
+    replaceTab, updateTab, updateYoutube
+} from "./tab.ts";
 import { ZodError } from "zod";
 
 export async function main() {
@@ -210,6 +213,47 @@ export async function main() {
         }
     });
 
+    // Replace Tab File
+    app.post("/api/tab/:id/replace", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const tab = await getTab(id);
+
+            const form = await c.req.formData();
+            const file = form.get("file");
+
+            if (!(file instanceof File)) {
+                throw new Error("No file uploaded");
+            }
+
+            // Check file ext if in supportedFormatList
+            const fileName = file.name;
+            const ext = fileName.split(".").pop()?.toLowerCase();
+            if (!ext) {
+                throw new Error("File has no extension");
+            }
+
+            if (!supportedFormatList.includes(ext)) {
+                throw new Error("Unsupported file format: " + ext);
+            }
+
+            const arrayBuffer = await file.arrayBuffer();
+            await replaceTab(tab, new Uint8Array(arrayBuffer), ext, fileName);
+
+            return c.json({
+                ok: true,
+            });
+
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     // Delete Tab
     app.delete("/api/tab/:id", async (c) => {
         try {
@@ -388,7 +432,10 @@ export async function main() {
 
     // if /api/* not found, return 404
     app.all("/api/*", (c) => {
-        return c.json({ error: "Not found" }, 404);
+        return c.json({
+            ok: false,
+            msg: "Page Not found",
+        }, 404);
     });
 
     // For SPA, always return index.html

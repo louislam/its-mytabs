@@ -30,6 +30,24 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
     return id;
 }
 
+// Replace Tab
+export async function replaceTab(tab: TabInfo, tabFileData: Uint8Array, ext: string, originalFilename: string) {
+    // Rename old file to filename.ext.timestamp
+    const oldFilePath = getTabFilePath(tab);
+    const renamedOldFilePath = oldFilePath + "." + Date.now().toString();
+    await Deno.rename(oldFilePath, renamedOldFilePath);
+
+    // Write new file
+    const filename = "tab." + ext;
+    const newFilePath = path.join(tabDir, tab.id.toString(), filename);
+    await Deno.writeFile(newFilePath, tabFileData);
+
+    // Update tab info
+    tab.filename = filename;
+    tab.originalFilename = originalFilename;
+    await kv.set(["tab", tab.id], tab);
+}
+
 /**
  * Read the tabDir and find the max ID
  */

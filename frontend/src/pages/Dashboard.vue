@@ -16,10 +16,12 @@ export default defineComponent({
     data() {
         return {
             isLoggedIn: false,
+            ready: false,
         };
     },
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
+        this.ready = true;
     },
     methods: {
         async signOut() {
@@ -36,7 +38,7 @@ export default defineComponent({
             <Logo />
 
             <div class="toolbar">
-                <div class="left">
+                <div class="left" v-show="ready">
                     <router-link to="/" v-if="isLoggedIn">
                         <font-awesome-icon :icon='["fas", "folder"]' />
                         Tabs
@@ -53,7 +55,7 @@ export default defineComponent({
                     </router-link>
                 </div>
 
-                <div class="right">
+                <div class="right"  v-show="ready">
                     <a href="#" @click.prevent="signOut()" v-if="isLoggedIn">
                         <font-awesome-icon :icon='["fas", "arrow-right-from-bracket"]' />
                         Log out

@@ -3,7 +3,8 @@ import { defineComponent } from "vue";
 import { baseURL, checkFetch, convertAlphaTexSyncPoint, generalError } from "../app.js";
 import { notify } from "@kyvg/vue3-notification";
 import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
-import { supportedFormatCommaString } from "../../../backend/common.js";
+import {supportedAudioFormatCommaString, supportedFormatCommaString} from "../../../backend/common.js";
+import * as alphaTab from "@coderline/alphatab";
 
 export default defineComponent({
     components: { Vue3Dropzone },
@@ -16,7 +17,10 @@ export default defineComponent({
             youtubeList: [],
             is127001ip: false,
             supportedFormatCommaString,
+            supportedAudioFormatCommaString,
             filePath: "",
+            tabFiles: [],
+            audioFiles: [],
         };
     },
     async mounted() {
@@ -161,6 +165,55 @@ export default defineComponent({
                 generalError(e);
             }
         },
+
+        async uploadTab() {
+            try {
+                if (this.tabFiles.length === 0) {
+                    throw new Error("Please select a file to upload");
+                }
+
+                const file = this.tabFiles[0].file;
+
+                // Try to parse the file with AlphaTab to ensure it's valid
+                const data = await file.arrayBuffer();
+
+                const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(
+                    new Uint8Array(data),
+                    new alphaTab.Settings(),
+                );
+                
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const response = await fetch(baseURL + `/api/tab/${this.tabID}/replace`, {
+                    method: "POST",
+                    credentials: "include",
+                    body: formData,
+                });
+                
+                await checkFetch(response);
+                notify({
+                    text: "Tab file uploaded and replaced successfully",
+                    type: "success",
+                });
+                this.$router.push(`/tab/${this.tabID}`);
+                
+            } catch (error) {
+                notify({
+                    text: error.message,
+                    type: "error",
+                });
+            }
+        },
+        
+        dropzoneError(err) {
+            console.log(err);
+            let error = err.type;
+            notify({
+                text: error,
+                type: "error",
+            });
+        },
     },
 });
 </script>
@@ -274,9 +327,14 @@ export default defineComponent({
                                     You can use this to sync the song bar by bar.
                                 </p>
                                 <p>
-                                    \sync BarIndex Occurence MillisecondOffset
+                                    \sync {Bar} {Occurence} {Offset}
+                                    
+                                    <ul>
+                                        <li>Bar: 0 is the first bar</li>
+                                        <li>Offset: In milliseconds (ms) (1000ms = 1s)</li>
+                                    </ul>
                                 </p>
-                                <p>Go to <a href="https://alphatab.net/docs/playground" target="_blank">https://alphatab.net/docs/playground</a>, and generate alphaTex Sync Points.</p>
+                                <p>Visual Tool: <a href="https://alphatab.net/docs/playground" target="_blank">https://alphatab.net/docs/playground</a>, and generate alphaTex Sync Points.</p>
                             </div>
 
                             <textarea
@@ -309,11 +367,11 @@ export default defineComponent({
                 <Vue3Dropzone
                     v-model="files"
                     :maxFileSize="100"
-                    :accept="supportedFormatCommaString"
+                    :accept="supportedAudioFormatCommaString"
                     @error="dropzoneError"
                 >
                     <template #title>
-                        Drop your tab here
+                        Drop your audio file here
                     </template>
                     <template #description> </template>
                 </Vue3Dropzone>
@@ -323,7 +381,7 @@ export default defineComponent({
         </div>
 
         <!-- Tab File Page -->
-        <div v-else-if='this.page === "tab-file"'>
+        <div v-else-if='this.page === "tab-file"' class="mb-5">
             <h2 class="mt-4 mb-4">Method 1: Direct Edit</h2>
             <p>
                 If you can access the file system, you can edit/replace the tab directly, the path is:<br />
@@ -333,7 +391,7 @@ export default defineComponent({
             <h2 class="mt-4 mb-4">Method 2: Upload and replace the tab file</h2>
 
             <Vue3Dropzone
-                v-model="files"
+                v-model="tabFiles"
                 :maxFileSize="100"
                 :accept="supportedFormatCommaString"
                 @error="dropzoneError"
@@ -344,7 +402,7 @@ export default defineComponent({
                 <template #description> </template>
             </Vue3Dropzone>
 
-            <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
+            <button @click="uploadTab" class="btn btn-primary w-100 mt-4">Upload</button>
         </div>
     </div>
 </template>

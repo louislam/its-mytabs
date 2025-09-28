@@ -34,10 +34,8 @@ export async function checkFetch(res: Response): Promise<void> {
     try {
         if (!res.ok) {
             data = await res.json();
-            console.log(data);
         }
     } catch (e) {
-        console.log(e);
         throw new Error("Failed to fetch without message: " + res.status);
     }
 
@@ -78,15 +76,37 @@ export function generalError(e: unknown): void {
 }
 
 /**
- * @deprecated Need full score.
+ *
  * @param alphaTexString
  */
 export function convertAlphaTexSyncPoint(alphaTexString: string) {
-    const importer = new alphaTab.importer.AlphaTexImporter();
-    const settings = new alphaTab.Settings();
-    importer.initFromString(alphaTexString, settings);
-    const score = importer.readScore();
-    return score.exportFlatSyncPoints();
+    // To array each line
+    const lines = alphaTexString.split("\n");
+
+    const syncPoints = [];
+
+    for (const line of lines) {
+        if (line.trim().startsWith("\\sync")) {
+            const parts = line.split(" ");
+
+            const barIndex = parseInt(parts[1]);
+            const barOccurence = parseInt(parts[2]);
+            const millisecondOffset = parseInt(parts[3]);
+            let barPosition = 0;
+            if (parts[4]) {
+                barPosition = parseInt(parts[4]);
+            }
+
+            syncPoints.push({
+                barIndex,
+                barOccurence,
+                millisecondOffset,
+                barPosition,
+            });
+        }
+    }
+
+    return syncPoints;
 }
 
 export function getSetting() {
