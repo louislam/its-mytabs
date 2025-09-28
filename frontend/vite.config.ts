@@ -14,4 +14,8 @@ export default defineConfig({
             alphaTabSourceDir: "node_modules/@coderline/alphatab/dist",
         }),
     ],
+
+    server: {
+        host: "0.0.0.0",
+    }
 });

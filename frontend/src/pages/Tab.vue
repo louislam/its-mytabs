@@ -296,7 +296,9 @@ export default defineComponent({
             }
 
             const tempToken = await this.getTempToken();
-            await this.initContainer(tempToken, trackID);
+            
+            // Requested trackID may be invalid, so we need to get the actual trackID used
+            trackID = await this.initContainer(tempToken, trackID);
 
             this.setConfig("trackID", trackID);
         },
@@ -355,6 +357,12 @@ export default defineComponent({
             return (await response.json()).token;
         },
 
+        /**
+         * 
+         * @param tempToken
+         * @param trackID
+         * @returns {Promise<number>} The actual trackID used
+         */
         initContainer(tempToken, trackID) {
             return new Promise((resolve, reject) => {
                 if (this.api) {
@@ -399,7 +407,7 @@ export default defineComponent({
                     },
                     core: {
                         file: this.getFileURL(tempToken),
-                        tracks: [trackID],
+                        //tracks: [trackID],
                         fontDirectory: "/font/",
                         engine: "html5",
                     },
@@ -428,7 +436,14 @@ export default defineComponent({
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
                     console.log("Score loaded");
+                    
                     this.applyColors(score);
+                    
+                    // Track
+                    if (trackID < 0 || trackID >= score.tracks.length) {
+                        trackID = 0;
+                    }
+                    this.api.renderTracks([this.api.score.tracks[trackID]]);
 
                     // Set Audio source
                     this.currentAudio = this.getConfig("audio", "synth");
@@ -466,7 +481,7 @@ export default defineComponent({
                     this.enableBackingTrack = this.hasBackingTrack();
                     this.selectedTrack = trackID;
                     this.ready = true;
-                    resolve();
+                    resolve(trackID);
                 });
 
                 this.api.playerFinished.on(() => {
@@ -1043,7 +1058,7 @@ export default defineComponent({
             
             <div v-show='currentAudio.startsWith("youtube-")' class="youtube-player-container">
                 <!-- Simple sync edit -->
-                <div class="sync-offset ps-3 pe-3 p-2" v-if="youtube?.syncMethod === 'simple'">
+                <div class="sync-offset ps-3 pe-3 p-2" v-if="youtube?.syncMethod === 'simple' && isLoggedIn">
                     Sync Offset: <input type="number" class="form-control" min="-100000" max="100000" step="0.01" v-model="simpleSyncSecond" /> s
                 </div>
                 <div ref="youtube" class="player"></div>
