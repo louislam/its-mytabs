@@ -90,14 +90,16 @@ export default defineComponent({
         </Vue3Dropzone>
 
         <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
-        
-        
+
         <h4 class="mt-5">Free Resources</h4>
-        
+
         <ul class="free-resources">
             <li><a href="https://www.ultimate-guitar.com/" target="_blank" rel="noopener">Ultimate Guitar</a><br />Some free tabs in *.gp format</li>
             <li><a href="https://www.911tabs.com/" target="_blank" rel="noopener">911Tabs</a><br />Search engine for tabs</li>
-            <li><a href="https://musescore.com/sheetmusic?instrument=72%2C73&recording_type=free-download" target="_blank" rel="noopener">MuseScore (Free Download filtered)</a><br />Some free tabs in MusicXML format</li>
+            <li>
+                <a href="https://musescore.com/sheetmusic?instrument=72%2C73&recording_type=free-download" target="_blank" rel="noopener">MuseScore (Free Download filtered)</a><br />Some free tabs in
+                MusicXML format
+            </li>
             <li><a href="https://gprotab.net/" target="_blank" rel="noopener">GProTab</a><br />Free Guitar Pro tabs in *.gp format</li>
         </ul>
     </div>

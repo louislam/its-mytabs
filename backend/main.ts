@@ -1,31 +1,15 @@
 import { serve } from "@hono/node-server";
 import { Context, Hono, MiddlewareHandler } from "@hono/hono";
 import * as fs from "@std/fs";
-import {auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup, isLoggedIn} from "./auth.ts";
-import {
-    SignUpSchema,
-    TabInfo,
-    TabInfoSchema,
-    UpdateTabInfoSchema,
-    YoutubeAddDataSchema,
-    YoutubeSaveRequestSchema
-} from "./zod.ts";
-import {db, hasUser, kv} from "./db.ts";
+import { auth, checkLogin, disableSignUp, isDisableSignUp, isFinishSetup, isLoggedIn } from "./auth.ts";
+import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, YoutubeSaveRequestSchema } from "./zod.ts";
+import { db, hasUser, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
 import { devOriginList, isDev } from "./util.ts";
 import * as path from "@std/path";
 import { supportedFormatList } from "./common.ts";
-import {
-    addYoutube,
-    createTab,
-    deleteTab,
-    getTab,
-    getTabFilePath, getTabFullFilePath,
-    getYoutubeList,
-    removeYoutube, updateTab,
-    updateYoutube
-} from "./tab.ts";
+import { addYoutube, createTab, deleteTab, getTab, getTabFilePath, getTabFullFilePath, getYoutubeList, removeYoutube, updateTab, updateYoutube } from "./tab.ts";
 import { ZodError } from "zod";
 
 export async function main() {
@@ -263,7 +247,6 @@ export async function main() {
             return c.json({
                 ok: true,
             });
-
         } catch (e) {
             return generalError(c, e);
         }
@@ -288,7 +271,6 @@ export async function main() {
             return c.json({
                 ok: true,
             });
-
         } catch (e) {
             return generalError(c, e);
         }
@@ -310,7 +292,6 @@ export async function main() {
             return c.json({
                 ok: true,
             });
-
         } catch (e) {
             return generalError(c, e);
         }
@@ -337,7 +318,6 @@ export async function main() {
 
                 // Delete the token after use
                 await kv.delete(["temp_token", tempToken]);
-
             } else {
                 await checkLogin(c);
             }
@@ -427,16 +407,16 @@ export async function main() {
 }
 
 function generalError(c: Context, e: unknown) {
-   if (e instanceof ZodError) {
-       let message = "";
-       for (const issue of e.issues) {
-              message += `${issue.path.join(".")}: ${issue.message}\n`;
-       }
-       return c.json({
-           ok: false,
-           msg: message,
-       }, 400);
-   } else if (e instanceof Error) {
+    if (e instanceof ZodError) {
+        let message = "";
+        for (const issue of e.issues) {
+            message += `${issue.path.join(".")}: ${issue.message}\n`;
+        }
+        return c.json({
+            ok: false,
+            msg: message,
+        }, 400);
+    } else if (e instanceof Error) {
         return c.json({
             ok: false,
             msg: e.message,

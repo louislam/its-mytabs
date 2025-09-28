@@ -1,15 +1,7 @@
 import { tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import {
-    TabInfo,
-    TabInfoSchema, UpdateTabInfo,
-    Youtube,
-    YoutubeAddDataSchema,
-    YoutubeData,
-    YoutubeSaveRequest,
-    YoutubeSchema
-} from "./zod.ts";
+import { TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeAddDataSchema, YoutubeData, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 
 export async function createTab(tabFileData: Uint8Array, ext: string, title: string, artist: string, originalFilename: string) {
@@ -64,7 +56,7 @@ async function getNextID(): Promise<number> {
     const op = kv.atomic();
     const current = await kv.get<Deno.KvU64>(counterKey);
     op.check(current);
-    op.set(counterKey, new Deno.KvU64((current.value ? current.value.value + 1n : 1n)));
+    op.set(counterKey, new Deno.KvU64(current.value ? current.value.value + 1n : 1n));
     const res = await op.commit();
     if (res.ok) {
         return current.value ? Number(current.value.value) + 1 : 1;
@@ -130,16 +122,22 @@ export async function deleteTab(id: number) {
 }
 
 export async function addYoutube(tabID: number, videoID: string) {
-    await kv.set(["youtube", tabID, videoID], YoutubeSchema.parse({
-        videoID,
-    }));
+    await kv.set(
+        ["youtube", tabID, videoID],
+        YoutubeSchema.parse({
+            videoID,
+        }),
+    );
 }
 
 export async function updateYoutube(tabID: number, videoID: string, data: YoutubeSaveRequest) {
-    await kv.set(["youtube", tabID, videoID], YoutubeSchema.parse({
-        videoID,
-        ...data,
-    }));
+    await kv.set(
+        ["youtube", tabID, videoID],
+        YoutubeSchema.parse({
+            videoID,
+            ...data,
+        }),
+    );
 }
 
 export async function removeYoutube(tabID: number, videoID: string) {

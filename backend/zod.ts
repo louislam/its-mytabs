@@ -39,7 +39,7 @@ export const YoutubeSchema = z.object({
     syncMethod: syncMethod.default("simple"),
     simpleSync: simpleSync.default(0),
     advancedSync: advancedSync.default(""),
-})
+});
 export type Youtube = z.infer<typeof YoutubeSchema>;
 
 export const YoutubeAddDataSchema = z.object({
@@ -53,4 +53,3 @@ export const YoutubeSaveRequestSchema = z.object({
     advancedSync,
 });
 export type YoutubeSaveRequest = z.infer<typeof YoutubeSaveRequestSchema>;
-

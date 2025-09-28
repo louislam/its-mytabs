@@ -1,30 +1,31 @@
 <script>
 import * as alphaTab from "@coderline/alphatab";
 import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import {ActionBuffer, baseURL, checkFetch, connectSocketIO, getInstrumentName, getSetting} from "../app.js";
+import { ActionBuffer, baseURL, checkFetch, connectSocketIO, getInstrumentName, getSetting } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
-import {FontAwesomeIcon} from "@fortawesome/vue-fontawesome";
-import {isLoggedIn} from "../auth-client.js";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+import { isLoggedIn } from "../auth-client.js";
 
 const speedActionBuffer = new ActionBuffer(2000);
 
 export default defineComponent({
-    components: {FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
+    /**
+     * @type {SocketIOClient.Socket}
+     */
+    socket: null,
+    /**
+     * @type {alphaTab.AlphaTabApi}
+     */
+    api: null,
+    components: { FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
     data() {
         return {
             isLoggedIn: false,
             title: "",
             artist: "",
-            /**
-             * @type {alphaTab.AlphaTabApi}
-             */
-            api: null,
-            /**
-             * @type {SocketIOClient.Socket}
-             */
-            socket: null,
+
             tabID: -1,
             tracks: [],
             showTrackList: false,
@@ -56,22 +57,21 @@ export default defineComponent({
     computed: {
         animatedCursor() {
             return this.setting.cursor === "animated";
-        }
+        },
     },
-    
+
     watch: {
         playing() {
-            
             // Hide the cursor when playing
             if (this.setting.cursor === "invisible" || this.setting.cursor === "bar") {
-                    const cursor = document.querySelector('.at-cursor-beat');
+                const cursor = document.querySelector(".at-cursor-beat");
                 if (cursor) {
                     if (this.playing) {
                         console.log("Hide cursor");
-                        cursor.classList.add('invisible');
+                        cursor.classList.add("invisible");
                     } else {
                         console.log("Show cursor");
-                        cursor.classList.remove('invisible');
+                        cursor.classList.remove("invisible");
                     }
                 }
             }
@@ -86,6 +86,9 @@ export default defineComponent({
         },
 
         enableCountIn() {
+            if (!this.api) {
+                return;
+            }
             if (this.enableCountIn) {
                 this.api.countInVolume = 1;
             } else {
@@ -93,8 +96,11 @@ export default defineComponent({
             }
             this.setConfig("enableCountIn", this.enableCountIn);
         },
-        
+ 
         enableMetronome() {
+            if (!this.api) {
+                return;
+            }
             if (this.enableMetronome) {
                 this.api.metronomeVolume = 1;
             } else {
@@ -102,17 +108,23 @@ export default defineComponent({
             }
             this.setConfig("enableMetronome", this.enableMetronome);
         },
-        
+
         isLooping() {
+            if (!this.api) {
+                return;
+            }
             this.api.isLooping = this.isLooping;
             this.setConfig("isLooping", this.isLooping);
         },
-        
+
         speed(newVal) {
+            if (!this.api) {
+                return;
+            }
             console.log("Speed changed to:", newVal);
 
             let speed = newVal;
-            
+
             if (typeof speed !== "number" || isNaN(speed)) {
                 speed = 100;
             } else if (speed < 20) {
@@ -125,21 +137,36 @@ export default defineComponent({
             speedActionBuffer.run(() => {
                 this.api.playbackSpeed = parseFloat((speed / 100).toFixed(2));
                 this.setConfig("speed", speed);
-            })
+            });
         },
 
         // Switch Audio Source
         async currentAudio() {
+            console.log("Switching audio to:", this.currentAudio);
+            
+            if (!this.api) {
+                return;
+            }
+
+            this.api.player.masterVolume = 1;
+            
             if (this.currentAudio === "synth") {
                 await this.initSynth();
+                
             } else if (this.currentAudio === "backingTrack") {
                 this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledBackingTrack;
                 this.api.updateSettings();
                 this.pause();
-                this.closeAllList();
+                
             } else if (this.currentAudio.startsWith("youtube-")) {
                 const videoID = this.currentAudio.substring(8);
                 await this.initYoutube(videoID);
+                
+            } else if (this.currentAudio === "none") {
+                // Workaround: alphaTab.PlayerMode.Disabled is not working, so just mute the volume
+                this.api.player.masterVolume = 0;
+                this.pause();
+                
             } else {
                 // Unknown audio source, fallback to synth
                 await this.initSynth();
@@ -150,11 +177,11 @@ export default defineComponent({
                 });
                 return;
             }
-            
+
             this.setConfig("audio", this.currentAudio);
-        }
+        },
     },
-    
+
     // Mounted
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
@@ -163,10 +190,10 @@ export default defineComponent({
 
         try {
             const trackID = this.getConfig("trackID", 0);
-            
+
             // Load the AlphaTab
             await this.load(trackID);
-            
+
             window.addEventListener("keydown", this.keyEvents);
         } catch (e) {
             notify({
@@ -188,11 +215,11 @@ export default defineComponent({
             if (this.api) {
                 this.destroyContainer();
             }
-            
+
             const res = await fetch(baseURL + `/api/tab/${this.tabID}`, {
                 credentials: "include",
             });
-            
+
             try {
                 await checkFetch(res);
             } catch (e) {
@@ -203,7 +230,7 @@ export default defineComponent({
                     throw e;
                 }
             }
-            
+
             const data = await res.json();
             if (data.tab) {
                 this.tab = data.tab;
@@ -212,14 +239,14 @@ export default defineComponent({
 
             const tempToken = await this.getTempToken();
             await this.initContainer(tempToken, trackID);
-            
+
             this.setConfig("trackID", trackID);
         },
-        
+
         countIn() {
             this.enableCountIn = !this.enableCountIn;
         },
-        
+
         metronome() {
             this.enableMetronome = !this.enableMetronome;
         },
@@ -227,33 +254,32 @@ export default defineComponent({
         loop() {
             this.isLooping = !this.isLooping;
         },
-        
+
         playPause() {
             if (!this.api || !this.ready) {
-                return
+                return;
             }
 
             this.api.settings.player.scrollMode = ScrollMode.Continuous;
             this.api.updateSettings();
 
             this.playing = !this.playing;
-            
+
             if (this.playing) {
                 this.api.play();
-            } else  {
+            } else {
                 this.api.pause();
             }
-            
         },
-        
+
         pause() {
             if (!this.api || !this.ready) {
-                return
+                return;
             }
             this.playing = false;
             this.api.pause();
         },
-        
+
         getFileURL(tempToken) {
             return baseURL + `/api/tab/${this.tabID}/file?tempToken=${tempToken}`;
         },
@@ -281,24 +307,24 @@ export default defineComponent({
                 if (!(this.$refs.bassTabContainer instanceof HTMLElement)) {
                     reject(new Error("Container element not found"));
                 }
-                
+
                 let displayResources = {
                     tablatureFont: "bold 14px Arial",
                     barNumberColor: "#6D6D6D",
                 };
 
-              if (this.setting.scoreColor === "dark") {
-                  displayResources = {
-                      ...displayResources,
-                      staffLineColor: "#6D6D6D",
-                      barSeparatorColor: "#6D6D6D",
-                      mainGlyphColor: "#A4A4A4",
-                      secondaryGlyphColor: "#A4A4A4",
-                      scoreInfoColor: "#A4A4A4",
-                      barNumberColor: "#6D6D6D",
-                  }
+                if (this.setting.scoreColor === "dark") {
+                    displayResources = {
+                        ...displayResources,
+                        staffLineColor: "#6D6D6D",
+                        barSeparatorColor: "#6D6D6D",
+                        mainGlyphColor: "#A4A4A4",
+                        secondaryGlyphColor: "#A4A4A4",
+                        scoreInfoColor: "#A4A4A4",
+                        barNumberColor: "#6D6D6D",
+                    };
                 }
-                
+
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
                         rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
@@ -322,8 +348,8 @@ export default defineComponent({
                     },
                     player: {
                         enablePlayer: true,
-                        
-                        // Always enable, so we can nagivate to any position
+
+                        // Always enable, so we can navigate to any position
                         enableCursor: true,
                         enableAnimatedBeatCursor: this.animatedCursor,
                         enableUserInteraction: true,
@@ -338,28 +364,33 @@ export default defineComponent({
                         resources: displayResources,
                     },
                 });
+                
+                // Exposing api to window for debugging
+                window.api = this.api;
 
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
+                    console.log("Score loaded");
                     this.applyColors(score);
-                    
+
                     // Set Audio source
                     this.currentAudio = this.getConfig("audio", "synth");
-                    
+
                     // Metronome
                     this.enableMetronome = this.getConfig("enableMetronome", false);
-                    
+
                     // Count in
                     this.enableCountIn = this.getConfig("enableCountIn", false);
-         
+
                     // Looping
                     this.isLooping = this.getConfig("isLooping", false);
-                    
+
                     // Speed
+                    this.speed = 100;
                     this.speed = this.getConfig("speed", 100);
                     
                     this.tracks = [];
-              
+
                     // List all tracks
                     score.tracks.forEach((track) => {
                         this.tracks.push({
@@ -368,13 +399,19 @@ export default defineComponent({
                             program: track.playbackInfo.program,
                         });
                     });
-                    
+
+                    // Force score+tab if the current track program = 0 (probably drums)
+                    if (score.tracks[trackID].playbackInfo.program === 0) {
+                        this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
+                        this.api.updateSettings();
+                    }
+
                     this.enableBackingTrack = this.hasBackingTrack();
                     this.selectedTrack = trackID;
                     this.ready = true;
                     resolve();
                 });
-                
+
                 this.api.playerFinished.on(() => {
                     if (!this.isLooping) {
                         this.playing = false;
@@ -386,12 +423,19 @@ export default defineComponent({
         destroyContainer() {
             this.api?.destroy();
             this.api = undefined;
+            
+            // Reset states
             this.ready = false;
             this.playing = false;
+            this.currentAudio = "synth";
+            this.enableMetronome = false;
+            this.enableCountIn = false;
+            this.isLooping = false;
+            this.speed = 100;
             this.soloTrackID = -1;
             this.muteTrackList = {};
         },
-        
+
         simpleSync(offset) {
             // Apply sync points
             const syncPoints = [
@@ -410,7 +454,7 @@ export default defineComponent({
                 5: alphaTab.model.Color.fromJson("#2A8E08"),
                 6: alphaTab.model.Color.fromJson("#A349A4"),
             };
-            
+
             if (this.setting.scoreColor === "light") {
                 stringColors[2] = alphaTab.model.Color.fromJson("#b5a33a");
             }
@@ -442,7 +486,6 @@ export default defineComponent({
                                         note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
                                     }
                                 }
-                         
                             }
                         }
                     }
@@ -466,18 +509,18 @@ export default defineComponent({
             });
         },
 
-
         async audioYoutube(videoID) {
             this.currentAudio = "youtube-" + videoID;
+            this.closeAllList();
         },
 
         async initYoutube(videoID) {
             this.closeAllList();
-            
+
             if (!this.youtubePlayer) {
                 await this.initYoutubePlayer();
             }
-            
+
             // Get offset from youtubeList
             let offset = 0;
             for (const yt of this.youtubeList) {
@@ -492,10 +535,10 @@ export default defineComponent({
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
             this.simpleSync(offset);
-            
+
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
-            
+
             this.api.player.output.handler = this.alphaTabYoutubeHandler;
             this.youtubePlayer.cueVideoById(videoID);
             this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
@@ -510,35 +553,34 @@ export default defineComponent({
                     text: "If YouTube is taking too long to load, please refresh the page.",
                 });
             }, 5000);
-            
+
             this.$refs.youtube.innerHTML = "";
-            
-            const isScriptLoaded = typeof YT !=="undefined";
+
+            const isScriptLoaded = typeof YT !== "undefined";
             console.log("isScriptLoaded:", isScriptLoaded);
 
             // Create playerElement inside this.$refs.youtube
             const playerElement = document.createElement("div");
             this.$refs.youtube.appendChild(playerElement);
-            
-           if (!isScriptLoaded) {
-               const tag = document.createElement("script");
-               tag.src = "https://www.youtube.com/player_api";
-               const firstScriptTag = document.getElementsByTagName('script')[0];
-               firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-               console.log("Loading YouTube API");
 
-               const youtubeApiReady = Promise.withResolvers();
-               window.onYouTubePlayerAPIReady = youtubeApiReady.resolve;
-               await youtubeApiReady.promise;
-               console.log("YouTube API ready");
+            if (!isScriptLoaded) {
+                const tag = document.createElement("script");
+                tag.src = "https://www.youtube.com/player_api";
+                const firstScriptTag = document.getElementsByTagName("script")[0];
+                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                console.log("Loading YouTube API");
 
-               // Now Youtube Script is loaded
-               // The YT object is now available globally, even if vue route changed. Be careful.
+                const youtubeApiReady = Promise.withResolvers();
+                window.onYouTubePlayerAPIReady = youtubeApiReady.resolve;
+                await youtubeApiReady.promise;
+                console.log("YouTube API ready");
 
-           } else {
-               console.log("YouTube API already loaded");
-           }
-            
+                // Now Youtube Script is loaded
+                // The YT object is now available globally, even if vue route changed. Be careful.
+            } else {
+                console.log("YouTube API already loaded");
+            }
+
             const youtubePlayerReady = Promise.withResolvers();
             let currentTimeInterval = 0;
             const player = new YT.Player(playerElement, {
@@ -628,12 +670,12 @@ export default defineComponent({
                     player.pauseVideo();
                 },
             };
-            
+
             this.youtubePlayer = player;
             this.alphaTabYoutubeHandler = alphaTabYoutubeHandler;
             clearTimeout(ytWarning);
         },
-        
+
         getStaveProfile() {
             if (this.setting.scoreStyle === "tab") {
                 return StaveProfile.Tab;
@@ -645,18 +687,18 @@ export default defineComponent({
                 return StaveProfile.Default;
             }
         },
-        
+
         async audioSynth() {
             this.currentAudio = "synth";
+            this.closeAllList();
         },
 
         async initSynth() {
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
             this.pause();
-            this.closeAllList();
         },
-        
+
         async audioBackingTrack() {
             if (!this.hasBackingTrack()) {
                 notify({
@@ -667,6 +709,7 @@ export default defineComponent({
                 return;
             }
             this.currentAudio = "backingTrack";
+            this.closeAllList();
         },
 
         /**
@@ -732,7 +775,7 @@ export default defineComponent({
             await this.load(trackID);
             this.closeAllList();
         },
-        
+
         showList(type) {
             if (type === "track") {
                 this.showTrackList = !this.showTrackList;
@@ -742,7 +785,7 @@ export default defineComponent({
                 this.showTrackList = false;
             }
         },
-        
+
         closeAllList() {
             this.showTrackList = false;
             this.showAudioList = false;
@@ -752,12 +795,11 @@ export default defineComponent({
             if (!this.api) {
                 return;
             }
-            
+
             if (this.soloTrackID === trackID) {
                 this.api.changeTrackMute(this.api.score.tracks, false);
                 this.soloTrackID = -1;
                 this.muteTrackList = {};
-       
             } else {
                 const muteList = [];
                 const soloList = [];
@@ -777,34 +819,32 @@ export default defineComponent({
 
                 this.soloTrackID = trackID;
             }
-            
-       
         },
-        
+
         toggleMute(trackID) {
             this.soloTrackID = -1;
 
             this.muteTrackList[trackID] = !this.muteTrackList[trackID];
-            
+
             const mute = this.muteTrackList[trackID];
 
             this.api.changeTrackMute([
-                this.api.score.tracks[trackID]
+                this.api.score.tracks[trackID],
             ], mute);
         },
 
         edit() {
             this.$router.push(`/tab/${this.tabID}/edit/info`);
         },
-        
+
         hasBackingTrack() {
-            return !!this.api.score.backingTrack
+            return !!this.api.score.backingTrack;
         },
-        
+
         setConfig(key, value) {
             localStorage.setItem(`tab-${this.tabID}-${key}`, JSON.stringify(value));
         },
-        
+
         getConfig(key, defaultValue) {
             const value = localStorage.getItem(`tab-${this.tabID}-${key}`);
             if (value === null) {
@@ -812,24 +852,21 @@ export default defineComponent({
             }
             return JSON.parse(value);
         },
-
     },
 });
 </script>
 
 <template>
-    <div class="main" :class="{'light': this.setting.scoreColor === 'light'}">
+    <div class="main" :class='{ "light": this.setting.scoreColor === "light" }'>
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
         <div ref="bassTabContainer" v-pre></div>
-        
-        <div :class="{'yt-margin': currentAudio.startsWith(`youtube-`)}">
-            
-        </div>
+
+        <div :class='{ "yt-margin": currentAudio.startsWith(`youtube-`) }'></div>
 
         <div class="toolbar">
             <div class="track-selector selector">
-                <div class="button" @click="showList('track')">
+                <div class="button" @click='showList("track")'>
                     <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
                     <span v-else>Loading...</span>
                 </div>
@@ -838,17 +875,17 @@ export default defineComponent({
                     <div class="p-2 text-end">
                         <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
                     </div>
-                    
+
                     <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTrack === track.id }">
                         <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
-                        <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id}">Solo</div>
-                        <div class="list-button mute" @click="toggleMute(track.id)"  :class="{ active: muteTrackList[track.id]}">Mute</div>
+                        <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
+                        <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
                     </div>
                 </div>
             </div>
 
             <div class="audio-selector selector">
-                <div class="button" @click="showList('audio')">
+                <div class="button" @click='showList("audio")'>
                     Audio
                 </div>
 
@@ -856,27 +893,31 @@ export default defineComponent({
                     <div class="p-2 text-end">
                         <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
                     </div>
-                    
-                    <div class="audio item" @click="audioSynth" :class="{ active: currentAudio === 'synth' }">
+
+                    <div class="audio item" @click="audioSynth" :class='{ active: currentAudio === "synth" }'>
                         <div class="name">Synth</div>
                     </div>
 
-                    <div class="audio item" @click="audioBackingTrack" :class="{ active: currentAudio === 'backingTrack' }" v-if="enableBackingTrack">
+                    <div class="audio item" @click="audioBackingTrack" :class='{ active: currentAudio === "backingTrack" }' v-if="enableBackingTrack">
                         <div class="name">Embedded Backing Track</div>
                     </div>
 
-                    <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class="{ active: currentAudio === 'youtube-' + youtube.videoID }">
+                    <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class='{ active: currentAudio === "youtube-" + youtube.videoID }'>
                         <div class="name">Youtube: {{ youtube.videoID }}</div>
                     </div>
-    
+                    
+                    <!-- No Audio -->
+                    <div class="audio item" @click="currentAudio = 'none'; closeAllList()" :class='{ active: currentAudio === "none" }'>
+                        <div class="name">No Audio (Mute)</div>
+                    </div>
+
                     <div class="ms-4 me-4 mt-3 mb-3" v-if="isLoggedIn">
                         <router-link :to="`/tab/${tab.id}/edit/audio`">Add Youtube or Audio File...</router-link>
                     </div>
-                    
                 </div>
             </div>
 
-            <button class="btn btn-primary" @click="playPause" :class="{active: playing }">
+            <button class="btn btn-primary" @click="playPause" :class="{ active: playing }">
                 <span v-if="!playing">
                     <font-awesome-icon :icon='["fas", "play"]' />
                     Play
@@ -886,21 +927,21 @@ export default defineComponent({
                     Pause
                 </span>
             </button>
-            <button class="btn btn-secondary" @click="loop()" :class="{active: isLooping }">
+            <button class="btn btn-secondary" @click="loop()" :class="{ active: isLooping }">
                 <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
                 Loop
             </button>
-            <button class="btn btn-secondary" @click="countIn()" :class="{active: enableCountIn, disabled: currentAudio !== 'synth' }">
+            <button class="btn btn-secondary" @click="countIn()" :class='{ active: enableCountIn, disabled: currentAudio !== "synth" }'>
                 <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
                 Count in
             </button>
-            <button class="btn btn-secondary" @click="metronome()"  :class="{active: enableMetronome, disabled: currentAudio !== 'synth' }">
+            <button class="btn btn-secondary" @click="metronome()" :class='{ active: enableMetronome, disabled: currentAudio !== "synth" }'>
                 <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
                 Metronome
             </button>
 
             <div class="speed">
-                    Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
+                Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
             </div>
 
             <div class="btn-edit" v-if="isLoggedIn">
@@ -909,10 +950,8 @@ export default defineComponent({
                 </button>
             </div>
 
-            <div ref="youtube" v-show="currentAudio.startsWith('youtube-')" class="youtube-player-container"></div>
+            <div ref="youtube" v-show='currentAudio.startsWith("youtube-")' class="youtube-player-container"></div>
         </div>
-
-
     </div>
 </template>
 
@@ -924,16 +963,15 @@ $youtube-height: 200px;
 
 // Light Score
 
-
 .main {
     width: 95%;
     color: #d6d6d6;
     margin: 0 auto $toolbar-height auto;
-    
+
     &.light {
-        background-color: #F1F1F1;
+        background-color: #f1f1f1;
         padding-top: 30px;
-        
+
         h1, h2 {
             color: #333;
         }
@@ -959,33 +997,33 @@ $youtube-height: 200px;
     left: 0;
     width: 100%;
     z-index: 1;
-    
+
     .light & {
         background-color: rgba(33, 37, 41, 0.8);
     }
-    
+
     .btn-edit {
         flex-grow: 1;
         text-align: right;
     }
-    
+
     .button, .btn {
         height: 44px;
     }
-    
+
     .btn-secondary {
         &.active {
             //background-color: lighten($primary, 10%);
         }
     }
-    
+
     .close {
         cursor: pointer;
         &:hover {
             color: white;
         }
     }
-    
+
     .youtube-player-container {
         position: absolute;
         bottom: 100%;
@@ -1028,7 +1066,7 @@ $padding: 20px;
             background-color: lighten($color, 10%);
         }
     }
-    
+
     .list {
         position: absolute;
         background-color: $color;
@@ -1038,10 +1076,10 @@ $padding: 20px;
         bottom: 130%;
         width: 400px;
         overflow: hidden;
-        
+
         // TODO: No matter how big it is, the tab cursor (z-index: 1000) is always on top of it for unknown reason.
         z-index: 1;
-        
+
         .item {
             cursor: pointer;
             display: flex;
@@ -1051,7 +1089,7 @@ $padding: 20px;
             &.active {
                 background-color: lighten($color, 8%);
             }
-            
+
             .name {
                 flex-grow: 1;
                 font-weight: bold;
@@ -1073,13 +1111,10 @@ $padding: 20px;
 
 .track-selector {
     position: relative;
-    
+
     .track-list {
         .track {
-    
-            .name {
- 
-            }
+            .name {}
 
             .list-button {
                 background-color: lighten($color, 10%);
@@ -1102,7 +1137,7 @@ $padding: 20px;
 .speed {
     display: flex;
     align-items: center;
-    
+
     input {
         border: 0;
     }

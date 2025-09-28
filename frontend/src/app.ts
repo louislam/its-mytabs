@@ -1,8 +1,8 @@
 import { io } from "socket.io-client";
 import { midiProgramCodeList } from "../../backend/common.ts";
-import {notify} from "@kyvg/vue3-notification";
-import * as alphaTab from '@coderline/alphatab';
-import {SettingSchema} from "./zod.ts";
+import { notify } from "@kyvg/vue3-notification";
+import * as alphaTab from "@coderline/alphatab";
+import { SettingSchema } from "./zod.ts";
 
 export function connectSocketIO() {
     return io(baseURL);
@@ -28,13 +28,13 @@ export function getInstrumentName(midiProgram: number) {
     return midiProgramCodeList[midiProgram] || "Unknown";
 }
 
-export async function checkFetch(res : Response): Promise<void> {
+export async function checkFetch(res: Response): Promise<void> {
     let data;
 
     try {
         if (!res.ok) {
             data = await res.json();
-            console.log(data)
+            console.log(data);
         }
     } catch (e) {
         console.log(e);
@@ -109,7 +109,7 @@ export class ActionBuffer {
         this.timer = null;
     }
 
-    run(action : () => void) {
+    run(action: () => void) {
         if (this.timer) {
             //If cold down not finished, place it in buffer
             this.action = action;

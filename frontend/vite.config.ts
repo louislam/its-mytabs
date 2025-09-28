@@ -13,5 +13,5 @@ export default defineConfig({
         alphaTab({
             alphaTabSourceDir: "node_modules/@coderline/alphatab/dist",
         }),
-    ]
+    ],
 });

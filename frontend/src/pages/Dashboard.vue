@@ -58,7 +58,7 @@ export default defineComponent({
                         <font-awesome-icon :icon='["fas", "arrow-right-from-bracket"]' />
                         Log out
                     </a>
-                    
+
                     <router-link to="/login" v-else>
                         <font-awesome-icon :icon='["fas", "arrow-right-to-bracket"]' />
                         Log in

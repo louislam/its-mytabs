@@ -145,11 +145,11 @@ export const midiProgramCodeList = {
     124: "Telephone Ring",
     125: "Helicopter",
     126: "Applause",
-    127: "Gunshot"
+    127: "Gunshot",
 };
 
 export function isGuitarOrBass(program: number) {
     return (program >= 24 && program <= 39) ||
-        program == 86 ||   // Lead 7 (fifths), do not know why but used in some tabs
-        program == 87  // Lead 8 (bass + lead), since the name contains "bass", I also add it here
+        program == 86 || // Lead 7 (fifths), do not know why but used in some tabs
+        program == 87; // Lead 8 (bass + lead), since the name contains "bass", I also add it here
 }
