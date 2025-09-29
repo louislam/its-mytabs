@@ -9,8 +9,9 @@ import { isLoggedIn } from "../auth-client.js";
 const alphaTab = await import("@coderline/alphatab");
 const { ScrollMode, StaveProfile } = alphaTab;
 
-const speedActionBuffer = new ActionBuffer(2000);
-const syncOffsetActionBuffer = new ActionBuffer(1500);
+const speedActionBuffer = new ActionBuffer(1000);
+const syncOffsetYoutubeActionBuffer = new ActionBuffer(200);
+const syncOffsetAudioActionBuffer = new ActionBuffer(200);
 
 export default defineComponent({
     /**
@@ -21,6 +22,13 @@ export default defineComponent({
      * @type {alphaTab.AlphaTabApi}
      */
     api: null,
+    
+    audioHandler: null,
+
+    alphaTabYoutubeHandler: null,
+
+    youtubePlayer: null,
+    
     components: { FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
     data() {
         return {
@@ -45,8 +53,9 @@ export default defineComponent({
             muteTrackList: {},
             currentAudio: "synth",
             youtubeList: [],
-            youtubePlayer: null,
-            alphaTabYoutubeHandler: null,
+            audioList: [],
+            audio: {},
+
             keyEvents: (e) => {
                 if (e.code === "Space") {
                     e.preventDefault();
@@ -61,36 +70,70 @@ export default defineComponent({
         animatedCursor() {
             return this.setting.cursor === "animated";
         },
+        
+        syncMethod() {
+            if (this.currentAudio.startsWith("youtube-"))  {  
+                return this.youtube.syncMethod;
+            } else if (this.currentAudio.startsWith("audio-")) {
+                return this.audio.syncMethod;
+            } else {
+                return undefined;
+            }
+        }
     },
 
     watch: {
         simpleSyncSecond(newVal, oldVal) {
-            if (!this.api || !this.youtube) {
+            if (!this.api) {
                 return;
+            }
+            
+            let obj;
+            
+            if (this.currentAudio.startsWith("youtube-"))  {  
+                if (!this.youtube) {
+                    return;
+                }
+                obj = this.youtube;
+            } else if (this.currentAudio.startsWith("audio-")) {
+                if (!this.audio) {
+                    return;
+                }
+                obj = this.audio;
             }
 
             this.pause();
 
-            this.youtube.simpleSync = this.simpleSyncSecond * 1000;
+            obj.simpleSync = this.simpleSyncSecond * 1000;
 
             // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
             // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
 
-            this.simpleSync(this.youtube.simpleSync);
+            this.simpleSync(obj.simpleSync);
 
             // Restore
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
-            this.api.player.output.handler = this.alphaTabYoutubeHandler;
+   
 
             // Save
-            syncOffsetActionBuffer.run(() => {
-                if (oldVal !== -1) {
-                    this.saveYoutube();
-                }
-            });
+            if (this.currentAudio.startsWith("youtube-"))  {
+                this.api.player.output.handler = this.alphaTabYoutubeHandler;
+                syncOffsetYoutubeActionBuffer.run(() => {
+                    if (oldVal !== -1) {
+                        this.saveYoutube();
+                    }
+                });
+            } else {
+                this.api.player.output.handler = this.audioHandler;
+                syncOffsetAudioActionBuffer.run(() => {
+                    if (oldVal !== -1) {
+                        this.saveAudio();
+                    }
+                });
+            }
         },
 
         "youtube.simpleSync"() {
@@ -98,6 +141,13 @@ export default defineComponent({
                 return;
             }
             this.simpleSyncSecond = parseFloat((this.youtube.simpleSync / 1000).toFixed(2));
+        },
+        
+        "audio.simpleSync"() {
+            if (!this.api || !this.audio) {
+                return;
+            }
+            this.simpleSyncSecond = parseFloat((this.audio.simpleSync / 1000).toFixed(2));
         },
 
         playing() {
@@ -210,6 +260,9 @@ export default defineComponent({
             } else if (this.currentAudio.startsWith("youtube-")) {
                 const videoID = this.currentAudio.substring(8);
                 await this.initYoutube(videoID);
+            } else if (this.currentAudio.startsWith("audio-")) {
+                const filename = this.currentAudio.substring(6);
+                await this.initAudio(filename);
             } else if (this.currentAudio === "none") {
                 // Workaround: alphaTab.PlayerMode.Disabled is not working, so just mute the volume
                 this.api.player.masterVolume = 0;
@@ -298,6 +351,7 @@ export default defineComponent({
             if (data.tab) {
                 this.tab = data.tab;
                 this.youtubeList = data.youtubeList;
+                this.audioList = data.audioList;
             }
 
             const tempToken = await this.getTempToken();
@@ -594,6 +648,130 @@ export default defineComponent({
         async audioYoutube(videoID) {
             this.currentAudio = "youtube-" + videoID;
             this.closeAllList();
+        },
+        
+        async audioFile(filename) {
+            this.currentAudio = "audio-" + filename;
+            this.closeAllList();
+        },
+        
+        async initAudio(filename) {
+            if (!this.api) {
+                return;
+            }
+            
+            this.closeAllList();
+
+            const audioPlayer = this.$refs.audioPlayer;
+            
+            // Init the audio handler if not exists
+            if (!this.audioHandler) {
+                
+                this.audioHandler = {
+                    get backingTrackDuration() {
+                        const duration = audioPlayer.duration;
+                        return Number.isFinite(duration) ? duration * 1000 : 0;
+                    },
+                    get playbackRate() {
+                        return audioPlayer.playbackRate;
+                    },
+                    set playbackRate(value) {
+                        audioPlayer.playbackRate = value;
+                    },
+                    get masterVolume() {
+                        return audioPlayer.volume;
+                    },
+                    set masterVolume(value) {
+                        audioPlayer.volume = value;
+                    },
+                    seekTo(time) {
+                        audioPlayer.currentTime = time / 1000;
+                    },
+                    play() {
+                        audioPlayer.play();
+                    },
+                    pause() {
+                        audioPlayer.pause();
+                    }
+                };
+
+                let updateTimer = 0;
+                const onTimeUpdate = () => {
+                    this.api?.player?.output?.updatePosition(
+                        audioPlayer.currentTime * 1000
+                    );
+                }
+
+                audioPlayer.addEventListener('timeupdate', onTimeUpdate);
+                audioPlayer.addEventListener('seeked', onTimeUpdate);
+                audioPlayer.addEventListener('play', () => {
+                    window.clearInterval(updateTimer);
+                    this.api?.play();
+                    updateTimer = window.setInterval(onTimeUpdate, 50);
+                });
+
+                // state updates
+                audioPlayer.addEventListener('pause', () => {
+                    this.api.pause();
+                    window.clearInterval(updateTimer.current);
+                });
+                audioPlayer.addEventListener('ended', () => {
+                    this.api.pause();
+                    window.clearInterval(updateTimer.current);
+                });
+                audioPlayer.addEventListener('volumechange', () => {
+                    this.api.masterVolume = audioPlayer.volume;
+                });
+                audioPlayer.addEventListener('ratechange', () => {
+                    this.api.playbackSpeed = audioPlayer.playbackRate;
+                });
+                
+            }
+
+            // Bug? If change to EnabledExternalMedia, and this.api.updateSettings(), this sync point can not be applied correctly.
+            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
+            this.api.updateSettings();
+
+            let found = false;
+
+            // Get offset from youtubeList
+            for (const audio of this.audioList) {
+                if (audio.filename === filename) {
+                    this.audio = audio;
+                    if (audio.syncMethod === "advanced") {
+                        this.advancedSync(audio.advancedSync);
+                    } else {
+                        this.simpleSync(audio.simpleSync);
+                    }
+                    found = true;
+                    break;
+                }
+            }
+
+            // Probably provided a video ID not in the list, switch to synth
+            if (!found) {
+                notify({
+                    type: "error",
+                    title: "Error",
+                    text: "YouTube video not found, fallback to synth.",
+                });
+                this.currentAudio = "synth";
+                return;
+            }
+
+            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
+            this.api.updateSettings();
+            
+            this.api.player.output.handler = this.audioHandler;
+            
+            const path = baseURL + `/api/tab/${this.tabID}/audio/${encodeURIComponent(filename)}`;
+            
+            audioPlayer.src = path;
+            audioPlayer.load();
+            audioPlayer.playbackRate = this.api.playbackSpeed;
+            
+            this.pause();
         },
 
         async initYoutube(videoID) {
@@ -973,6 +1151,28 @@ export default defineComponent({
                 generalError(e);
             }
         },
+
+        async saveAudio() {
+            let res;
+            try {
+                res = await fetch(baseURL + `/api/tab/${this.tabID}/audio/${this.audio.filename}`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        syncMethod: this.audio.syncMethod,
+                        simpleSync: this.audio.simpleSync,
+                        advancedSync: this.audio.advancedSync,
+                    }),
+                });
+
+                await checkFetch(res);
+            } catch (e) {
+                generalError(e);
+            }
+        },
     },
 });
 </script>
@@ -994,7 +1194,7 @@ export default defineComponent({
                 </div>
 
                 <div class="track-list list" v-if="showTrackList">
-                    <div class="p-2 text-end">
+                    <div class="p-2 text-end list-header">
                         <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
                     </div>
 
@@ -1012,7 +1212,7 @@ export default defineComponent({
                 </div>
 
                 <div class="audio-list list" v-if="showAudioList">
-                    <div class="p-2 text-end">
+                    <div class="p-2 text-end list-header">
                         <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
                     </div>
 
@@ -1026,6 +1226,10 @@ export default defineComponent({
 
                     <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class='{ active: currentAudio === "youtube-" + youtube.videoID }'>
                         <div class="name">Youtube: {{ youtube.videoID }}</div>
+                    </div>
+
+                    <div class="audio item" @click="audioFile(audio.filename)" v-for="audio in audioList" :key="audio.filename" :class='{ active: currentAudio === "audio-" + audio.filename }'>
+                        <div class="name">{{ audio.filename }}</div>
                     </div>
 
                     <!-- No Audio -->
@@ -1079,12 +1283,22 @@ export default defineComponent({
                 </button>
             </div>
 
-            <div v-show='currentAudio.startsWith("youtube-")' class="youtube-player-container">
+            <!-- USE v-show, because youtube player is not vue  -->
+            <div v-show='currentAudio.startsWith("youtube-") || currentAudio.startsWith("audio-")' class="player-container">
                 <!-- Simple sync edit -->
-                <div class="sync-offset ps-3 pe-3 p-2" v-if='youtube?.syncMethod === "simple" && isLoggedIn'>
-                    Sync Offset: <input type="number" class="form-control" min="-100000" max="100000" step="0.01" v-model="simpleSyncSecond" /> s
+                <div class="sync-offset ps-3 pe-3 p-2" v-if='syncMethod === "simple" && isLoggedIn'>
+                    Sync Offset: <input type="number" class="form-control" min="-100000" max="100000" step="0.1" v-model="simpleSyncSecond" /> s
                 </div>
-                <div ref="youtube" class="player"></div>
+                
+                <!-- Youtube Player -->
+                <div v-show='currentAudio.startsWith("youtube-")'>
+                    <div ref="youtube" class="player"></div>
+                </div>
+               
+                
+                <!-- Audio Player -->
+                <audio ref="audioPlayer" class="player" controls v-show='currentAudio.startsWith("audio-")' hidden></audio>
+              
             </div>
         </div>
     </div>
@@ -1159,7 +1373,7 @@ $youtube-height: 200px;
         }
     }
 
-    .youtube-player-container {
+    .player-container {
         position: absolute;
         bottom: 100%;
         right: 0;
@@ -1233,10 +1447,18 @@ $padding: 20px;
         border-radius: 3px;
         bottom: 130%;
         width: 400px;
-        overflow: hidden;
+        overflow: scroll;
+        max-height: calc(100vh - 90px);
 
         // TODO: No matter how big it is, the tab cursor (z-index: 1000) is always on top of it for unknown reason.
         z-index: 1;
+        
+        .list-header {
+            position: sticky;
+            top: 0;
+            background-color: $color;
+            border-bottom: 1px solid darken($color, 5%);
+        }
 
         .item {
             cursor: pointer;
