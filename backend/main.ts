@@ -6,13 +6,10 @@ import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDa
 import { db, hasUser, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import {devOriginList, getFrontendDir, isDev, start} from "./util.ts";
+import { devOriginList, getFrontendDir, host, isDev, port, start } from "./util.ts";
 import * as path from "@std/path";
 import { supportedFormatList } from "./common.ts";
-import {
-    addYoutube, createTab, deleteTab, getTab, getTabFilePath, getTabFullFilePath, getYoutubeList, removeYoutube,
-    replaceTab, updateTab, updateYoutube
-} from "./tab.ts";
+import { addYoutube, createTab, deleteTab, getTab, getTabFilePath, getTabFullFilePath, getYoutubeList, removeYoutube, replaceTab, updateTab, updateYoutube } from "./tab.ts";
 import { ZodError } from "zod";
 
 export async function main() {
@@ -39,15 +36,20 @@ export async function main() {
 
     const httpServer = serve({
         fetch: app.fetch,
-        port: 47777,
+        port,
+        hostname: host,
     }, (info) => {
-        const url = `http://localhost:${info.port}`;
+        let address = info.address;
+        if (address == "0.0.0.0") {
+            address = "localhost";
+        }
+
+        const url = `http://${address}:${info.port}`;
         console.log(`Server running on ${url}`);
 
         if (Deno.build.standalone) {
             start(url);
         }
-
     });
 
     // CORS for development
@@ -254,7 +256,6 @@ export async function main() {
             return c.json({
                 ok: true,
             });
-
         } catch (e) {
             return generalError(c, e);
         }
@@ -455,7 +456,7 @@ export async function main() {
         db.close();
         console.log("Server closed");
         Deno.exit();
-    }
+    };
 
     // Close Server event
     Deno.addSignalListener("SIGINT", signalHandler);

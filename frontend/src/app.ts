@@ -1,7 +1,6 @@
 import { io } from "socket.io-client";
 import { midiProgramCodeList } from "../../backend/common.ts";
 import { notify } from "@kyvg/vue3-notification";
-import * as alphaTab from "@coderline/alphatab";
 import { SettingSchema } from "./zod.ts";
 
 export function connectSocketIO() {
@@ -76,7 +75,6 @@ export function generalError(e: unknown): void {
 }
 
 /**
- *
  * @param alphaTexString
  */
 export function convertAlphaTexSyncPoint(alphaTexString: string) {

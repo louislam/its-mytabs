@@ -1,0 +1,9 @@
+services:
+    app:
+        build:
+            context: ..
+        ports:
+            - "47777:47777"
+        restart: unless-stopped
+        volumes:
+            - ./data:/app/data

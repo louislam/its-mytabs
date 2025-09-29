@@ -1,11 +1,12 @@
-<script lang="ts">
+<script>
 import { defineComponent } from "vue";
 import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
 import "@jaxtheprime/vue3-dropzone/dist/style.css";
 import { notify } from "@kyvg/vue3-notification";
 import { baseURL } from "../app.js";
 import { supportedFormatCommaString } from "../../../backend/common.js";
-import * as alphaTab from "@coderline/alphatab";
+
+const alphaTab = await import("@coderline/alphatab");
 
 export default defineComponent({
     components: { Vue3Dropzone },

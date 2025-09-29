@@ -3,8 +3,9 @@ import { defineComponent } from "vue";
 import { baseURL, checkFetch, convertAlphaTexSyncPoint, generalError } from "../app.js";
 import { notify } from "@kyvg/vue3-notification";
 import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
-import {supportedAudioFormatCommaString, supportedFormatCommaString} from "../../../backend/common.js";
-import * as alphaTab from "@coderline/alphatab";
+import { supportedAudioFormatCommaString, supportedFormatCommaString } from "../../../backend/common.js";
+
+const alphaTab = await import("@coderline/alphatab");
 
 export default defineComponent({
     components: { Vue3Dropzone },
@@ -15,7 +16,7 @@ export default defineComponent({
             page: "",
             youtubeURL: "",
             youtubeList: [],
-            is127001ip: false,
+            // isLocalIP: false,
             supportedFormatCommaString,
             supportedAudioFormatCommaString,
             filePath: "",
@@ -33,8 +34,7 @@ export default defineComponent({
             generalError(e);
         }
 
-        // Check if 127.0.0.1
-        this.is127001ip = window.location.hostname === "127.0.0.1";
+        //this.isLocalIP = !!isPrivateIP(window.location.hostname);
     },
     methods: {
         async load() {
@@ -181,7 +181,7 @@ export default defineComponent({
                     new Uint8Array(data),
                     new alphaTab.Settings(),
                 );
-                
+
                 const formData = new FormData();
                 formData.append("file", file);
 
@@ -190,14 +190,13 @@ export default defineComponent({
                     credentials: "include",
                     body: formData,
                 });
-                
+
                 await checkFetch(response);
                 notify({
                     text: "Tab file uploaded and replaced successfully",
                     type: "success",
                 });
                 this.$router.push(`/tab/${this.tabID}`);
-                
             } catch (error) {
                 notify({
                     text: error.message,
@@ -205,7 +204,37 @@ export default defineComponent({
                 });
             }
         },
-        
+
+        async uploadAudio() {
+            try {
+                if (this.tabFiles.length === 0) {
+                    throw new Error("Please select a file to upload");
+                }
+
+                const file = this.tabFiles[0].file;
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const response = await fetch(baseURL + `/api/tab/${this.tabID}/audio`, {
+                    method: "POST",
+                    credentials: "include",
+                    body: formData,
+                });
+
+                await checkFetch(response);
+                notify({
+                    text: "Tab file uploaded and replaced successfully",
+                    type: "success",
+                });
+                this.$router.push(`/tab/${this.tabID}`);
+            } catch (error) {
+                notify({
+                    text: error.message,
+                    type: "error",
+                });
+            }
+        },
+
         dropzoneError(err) {
             console.log(err);
             let error = err.type;
@@ -271,9 +300,9 @@ export default defineComponent({
         <div v-else-if='this.page === "audio"'>
             <h2 class="mt-4">Youtube & Audio files</h2>
 
-            <!-- Show alert if 127.0.0.1 -->
-            <div v-if="is127001ip" class="alert alert-warning" role="alert">
-                Youtube videos may not work on 127.0.0.1 hostname. Please use <strong>localhost</strong> or other hostname.
+            <!-- Show alert if using a local ip -->
+            <div class="alert alert-info" role="alert">
+                Tip: Youtube videos may not work on a private ip (such as 127.0.0.1). Please use <strong>localhost</strong> or other hostname.
             </div>
 
             <div class="mb-3">
@@ -328,12 +357,11 @@ export default defineComponent({
                                 </p>
                                 <p>
                                     \sync {Bar} {Occurence} {Offset}
-                                    
-                                    <ul>
-                                        <li>Bar: 0 is the first bar</li>
-                                        <li>Offset: In milliseconds (ms) (1000ms = 1s)</li>
-                                    </ul>
                                 </p>
+                                <ul>
+                                    <li>Bar: 0 is the first bar</li>
+                                    <li>Offset: In milliseconds (ms) (1000ms = 1s)</li>
+                                </ul>
                                 <p>Visual Tool: <a href="https://alphatab.net/docs/playground" target="_blank">https://alphatab.net/docs/playground</a>, and generate alphaTex Sync Points.</p>
                             </div>
 
@@ -376,7 +404,7 @@ export default defineComponent({
                     <template #description> </template>
                 </Vue3Dropzone>
 
-                <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
+                <button @click="uploadAudio" class="btn btn-primary w-100 mt-4">Upload</button>
             </div>
         </div>
 

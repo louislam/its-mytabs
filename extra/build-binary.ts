@@ -12,7 +12,7 @@ export function buildWindows() {
             "./deno.jsonc",
             "--include",
             "./extra",
-          //  "--no-check",
+            //  "--no-check",
             "--allow-all",
             "--output",
             "its-mytabs.exe",

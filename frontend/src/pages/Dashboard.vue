@@ -55,7 +55,7 @@ export default defineComponent({
                     </router-link>
                 </div>
 
-                <div class="right"  v-show="ready">
+                <div class="right" v-show="ready">
                     <a href="#" @click.prevent="signOut()" v-if="isLoggedIn">
                         <font-awesome-icon :icon='["fas", "arrow-right-from-bracket"]' />
                         Log out

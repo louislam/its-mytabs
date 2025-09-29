@@ -2,6 +2,21 @@ import * as fs from "@std/fs";
 import * as path from "@std/path";
 import { fileURLToPath } from "node:url";
 import childProcess from "node:child_process";
+import * as jsonc from "@std/jsonc";
+
+const denoJSONCPath = path.join(getSourceDir(), "./deno.jsonc");
+export const denoJSONC = jsonc.parse(await Deno.readTextFile(denoJSONCPath));
+
+let version = "unknown";
+if (denoJSONC && typeof denoJSONC === "object" && !Array.isArray(denoJSONC) && typeof denoJSONC.version === "string") {
+    version = denoJSONC.version;
+}
+
+// Parse deno.jsonc
+export const appVersion: string = version;
+
+export const host = Deno.env.get("MYTABS_HOST");
+export const port = Deno.env.get("MYTABS_PORT") ? parseInt(Deno.env.get("MYTABS_PORT")!) : 47777;
 
 export async function getDataDir() {
     let dataDir = Deno.env.get("DATA_DIR") || "./data";

@@ -1,20 +1,13 @@
 <script>
-import * as alphaTab from "@coderline/alphatab";
-import { ScrollMode, StaveProfile } from "@coderline/alphatab";
-import {
-    ActionBuffer,
-    baseURL,
-    checkFetch,
-    connectSocketIO,
-    convertAlphaTexSyncPoint, generalError,
-    getInstrumentName,
-    getSetting
-} from "../app.js";
+import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
+
+const alphaTab = await import("@coderline/alphatab");
+const { ScrollMode, StaveProfile } = alphaTab;
 
 const speedActionBuffer = new ActionBuffer(2000);
 const syncOffsetActionBuffer = new ActionBuffer(1500);
@@ -75,9 +68,9 @@ export default defineComponent({
             if (!this.api || !this.youtube) {
                 return;
             }
-            
+
             this.pause();
-            
+
             this.youtube.simpleSync = this.simpleSyncSecond * 1000;
 
             // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
@@ -91,7 +84,7 @@ export default defineComponent({
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
             this.api.player.output.handler = this.alphaTabYoutubeHandler;
-            
+
             // Save
             syncOffsetActionBuffer.run(() => {
                 if (oldVal !== -1) {
@@ -99,19 +92,19 @@ export default defineComponent({
                 }
             });
         },
-        
+
         "youtube.simpleSync"() {
             if (!this.api || !this.youtube) {
                 return;
             }
             this.simpleSyncSecond = parseFloat((this.youtube.simpleSync / 1000).toFixed(2));
         },
-        
+
         playing() {
             if (!this.api) {
                 return;
             }
-            
+
             if (this.playing) {
                 this.api.settings.player.scrollMode = ScrollMode.Continuous;
                 this.api.updateSettings();
@@ -119,7 +112,7 @@ export default defineComponent({
             } else {
                 this.api.pause();
             }
-            
+
             // Hide the cursor when playing
             if (this.setting.cursor === "invisible" || this.setting.cursor === "bar") {
                 const cursor = document.querySelector(".at-cursor-beat");
@@ -154,7 +147,7 @@ export default defineComponent({
             }
             this.setConfig("enableCountIn", this.enableCountIn);
         },
- 
+
         enableMetronome() {
             if (!this.api) {
                 return;
@@ -201,30 +194,26 @@ export default defineComponent({
         // Switch Audio Source
         async currentAudio() {
             console.log("Switching audio to:", this.currentAudio);
-            
+
             if (!this.api) {
                 return;
             }
 
             this.api.player.masterVolume = 1;
-            
+
             if (this.currentAudio === "synth") {
                 await this.initSynth();
-                
             } else if (this.currentAudio === "backingTrack") {
                 this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledBackingTrack;
                 this.api.updateSettings();
                 this.pause();
-                
             } else if (this.currentAudio.startsWith("youtube-")) {
                 const videoID = this.currentAudio.substring(8);
                 await this.initYoutube(videoID);
-                
             } else if (this.currentAudio === "none") {
                 // Workaround: alphaTab.PlayerMode.Disabled is not working, so just mute the volume
                 this.api.player.masterVolume = 0;
                 this.pause();
-                
             } else {
                 // Unknown audio source, fallback to synth
                 await this.initSynth();
@@ -245,8 +234,24 @@ export default defineComponent({
         this.isLoggedIn = await isLoggedIn();
         this.setting = getSetting();
         this.tabID = this.$route.params.id;
+        const urlParams = new URLSearchParams(window.location.search);
 
         try {
+            // Override trackID if provided in URL
+            const trackParam = urlParams.get("track");
+            if (trackParam) {
+                const id = parseInt(trackParam);
+                if (!isNaN(id)) {
+                    this.setConfig("trackID", id);
+                }
+            }
+
+            // Override audio source if provided in URL
+            const audioParam = urlParams.get("audio");
+            if (audioParam) {
+                this.setConfig("audio", audioParam);
+            }
+
             const trackID = this.getConfig("trackID", 0);
 
             // Load the AlphaTab
@@ -296,7 +301,7 @@ export default defineComponent({
             }
 
             const tempToken = await this.getTempToken();
-            
+
             // Requested trackID may be invalid, so we need to get the actual trackID used
             trackID = await this.initContainer(tempToken, trackID);
 
@@ -321,10 +326,8 @@ export default defineComponent({
             }
 
             this.playing = !this.playing;
-
-
         },
-        
+
         play() {
             if (!this.api || !this.ready) {
                 return;
@@ -358,7 +361,6 @@ export default defineComponent({
         },
 
         /**
-         * 
          * @param tempToken
          * @param trackID
          * @returns {Promise<number>} The actual trackID used
@@ -429,16 +431,16 @@ export default defineComponent({
                         resources: displayResources,
                     },
                 });
-                
+
                 // Exposing api to window for debugging
                 window.api = this.api;
 
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
                     console.log("Score loaded");
-                    
+
                     this.applyColors(score);
-                    
+
                     // Track
                     if (trackID < 0 || trackID >= score.tracks.length) {
                         trackID = 0;
@@ -460,7 +462,7 @@ export default defineComponent({
                     // Speed
                     this.speed = 100;
                     this.speed = this.getConfig("speed", 100);
-                    
+
                     this.tracks = [];
 
                     // List all tracks
@@ -495,7 +497,7 @@ export default defineComponent({
         destroyContainer() {
             this.api?.destroy();
             this.api = undefined;
-            
+
             // Reset states
             this.ready = false;
             this.playing = false;
@@ -517,7 +519,7 @@ export default defineComponent({
             ];
             this.api.score.applyFlatSyncPoints(syncPoints);
         },
-        
+
         advancedSync(syncPointsText) {
             const syncPoints = convertAlphaTexSyncPoint(syncPointsText);
             this.api.score.applyFlatSyncPoints(syncPoints);
@@ -604,7 +606,9 @@ export default defineComponent({
             // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
             // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
-            this.api.updateSettings(); 
+            this.api.updateSettings();
+
+            let found = false;
 
             // Get offset from youtubeList
             for (const yt of this.youtubeList) {
@@ -615,13 +619,25 @@ export default defineComponent({
                     } else {
                         this.simpleSync(yt.simpleSync);
                     }
+                    found = true;
                     break;
                 }
             }
 
+            // Probably provided a video ID not in the list, switch to synth
+            if (!found) {
+                notify({
+                    type: "error",
+                    title: "Error",
+                    text: "YouTube video not found, fallback to synth.",
+                });
+                this.currentAudio = "synth";
+                return;
+            }
+
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
-            
+
             this.api.player.output.handler = this.alphaTabYoutubeHandler;
             this.youtubePlayer.cueVideoById(videoID);
             this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
@@ -935,7 +951,7 @@ export default defineComponent({
             }
             return JSON.parse(value);
         },
-        
+
         async saveYoutube() {
             let res;
             try {
@@ -955,7 +971,7 @@ export default defineComponent({
                 await checkFetch(res);
             } catch (e) {
                 generalError(e);
-            }  
+            }
         },
     },
 });
@@ -1011,9 +1027,16 @@ export default defineComponent({
                     <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class='{ active: currentAudio === "youtube-" + youtube.videoID }'>
                         <div class="name">Youtube: {{ youtube.videoID }}</div>
                     </div>
-                    
+
                     <!-- No Audio -->
-                    <div class="audio item" @click="currentAudio = 'none'; closeAllList()" :class='{ active: currentAudio === "none" }'>
+                    <div
+                        class="audio item"
+                        @click='
+                            currentAudio = "none";
+                            closeAllList();
+                        '
+                        :class='{ active: currentAudio === "none" }'
+                    >
                         <div class="name">No Audio (Mute)</div>
                     </div>
 
@@ -1055,10 +1078,10 @@ export default defineComponent({
                     Edit
                 </button>
             </div>
-            
+
             <div v-show='currentAudio.startsWith("youtube-")' class="youtube-player-container">
                 <!-- Simple sync edit -->
-                <div class="sync-offset ps-3 pe-3 p-2" v-if="youtube?.syncMethod === 'simple' && isLoggedIn">
+                <div class="sync-offset ps-3 pe-3 p-2" v-if='youtube?.syncMethod === "simple" && isLoggedIn'>
                     Sync Offset: <input type="number" class="form-control" min="-100000" max="100000" step="0.01" v-model="simpleSyncSecond" /> s
                 </div>
                 <div ref="youtube" class="player"></div>
@@ -1141,16 +1164,16 @@ $youtube-height: 200px;
         bottom: 100%;
         right: 0;
         display: flex;
-        
+
         // align bottom
         align-items: flex-end;
-        
+
         white-space: nowrap;
-        
+
         .player {
             height: 180px;
         }
-        
+
         .sync-offset {
             color: white;
             display: flex;

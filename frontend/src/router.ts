@@ -3,12 +3,13 @@ import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 import Layout from "./layouts/Layout.vue";
 import Dashboard from "./pages/Dashboard.vue";
 import Home from "./pages/Home.vue";
-import Tab from "./pages/Tab.vue";
 import Register from "./pages/Register.vue";
 import Login from "./pages/Login.vue";
 import TabConfig from "./pages/TabConfig.vue";
 import Settings from "./pages/Settings.vue";
 import TabNew from "./pages/TabNew.vue";
+
+const Tab = () => import("./pages/Tab.vue");
 
 const routes: RouteRecordRaw[] = [
     {
