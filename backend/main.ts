@@ -2,15 +2,31 @@ import { serve } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, YoutubeSaveRequestSchema } from "./zod.ts";
+import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, SyncRequestSchema } from "./zod.ts";
 import { db, hasUser, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { devOriginList, getFrontendDir, host, isDev, port, start } from "./util.ts";
+import { devOriginList, getFrontendDir, host, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
-import { supportedFormatList } from "./common.ts";
-import { addYoutube, createTab, deleteTab, getTab, getTabFilePath, getTabFullFilePath, getYoutubeList, removeYoutube, replaceTab, updateTab, updateYoutube } from "./tab.ts";
+import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
+import {
+    addAudio,
+    addYoutube,
+    createTab,
+    deleteTab, getAudio,
+    getAudioList,
+    getTab,
+    getTabFilePath,
+    getTabFullFilePath,
+    getYoutubeList,
+    removeAudio,
+    removeYoutube,
+    replaceTab, updateAudio,
+    updateTab,
+    updateYoutube,
+} from "./tab.ts";
 import { ZodError } from "zod";
+import sanitize from "sanitize-filename";
 
 export async function main() {
     const frontendDir = getFrontendDir();
@@ -186,12 +202,14 @@ export async function main() {
             }
 
             const youtubeList = await getYoutubeList(id);
+            const audioList = await getAudioList(id);
             const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(tab) : "";
 
             return c.json({
                 ok: true,
                 tab,
                 youtubeList,
+                audioList,
                 filePath,
             });
         } catch (e) {
@@ -280,6 +298,147 @@ export async function main() {
         }
     });
 
+    // Add Audio
+    app.post("/api/tab/:id/audio", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const tab = await getTab(id);
+
+            const form = await c.req.formData();
+            const file = form.get("file");
+
+            if (!(file instanceof File)) {
+                throw new Error("No file uploaded");
+            }
+
+            const fileName = file.name;
+            const ext = fileName.split(".").pop()?.toLowerCase();
+            if (!ext) {
+                throw new Error("File has no extension");
+            }
+
+            if (!supportedAudioFormatList.includes(ext)) {
+                throw new Error("Unsupported file format: " + ext);
+            }
+
+            const arrayBuffer = await file.arrayBuffer();
+            await addAudio(tab, new Uint8Array(arrayBuffer), fileName);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Save Audio (Metadata only)
+    app.post("/api/tab/:id/audio/:filename", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const body = await c.req.json();
+            const data = SyncRequestSchema.parse(body);
+
+            const tab = await getTab(id);
+            const filename = c.req.param("filename");
+
+            await updateAudio(tab, filename, data);
+
+            return c.json({
+                ok: true,
+            });
+
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Remove Audio
+    app.delete("/api/tab/:id/audio/:filename", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+            const tab = await getTab(id);
+            const filename = c.req.param("filename");
+            await removeAudio(tab, filename);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Serve audio file
+    app.get("/api/tab/:id/audio/:filename", async (c) => {
+        try {
+            const id = parseInt(c.req.param("id") || "");
+            const tab = await getTab(id);
+            if (!tab.public) {
+                await checkLogin(c);
+            }
+
+            const filename = sanitize(c.req.param("filename"));
+            let audioList = await getAudioList(id);
+            let found = false;
+
+            for (let audio of audioList) {
+                if (audio.filename === filename) {
+                    found = true;
+                }
+            }
+
+            if (!found) {
+                throw new Error("Audio record not found");
+            }
+
+            const filePath = path.join(tabDir, tab.id.toString(), filename);
+
+            // Check if file exists
+            if (!await fs.exists(filePath)) {
+                throw new Error("Audio file not found");
+            }
+
+            // serve the file
+            const file = await Deno.open(filePath, {
+                read: true,
+            });
+
+            const encodedFilename = encodeURIComponent(filename);
+            let mime = "application/octet-stream";
+            let mimeList: Record<string, string> = {
+                "mp3": "audio/mpeg",
+                "ogg": "audio/ogg",
+            };
+
+            const ext = filename.split(".").pop()?.toLowerCase();
+            if (ext && mimeList[ext]) {
+                mime = mimeList[ext];
+            }
+
+            return c.body(file.readable, 200, {
+                "Content-Type": mime,
+                "Content-Disposition": `attachment; filename="${encodedFilename}"`,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     // Add Youtube (/api/tab/${tabID}/youtube)
     app.post("/api/tab/:id/youtube", async (c) => {
         try {
@@ -314,7 +473,7 @@ export async function main() {
             }
 
             const body = await c.req.json();
-            const data = YoutubeSaveRequestSchema.parse(body);
+            const data = SyncRequestSchema.parse(body);
 
             await getTab(id);
             await updateYoutube(id, videoID, data);

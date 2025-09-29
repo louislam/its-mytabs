@@ -47,9 +47,18 @@ export const YoutubeAddDataSchema = z.object({
 });
 export type YoutubeData = z.infer<typeof YoutubeAddDataSchema>;
 
-export const YoutubeSaveRequestSchema = z.object({
+export const SyncRequestSchema = z.object({
     syncMethod,
     simpleSync,
     advancedSync,
 });
-export type YoutubeSaveRequest = z.infer<typeof YoutubeSaveRequestSchema>;
+export type YoutubeSaveRequest = z.infer<typeof SyncRequestSchema>;
+
+export const AudioDataSchema = z.object({
+    filename: z.string().min(1),
+    syncMethod: syncMethod.default("simple"),
+    simpleSync: simpleSync.default(0),
+    advancedSync: advancedSync.default(""),
+});
+
+export type AudioData = z.infer<typeof AudioDataSchema>;

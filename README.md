@@ -83,6 +83,15 @@ Go to `http://localhost:47777` to access the web UI.
 
 Download the latest release from [Releases]() page, unzip it, and run `its-mytabs.exe`.
 
+## Screenshots
+
+## Environment Variables
+
+| Name        | Default | Description                                               |
+| ----------- | ------- | --------------------------------------------------------- |
+| MYTABS_PORT | 47777   | The port to run the web server                            |
+| MYTABS_HOST | (unset) | The host to bind the web server (default: all interfaces) |
+
 ## Motivation
 
 A few months ago, I saw a music game called Rocksmith 2014 Remastered on sale on Steam. I bought it, grabbed my brother's abandoned bass, and started playing.

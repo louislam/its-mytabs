@@ -4,11 +4,12 @@ import { baseURL, checkFetch, convertAlphaTexSyncPoint, generalError } from "../
 import { notify } from "@kyvg/vue3-notification";
 import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
 import { supportedAudioFormatCommaString, supportedFormatCommaString } from "../../../backend/common.js";
+import SyncOptions from "../components/SyncOptions.vue";
 
 const alphaTab = await import("@coderline/alphatab");
 
 export default defineComponent({
-    components: { Vue3Dropzone },
+    components: { SyncOptions, Vue3Dropzone },
     data() {
         return {
             tabID: -1,
@@ -16,6 +17,7 @@ export default defineComponent({
             page: "",
             youtubeURL: "",
             youtubeList: [],
+            audioList: [],
             // isLocalIP: false,
             supportedFormatCommaString,
             supportedAudioFormatCommaString,
@@ -45,6 +47,7 @@ export default defineComponent({
             const data = await res.json();
             this.tab = data.tab;
             this.youtubeList = data.youtubeList;
+            this.audioList = data.audioList;
             this.filePath = data.filePath;
         },
 
@@ -113,6 +116,7 @@ export default defineComponent({
                 generalError(e);
             }
         },
+        
         async saveYoutube(video) {
             let res;
             try {
@@ -140,6 +144,7 @@ export default defineComponent({
                 generalError(e);
             }
         },
+        
         async removeYoutube(video) {
             try {
                 if (!confirm("Are you sure you want to remove this YouTube video?")) {
@@ -207,11 +212,11 @@ export default defineComponent({
 
         async uploadAudio() {
             try {
-                if (this.tabFiles.length === 0) {
+                if (this.audioFiles.length === 0) {
                     throw new Error("Please select a file to upload");
                 }
 
-                const file = this.tabFiles[0].file;
+                const file = this.audioFiles[0].file;
                 const formData = new FormData();
                 formData.append("file", file);
 
@@ -223,15 +228,71 @@ export default defineComponent({
 
                 await checkFetch(response);
                 notify({
-                    text: "Tab file uploaded and replaced successfully",
+                    text: "Upload audio successfully",
                     type: "success",
                 });
-                this.$router.push(`/tab/${this.tabID}`);
+                await this.load();
             } catch (error) {
                 notify({
                     text: error.message,
                     type: "error",
                 });
+            }
+        },
+
+        async saveAudio(audio) {
+            let res;
+            try {
+                const tabID = this.tab.id;
+                const encoded = encodeURIComponent(audio.filename);
+                res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        syncMethod: audio.syncMethod,
+                        simpleSync: audio.simpleSync,
+                        advancedSync: audio.advancedSync,
+                    }),
+                });
+
+                await checkFetch(res);
+
+                notify({
+                    text: "Updated successfully",
+                    type: "success",
+                });
+            } catch (e) {
+                generalError(e);
+            }
+        },
+
+        async removeAudio(audio) {
+            try {
+                if (!confirm("Are you sure you want to remove this audio file?")) {
+                    return;
+                }
+
+                const tabID = this.tab.id;
+                const encoded = encodeURIComponent(audio.filename);
+                
+                const res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}`, {
+                    method: "DELETE",
+                    credentials: "include",
+                });
+
+                await checkFetch(res);
+
+                notify({
+                    text: "The audio file has been removed successfully",
+                    type: "success",
+                });
+
+                await this.load();
+            } catch (e) {
+                generalError(e);
             }
         },
 
@@ -242,6 +303,10 @@ export default defineComponent({
                 text: error,
                 type: "error",
             });
+        },
+
+        getAudioURL(tabID, filename) {
+            return baseURL + `/api/tab/${tabID}/audio/${encodeURIComponent(filename)}`;
         },
     },
 });
@@ -298,10 +363,11 @@ export default defineComponent({
 
         <!-- Audio Page -->
         <div v-else-if='this.page === "audio"'>
-            <h2 class="mt-4">Youtube & Audio files</h2>
 
+            <h3 class="mt-4 mb-2">Youtube</h3>
+            
             <!-- Show alert if using a local ip -->
-            <div class="alert alert-info" role="alert">
+            <div class="alert alert-info mt-3" role="alert">
                 Tip: Youtube videos may not work on a private ip (such as 127.0.0.1). Please use <strong>localhost</strong> or other hostname.
             </div>
 
@@ -314,7 +380,6 @@ export default defineComponent({
             </div>
 
             <div class="mb-4">
-                <h3>Youtube</h3>
 
                 <!-- Youtube Item -->
                 <div v-for="video in youtubeList" :key="video.id" class="mb-3 pb-5 youtube-item">
@@ -333,55 +398,19 @@ export default defineComponent({
                             <strong>Video ID:</strong> <a :href="`https://www.youtube.com/watch?v=${video.videoID}`" target="_blank">{{ video.videoID }}</a>
                         </div>
 
-                        <select class="form-control mb-3" v-model="video.syncMethod">
-                            <option value="simple">Simple Sync</option>
-                            <option value="advanced">Advanced Sync</option>
-                        </select>
-
-                        <div v-if='video.syncMethod === "simple"' class="mb-3">
-                            1st Bar Start Point (start at {{ video.simpleSync }} milliseconds)
-
-                            <div class="my-2 text-info">
-                                Perfect for songs with a consistent tempo and the tab have a correct bpm.
-                            </div>
-
-                            <input type="number" class="form-control" v-model="video.simpleSync">
-                        </div>
-
-                        <div v-if='video.syncMethod === "advanced"' class="mb-3">
-                            Advanced Sync Points
-
-                            <div class="my-2 text-info">
-                                <p>
-                                    You can use this to sync the song bar by bar.
-                                </p>
-                                <p>
-                                    \sync {Bar} {Occurence} {Offset}
-                                </p>
-                                <ul>
-                                    <li>Bar: 0 is the first bar</li>
-                                    <li>Offset: In milliseconds (ms) (1000ms = 1s)</li>
-                                </ul>
-                                <p>Visual Tool: <a href="https://alphatab.net/docs/playground" target="_blank">https://alphatab.net/docs/playground</a>, and generate alphaTex Sync Points.</p>
-                            </div>
-
-                            <textarea
-                                class="form-control"
-                                rows="10"
-                                v-model="video.advancedSync"
-                                :placeholder='
-                                    "Example:\n" +
-                                        "\\sync 0 0 36\n" +
-                                        "\\sync 16 0 35425"
-                                '
-                            >
-                            </textarea>
-                        </div>
+                        <SyncOptions
+                            :syncMethod="video.syncMethod"
+                            :simpleSync="video.simpleSync"
+                            :advancedSync="video.advancedSync"
+                            @update:syncMethod="video.syncMethod = $event"
+                            @update:simpleSync="video.simpleSync = $event"
+                            @update:advancedSync="video.advancedSync = $event"
+                        />
 
                         <button class="btn btn-primary" @click.prevent="saveYoutube(video)">Save</button>
                     </div>
 
-                    <div>
+                    <div class="buttons">
                         <div class="btn-group">
                             <button class="btn btn-danger" @click="removeYoutube(video)">Remove</button>
                         </div>
@@ -392,16 +421,47 @@ export default defineComponent({
             <div class="mb-5">
                 <h3 class="mb-5">Audio files</h3>
 
+                <div class="mb-5">
+                    <div v-for="audio in audioList" class="audio-item mb-3 pb-3" :key="audio.id">
+                        <div>
+                            <div class="mb-2">
+                                <audio :src="getAudioURL(tabID, audio.filename)" controls></audio>
+                            </div>
+
+                            <a :href="getAudioURL(tabID, audio.filename)" target="_blank">{{ audio.filename }}</a>
+                        </div>
+                        <div class="info">
+                            <SyncOptions
+                                :syncMethod="audio.syncMethod"
+                                :simpleSync="audio.simpleSync"
+                                :advancedSync="audio.advancedSync"
+                                @update:syncMethod="audio.syncMethod = $event"
+                                @update:simpleSync="audio.simpleSync = $event"
+                                @update:advancedSync="audio.advancedSync = $event"
+                            />
+                            <button class="btn btn-primary" @click.prevent="saveAudio(audio)">Save</button>
+                        </div>
+                        <div class="buttons">
+                            <div class="btn-group">
+                                <button class="btn btn-danger" @click="removeAudio(audio)">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <Vue3Dropzone
-                    v-model="files"
+                    v-model="audioFiles"
                     :maxFileSize="100"
-                    :accept="supportedAudioFormatCommaString"
                     @error="dropzoneError"
                 >
+                    <template #placeholder-img>&nbsp;
+                    </template>
                     <template #title>
                         Drop your audio file here
                     </template>
-                    <template #description> </template>
+                    <template #description>
+                        Formats: mp3, ogg
+                    </template>
                 </Vue3Dropzone>
 
                 <button @click="uploadAudio" class="btn btn-primary w-100 mt-4">Upload</button>
@@ -445,14 +505,16 @@ export default defineComponent({
     }
 }
 
-.youtube-item {
+.youtube-item, .audio-item {
     display: flex;
     gap: 15px;
-    align-items: center;
+    align-items: flex-start;
     border-bottom: 1px solid #333;
-
     .info {
         flex-grow: 1;
+    }
+    .buttons {
+        align-self: center;
     }
 }
 </style>

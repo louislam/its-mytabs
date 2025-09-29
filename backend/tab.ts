@@ -1,8 +1,9 @@
 import { tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
+import { AudioData, AudioDataSchema, TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
+import sanitize from "sanitize-filename";
 
 export async function createTab(tabFileData: Uint8Array, ext: string, title: string, artist: string, originalFilename: string) {
     const id = await getNextTabID();
@@ -139,6 +140,74 @@ export async function deleteTab(id: number) {
     }
 }
 
+export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
+    // To avoid issues with special characters in filenames in different OS
+    const filename = sanitize(originalFilename);
+
+    // Check if kv entry already exists
+    const existing = await kv.get(["audio", tab.id, filename]);
+    if (existing.value) {
+        throw new Error("Audio file with the same name already exists");
+    }
+
+    const filePath = path.join(tabDir, tab.id.toString(), filename);
+    await Deno.writeFile(filePath, audioFileData);
+
+    await kv.set(
+        ["audio", tab.id, filename],
+        AudioDataSchema.parse({
+            filename,
+        }),
+    );
+}
+
+export async function getAudio(tab: TabInfo, filename: string) {
+    // Check if kv entry exists
+    const res = await kv.get(["audio", tab.id, filename]);
+    if (!res.value) {
+        throw new Error("Audio file not found");
+    }
+    return AudioDataSchema.parse(res.value);
+}
+
+export async function removeAudio(tab: TabInfo, filename: string) {
+    // Check if kv entry exists
+    await getAudio(tab, filename);
+
+    // Delete file
+    const filePath = path.join(tabDir, tab.id.toString(), filename);
+    await Deno.remove(filePath);
+
+    // Delete from KV
+    await kv.delete(["audio", tab.id, filename]);
+}
+
+export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeSaveRequest) {
+    await getAudio(tab, filename); // Check if exists
+    await kv.set(
+        ["audio", tab.id, filename],
+        AudioDataSchema.parse({
+            filename,
+            ...data,
+        }),
+    );
+}
+
+export async function getAudioList(tabID: number): Promise<AudioData[]> {
+    const list: AudioData[] = [];
+    const iter = kv.list({ prefix: ["audio", tabID] });
+
+    for await (const entry of iter) {
+        try {
+            list.push(AudioDataSchema.parse(entry.value));
+        } catch (e) {
+            console.error("Invalid AudioData entry in KV:", entry.key, entry.value);
+        }
+    }
+
+    return list;
+}
+
 export async function addYoutube(tabID: number, videoID: string) {
     await kv.set(
         ["youtube", tabID, videoID],
@@ -164,7 +233,7 @@ export async function removeYoutube(tabID: number, videoID: string) {
 
 export async function getYoutubeList(tabID: number): Promise<Youtube[]> {
     const list: Youtube[] = [];
-    const iter = kv.list<boolean>({ prefix: ["youtube", tabID] });
+    const iter = kv.list({ prefix: ["youtube", tabID] });
 
     for await (const entry of iter) {
         try {
