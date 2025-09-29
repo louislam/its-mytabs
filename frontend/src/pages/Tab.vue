@@ -1187,100 +1187,102 @@ export default defineComponent({
         <div :class='{ "yt-margin": currentAudio.startsWith(`youtube-`) }'></div>
 
         <div class="toolbar">
-            <div class="track-selector selector">
-                <div class="button" @click='showList("track")'>
-                    <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
-                    <span v-else>Loading...</span>
-                </div>
-
-                <div class="track-list list" v-if="showTrackList">
-                    <div class="p-2 text-end list-header">
-                        <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
-                    </div>
-
-                    <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTrack === track.id }">
-                        <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
-                        <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
-                        <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
+            <div class="scroll">
+                <div class="track-selector selector">
+                    <div class="button" @click='showList("track")'>
+                        <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
+                        <span v-else>Loading...</span>
                     </div>
                 </div>
-            </div>
 
-            <div class="audio-selector selector">
-                <div class="button" @click='showList("audio")'>
-                    Audio
-                </div>
-
-                <div class="audio-list list" v-if="showAudioList">
-                    <div class="p-2 text-end list-header">
-                        <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
-                    </div>
-
-                    <div class="audio item" @click="audioSynth" :class='{ active: currentAudio === "synth" }'>
-                        <div class="name">Synth</div>
-                    </div>
-
-                    <div class="audio item" @click="audioBackingTrack" :class='{ active: currentAudio === "backingTrack" }' v-if="enableBackingTrack">
-                        <div class="name">Embedded Backing Track</div>
-                    </div>
-
-                    <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class='{ active: currentAudio === "youtube-" + youtube.videoID }'>
-                        <div class="name">Youtube: {{ youtube.videoID }}</div>
-                    </div>
-
-                    <div class="audio item" @click="audioFile(audio.filename)" v-for="audio in audioList" :key="audio.filename" :class='{ active: currentAudio === "audio-" + audio.filename }'>
-                        <div class="name">{{ audio.filename }}</div>
-                    </div>
-
-                    <!-- No Audio -->
-                    <div
-                        class="audio item"
-                        @click='
-                            currentAudio = "none";
-                            closeAllList();
-                        '
-                        :class='{ active: currentAudio === "none" }'
-                    >
-                        <div class="name">No Audio (Mute)</div>
-                    </div>
-
-                    <div class="ms-4 me-4 mt-3 mb-3" v-if="isLoggedIn">
-                        <router-link :to="`/tab/${tab.id}/edit/audio`">Add Youtube or Audio File...</router-link>
+                <div class="audio-selector selector">
+                    <div class="button" @click='showList("audio")'>
+                        Audio
                     </div>
                 </div>
-            </div>
 
-            <button class="btn btn-primary" @click="playPause" :class="{ active: playing }">
+                <button class="btn btn-primary" @click="playPause" :class="{ active: playing }">
                 <span v-if="!playing">
                     <font-awesome-icon :icon='["fas", "play"]' />
                     Play
                 </span>
-                <span v-else>
+                    <span v-else>
                     <font-awesome-icon :icon='["fas", "pause"]' />
                     Pause
                 </span>
-            </button>
-            <button class="btn btn-secondary" @click="loop()" :class="{ active: isLooping }">
-                <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
-                Loop
-            </button>
-            <button class="btn btn-secondary" @click="countIn()" :class='{ active: enableCountIn, disabled: currentAudio !== "synth" }'>
-                <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
-                Count in
-            </button>
-            <button class="btn btn-secondary" @click="metronome()" :class='{ active: enableMetronome, disabled: currentAudio !== "synth" }'>
-                <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
-                Metronome
-            </button>
+                </button>
+                <button class="btn btn-secondary" @click="loop()" :class="{ active: isLooping }">
+                    <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
+                    Loop
+                </button>
+                <button class="btn btn-secondary" @click="countIn()" :class='{ active: enableCountIn, disabled: currentAudio !== "synth" }'>
+                    <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
+                    Count in
+                </button>
+                <button class="btn btn-secondary" @click="metronome()" :class='{ active: enableMetronome, disabled: currentAudio !== "synth" }'>
+                    <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
+                    Metronome
+                </button>
 
-            <div class="speed">
-                Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
+                <div class="speed">
+                    Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
+                </div>
+
+                <div class="btn-edit" v-if="isLoggedIn">
+                    <button class="btn btn-secondary" @click="edit()">
+                        Edit
+                    </button>
+                </div>
             </div>
 
-            <div class="btn-edit" v-if="isLoggedIn">
-                <button class="btn btn-secondary" @click="edit()">
-                    Edit
-                </button>
+            <div class="track-list list" v-if="showTrackList">
+                <div class="p-2 text-end list-header">
+                    <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
+                </div>
+
+                <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTrack === track.id }">
+                    <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
+                    <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
+                    <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
+                </div>
+            </div>
+
+            <div class="audio-list list" v-if="showAudioList">
+                <div class="p-2 text-end list-header">
+                    <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
+                </div>
+
+                <div class="audio item" @click="audioSynth" :class='{ active: currentAudio === "synth" }'>
+                    <div class="name">Synth</div>
+                </div>
+
+                <div class="audio item" @click="audioBackingTrack" :class='{ active: currentAudio === "backingTrack" }' v-if="enableBackingTrack">
+                    <div class="name">Embedded Backing Track</div>
+                </div>
+
+                <div class="audio item" @click="audioYoutube(youtube.videoID)" v-for="youtube in youtubeList" :key="youtube.id" :class='{ active: currentAudio === "youtube-" + youtube.videoID }'>
+                    <div class="name">Youtube: {{ youtube.videoID }}</div>
+                </div>
+
+                <div class="audio item" @click="audioFile(audio.filename)" v-for="audio in audioList" :key="audio.filename" :class='{ active: currentAudio === "audio-" + audio.filename }'>
+                    <div class="name">{{ audio.filename }}</div>
+                </div>
+
+                <!-- No Audio -->
+                <div
+                    class="audio item"
+                    @click='
+                            currentAudio = "none";
+                            closeAllList();
+                        '
+                    :class='{ active: currentAudio === "none" }'
+                >
+                    <div class="name">No Audio (Mute)</div>
+                </div>
+
+                <div class="ms-4 me-4 mt-3 mb-3" v-if="isLoggedIn">
+                    <router-link :to="`/tab/${tab.id}/edit/audio`">Add Youtube or Audio File...</router-link>
+                </div>
             </div>
 
             <!-- USE v-show, because youtube player is not vue  -->
@@ -1307,7 +1309,7 @@ export default defineComponent({
 <style scoped lang="scss">
 @import "../styles/vars.scss";
 
-$toolbar-height: 75px;
+$toolbar-height: 60px;
 $youtube-height: 200px;
 
 // Light Score
@@ -1333,12 +1335,6 @@ $youtube-height: 200px;
 }
 
 .toolbar {
-    height: $toolbar-height;
-    padding: 20px 15px;
-    display: flex;
-    align-items: center;
-    flex-grow: 4;
-    column-gap: 10px;
     backdrop-filter: blur(10px);
     border-bottom: 1px solid #3c3b40;
     position: fixed;
@@ -1350,26 +1346,36 @@ $youtube-height: 200px;
     .light & {
         background-color: rgba(33, 37, 41, 0.8);
     }
-
-    .btn-edit {
-        flex-grow: 1;
-        text-align: right;
-    }
-
-    .button, .btn {
-        height: 44px;
-    }
-
-    .btn-secondary {
-        &.active {
-            //background-color: lighten($primary, 10%);
+    
+    // Allow horizontal scroll
+    .scroll {
+        padding: 8px 15px;
+        display: flex;
+        align-items: center;
+        flex-grow: 4;
+        column-gap: 10px;
+        
+        .btn-edit {
+            flex-grow: 1;
+            text-align: right;
         }
-    }
 
-    .close {
-        cursor: pointer;
-        &:hover {
-            color: white;
+        .button, .btn {
+            height: 44px;
+            white-space: nowrap;
+        }
+
+        .btn-secondary {
+            &.active {
+                //background-color: lighten($primary, 10%);
+            }
+        }
+
+        .close {
+            cursor: pointer;
+            &:hover {
+                color: white;
+            }
         }
     }
 
@@ -1438,48 +1444,68 @@ $padding: 20px;
             background-color: lighten($color, 10%);
         }
     }
+}
 
-    .list {
-        position: absolute;
+.list {
+    position: absolute;
+    background-color: $color;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 3px;
+    bottom: $toolbar-height;
+    left: 15px;
+    width: 400px;
+    overflow: scroll;
+    max-height: calc(100vh - 90px);
+
+    // TODO: No matter how big it is, the tab cursor (z-index: 1000) is always on top of it for unknown reason.
+    z-index: 1;
+
+    .list-header {
+        position: sticky;
+        top: 0;
         background-color: $color;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        backdrop-filter: blur(10px);
-        border-radius: 3px;
-        bottom: 130%;
-        width: 400px;
-        overflow: scroll;
-        max-height: calc(100vh - 90px);
+        border-bottom: 1px solid darken($color, 5%);
+    }
 
-        // TODO: No matter how big it is, the tab cursor (z-index: 1000) is always on top of it for unknown reason.
-        z-index: 1;
-        
-        .list-header {
-            position: sticky;
-            top: 0;
-            background-color: $color;
-            border-bottom: 1px solid darken($color, 5%);
+    .item {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid darken($color, 5%);
+
+        &.active {
+            background-color: lighten($color, 8%);
         }
 
-        .item {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid darken($color, 5%);
+        .name {
+            flex-grow: 1;
+            font-weight: bold;
+            padding: $padding;
+            height: 100%;
+            border-right: 1px solid darken($color, 5%);
 
-            &.active {
-                background-color: lighten($color, 8%);
+            &:hover {
+                background-color: lighten($color, 2%);
+            }
+        }
+    }
+}
+
+.track-list {
+    .track {
+        .list-button {
+            background-color: lighten($color, 10%);
+            border-right: 1px solid darken($color, 5%);
+            padding: $padding;
+            height: 100%;
+
+            &:hover {
+                background-color: lighten($primary, 5%);
             }
 
-            .name {
-                flex-grow: 1;
-                font-weight: bold;
-                padding: $padding;
-                height: 100%;
-                border-right: 1px solid darken($color, 5%);
-
-                &:hover {
-                    background-color: lighten($color, 2%);
-                }
+            &.active {
+                background-color: lighten($primary, 8%);
             }
         }
     }
@@ -1491,27 +1517,6 @@ $padding: 20px;
 
 .track-selector {
     position: relative;
-
-    .track-list {
-        .track {
-            .name {}
-
-            .list-button {
-                background-color: lighten($color, 10%);
-                border-right: 1px solid darken($color, 5%);
-                padding: $padding;
-                height: 100%;
-
-                &:hover {
-                    background-color: lighten($primary, 5%);
-                }
-
-                &.active {
-                    background-color: lighten($primary, 8%);
-                }
-            }
-        }
-    }
 }
 
 .speed {
@@ -1520,6 +1525,39 @@ $padding: 20px;
 
     input {
         border: 0;
+    }
+}
+
+.mobile {
+    h1 {
+        font-size: 20px;
+    }
+    
+    h2 {
+        font-size: 16px;
+    }
+    
+    .list {
+        width: 100%;
+        left: 0;
+    }
+    
+    .toolbar {
+        .scroll {
+            overflow-x: scroll;
+        }
+        
+        .player-container {
+            .sync-offset {
+                display: none;
+            }
+        }
+    }
+    
+    .speed {
+        input {
+            width: 100px;
+        }
     }
 }
 </style>

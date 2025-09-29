@@ -14,7 +14,8 @@ const configJSONPath = path.join(dataDir, "config.json");
 export const auth = betterAuth({
     database: db,
     secret: await getSecretKey(),
-    trustedOrigins: devOriginList,
+    // Hono take care of this
+    trustedOrigins: ["*"],
     emailAndPassword: {
         enabled: true,
         disableSignUp: isDisableSignUp(),

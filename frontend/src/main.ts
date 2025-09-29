@@ -20,6 +20,16 @@ app.use(createBootstrap());
 app.component("FontAwesomeIcon", FontAwesomeIcon);
 app.mount("#app");
 
+function checkMobile() {
+    if (window.innerWidth <= 768) {
+        document.documentElement.classList.add('mobile');
+    } else {
+        document.documentElement.classList.remove('mobile');
+    }
+}
+window.addEventListener('resize', checkMobile);
+checkMobile();
+
 // HMR is not working properly with AlphaTab, so we do a full reload on update
 if (import.meta.hot) {
     import.meta.hot.on("vite:afterUpdate", () => {
@@ -33,3 +43,4 @@ if (import.meta.hot) {
         }
     });
 }
+

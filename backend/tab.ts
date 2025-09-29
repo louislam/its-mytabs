@@ -70,18 +70,22 @@ export async function getNextTabID(): Promise<number> {
  * Get the next ID from Deno KV, regardless of existing directories.
  */
 async function getNextID(): Promise<number> {
-    const kv = await Deno.openKv();
-    const counterKey = ["counter", "tab_id"];
-    const op = kv.atomic();
-    const current = await kv.get<Deno.KvU64>(counterKey);
-    op.check(current);
-    op.set(counterKey, new Deno.KvU64(current.value ? current.value.value + 1n : 1n));
-    const res = await op.commit();
-    if (res.ok) {
-        return current.value ? Number(current.value.value) + 1 : 1;
+    while (true) {
+        const key = ["counter", "tab_id"];
+        const res = await kv.get<Deno.KvU64>(key);
+        const current = res.value || new Deno.KvU64(0n);
+        const next = new Deno.KvU64(current.value + 1n);
+        const commit = await kv.atomic()
+            .check({ key, versionstamp: res.versionstamp })
+            .mutate({ type: "set", key, value: next })
+            .commit();
+        if (commit.ok) {
+            return Number(next.value);
+        }
     }
-    throw new Error("Failed to increment tab ID");
 }
+
+
 
 export async function getTab(id: number) {
     if (isNaN(id)) {

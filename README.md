@@ -91,6 +91,7 @@ Download the latest release from [Releases]() page, unzip it, and run `its-mytab
 | ----------- | ------- | --------------------------------------------------------- |
 | MYTABS_PORT | 47777   | The port to run the web server                            |
 | MYTABS_HOST | (unset) | The host to bind the web server (default: all interfaces) |
+| MYTABS_LAUNCH_BROWSER | true | (Desktop only) Whether to launch the browser when starting the app |
 
 ## Motivation
 

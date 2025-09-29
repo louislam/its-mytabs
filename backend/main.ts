@@ -6,7 +6,7 @@ import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDa
 import { db, hasUser, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { devOriginList, getFrontendDir, host, isDev, port, start, tabDir } from "./util.ts";
+import {appVersion, devOriginList, getFrontendDir, host, isDev, port, start, tabDir} from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -27,8 +27,11 @@ import {
 } from "./tab.ts";
 import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
+import "@std/dotenv/load";
 
 export async function main() {
+    console.log(`It's MyTabs v${appVersion}`);
+
     const frontendDir = getFrontendDir();
 
     if (!Deno.build.standalone) {
@@ -63,8 +66,12 @@ export async function main() {
         const url = `http://${address}:${info.port}`;
         console.log(`Server running on ${url}`);
 
+        const launchBrowser = Deno.env.get("MYTABS_LAUNCH_BROWSER");
+
         if (Deno.build.standalone) {
-            start(url);
+            if (launchBrowser !== "false") {
+                start(url);
+            }
         }
     });
 

@@ -121,4 +121,22 @@ export default defineComponent({
         }
     }
 }
+
+.mobile {
+    .my-navbar {
+        .navbar-brand {
+            width: 75px;
+            height: 75px;
+            font-size: 15px;
+        }
+        
+        .toolbar {
+            padding: 0 0 0 10px;
+
+            & > div {
+                column-gap: 10px;
+            }
+        }
+    }
+}
 </style>

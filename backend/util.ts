@@ -3,6 +3,8 @@ import * as path from "@std/path";
 import { fileURLToPath } from "node:url";
 import childProcess from "node:child_process";
 import * as jsonc from "@std/jsonc";
+import {kv} from "./db.ts";
+import {getNextTabID} from "./tab.ts";
 
 const denoJSONCPath = path.join(getSourceDir(), "./deno.jsonc");
 export const denoJSONC = jsonc.parse(await Deno.readTextFile(denoJSONCPath));
@@ -75,5 +77,40 @@ export function start(path: string) {
     if (Deno.build.os === "windows") {
         const escapedPath = escapeString(path);
         childProcess.exec(`start "" ${escapedPath}`);
+    }
+}
+
+export async function addDemoTab() {
+    try {
+        const demoTabPath = path.join(getSourceDir(), "./extra/demo-tab.gp");
+        const id = await getNextTabID();
+        const dir = path.join(tabDir, id.toString());
+        await Deno.mkdir(dir);
+
+        // Copy demo tab file
+        await Deno.copyFile(demoTabPath, path.join(dir, "tab.gp"));
+
+        // Add Tab
+        await kv.set(["tab", id], {
+            id,
+            title: "Hare no Hi ni (Bass Only)",
+            artist: "Reira Ushio",
+            filename: "tab.gp",
+            originalFilename: "汐れいら-ハレの日に (Bass Only)-09-18-2025.gp",
+            createdAt: "2025-09-26T07:29:56.450Z",
+            public: false
+        });
+
+        // Add Youtube Source
+        const videoID = "VuKSlOT__9s";
+        await kv.set(["youtube", id, videoID],    {
+            videoID,
+            syncMethod: "simple",
+            simpleSync: 2900,
+            advancedSync: ""
+        });
+
+    } catch (e) {
+        console.log("Skip: Failed to add demo tab:", e);
     }
 }
