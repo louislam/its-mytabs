@@ -2,7 +2,10 @@
 
 Open source, web based, self hostable guitar/bass tab viewer and player, similar to Songsterr.
 
-## Demo
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/d7859f4a-8ae0-41e2-bdeb-93b900cc0220" />
+
+
+## Live Demo
 
 https://its-mytabs.kuma.pet/tab/1?audio=youtube-VuKSlOT__9s&track=2
 
