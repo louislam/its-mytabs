@@ -3,7 +3,7 @@ import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
 import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, SyncRequestSchema } from "./zod.ts";
-import { db, hasUser, kv } from "./db.ts";
+import {db, hasUser, isInitDB, kv} from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
 import {appVersion, devOriginList, getFrontendDir, host, isDev, port, start, tabDir} from "./util.ts";
@@ -13,7 +13,7 @@ import {
     addAudio,
     addYoutube,
     createTab,
-    deleteTab, getAudio,
+    deleteTab,
     getAudioList,
     getTab,
     getTabFilePath,
@@ -31,6 +31,10 @@ import "@std/dotenv/load";
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
+
+    if (isInitDB()) {
+        console.log("Database initialized.");
+    }
 
     const frontendDir = getFrontendDir();
 

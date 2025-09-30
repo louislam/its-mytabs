@@ -7,15 +7,22 @@
     ],
 
     "tasks": {
+        // Production
+        "start": "deno run --allow-all backend/main.ts",
+        "setup": "deno task install-frontend-deps && deno task build-frontend",
+
+        // Dev
         "dev": "deno run -A npm:concurrently -k -r \"deno run -A npm:wait-on tcp:47777 && deno task frontend-dev\" \"deno task backend-dev\"",
         "frontend-dev": "cd frontend && deno run dev",
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
+        "install-frontend-deps": "cd frontend && deno install",
+
+        // Build
         "build-binary": "deno task build-frontend && deno run --allow-all extra/build-binary.ts",
-        "build-docker": "deno run --allow-all --env-file extra/build-docker.ts",
+        "build-docker": "deno task build-frontend && deno run --allow-all --env-file extra/build-docker.ts",
+        "build-docker-local": "deno task build-frontend && docker build -t louislam/its-mytabs:nightly -f Dockerfile .",
         "build-frontend": "cd frontend && deno run build",
-        "start": "deno run --allow-all backend/main.ts",
         "start-with-build": "deno task build-frontend && deno task start",
-        "generate-better-auth": "deno run --allow-all --unstable npm:@better-auth/cli generate --config backend/auth.ts"
     },
 
     "lock": false,
@@ -44,7 +51,7 @@
     "imports": {
         "@hono/hono": "jsr:@hono/hono@~4.9.8",
         "@hono/node-server": "npm:@hono/node-server@~1.19.3",
-        "@std/dotenv": "jsr:@std/dotenv@^0.225.5",
+        "@std/dotenv": "jsr:@std/dotenv@~0.225.5",
         "@std/fs": "jsr:@std/fs@~1.0.19",
         "@std/jsonc": "jsr:@std/jsonc@~1.0.2",
         "@std/path": "jsr:@std/path@~1.1.2",

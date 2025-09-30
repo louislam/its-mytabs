@@ -33,17 +33,20 @@ Tip: Youtube videos may not work on a private ip address (e.g. 192.168.x.x), use
 
 Download the [compose.yaml]() file and put it in an empty folder.
 
-````bash
 ```yaml
 services:
     app:
         image: louislam/its-mytabs:1
         ports:
-            # HostPort:ContainerPort
+            # Host Port:Container Port
             - "47777:47777"
-        restart: unless-stopped
         volumes:
+            # Host Path:Container Path
             - ./data:/app/data
+        restart: unless-stopped
+        environment:
+            - PUID=1000
+            - PGID=1000
 ````
 
 ```bash
@@ -87,11 +90,19 @@ Download the latest release from [Releases]() page, unzip it, and run `its-mytab
 
 ## Environment Variables
 
-| Name        | Default | Description                                               |
-| ----------- | ------- | --------------------------------------------------------- |
-| MYTABS_PORT | 47777   | The port to run the web server                            |
-| MYTABS_HOST | (unset) | The host to bind the web server (default: all interfaces) |
-| MYTABS_LAUNCH_BROWSER | true | (Desktop only) Whether to launch the browser when starting the app |
+You can create `.env` file to use.
+
+```ini
+
+# (string) Server Host (Default: not set, bind to all interfaces)
+MYTABS_HOST=
+
+# (string) Server Port (Default: 47777)
+MYTABS_PORT=47777
+
+# (boolean) Whether to launch the browser when starting the app (Desktop only) (Default: true)
+MYTABS_LAUNCH_BROWSER=true
+```
 
 ## Motivation
 
