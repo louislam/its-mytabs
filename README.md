@@ -17,6 +17,7 @@ https://its-mytabs.kuma.pet/tab/1?audio=youtube-VuKSlOT__9s&track=2
 - MIDI Synth - able to mute tracks and solo tracks
 - Supports .gp, .gpx, .gp3, .gp4, .gp5, .musicxml, .capx formats
 - Simple UI/UX
+- Mobile friendly
 - Offer different cursor modes:
   - No cursor (just auto scroll the tab) - You can use it to learn to coop with drums, not just following the cursor
   - Highlight the current bar
@@ -31,6 +32,11 @@ https://its-mytabs.kuma.pet/tab/1?audio=youtube-VuKSlOT__9s&track=2
 Support: x64, ARM64
 
 Tip: Youtube videos may not work on a private ip address (e.g. 192.168.x.x), use `localhost` or a public ip/domain instead.
+
+### Windows (exe)
+
+Download the latest release (its-mytabs-v1.x.x-windows.zip) from [Releases](https://github.com/louislam/its-mytabs/releases/latest) page, unzip it, and run `its-mytabs.exe`.
+
 
 ### Docker Compose
 
@@ -82,15 +88,24 @@ deno task start
 
 Go to `http://localhost:47777` to access the web UI.
 
-### Windows (exe)
-
-Download the latest release from [Releases]() page, unzip it, and run `its-mytabs.exe`.
-
 ## Screenshots
+
+<img width="200"  alt="image" src="https://github.com/user-attachments/assets/c980d516-8f6d-4cca-8a59-4a1a4cc75b1b" />
+
+
+<img width="300"  alt="image" src="https://github.com/user-attachments/assets/266c6c5a-ae86-4b88-8305-3ae120cf4dd8" />
+
+<img width="300"  alt="image" src="https://github.com/user-attachments/assets/a57293a4-5399-4a76-a14d-da026d0c4a7a" />
+
+<img width="300" alt="image" src="https://github.com/user-attachments/assets/972aa28a-1235-465a-be47-ed2bc9bb3035" />
+
+<img width="300" alt="image" src="https://github.com/user-attachments/assets/a617af33-ba33-4022-b9d2-6fe96e11e85d" />
+
+
 
 ## Environment Variables
 
-You can create `.env` file to use.
+You can create a `.env` file to use these env vars.
 
 ```ini
 
