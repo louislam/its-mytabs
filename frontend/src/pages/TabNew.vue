@@ -80,14 +80,13 @@ export default defineComponent({
 
         <Vue3Dropzone
             v-model="files"
-            :maxFileSize="100"
-            :accept="supportedFormatCommaString"
+            :maxFileSize="500"
             @error="dropzoneError"
         >
             <template #title>
                 Drop your tab here
             </template>
-            <template #description> </template>
+            <template #description>Supports {{ supportedFormatCommaString }}</template>
         </Vue3Dropzone>
 
         <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
