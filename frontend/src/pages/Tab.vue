@@ -1013,58 +1013,6 @@ export default defineComponent({
         },
 
         /**
-         * TODO
-         */
-        async initSocket() {
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
-            this.api.updateSettings();
-
-            // check if connected to socket
-
-            // websocket get info first
-            this.socket.emit("waitMPC");
-
-            const handler = {
-                get backingTrackDuration() {
-                    return 0;
-                },
-                get playbackRate() {
-                    return player.getPlaybackRate();
-                },
-                set playbackRate(value) {
-                    player.setPlaybackRate(value);
-                },
-                get masterVolume() {
-                    return player.getVolume() / 100;
-                },
-                set masterVolume(value) {
-                    player.setVolume(value * 100);
-                },
-                seekTo(time) {
-                    if (
-                        player.getPlayerState() !== YT.PlayerState.PAUSED &&
-                        player.getPlayerState() !== YT.PlayerState.PLAYING
-                    ) {
-                        initialSeek = time / 1000;
-                    } else {
-                        player.seekTo(time / 1000);
-                    }
-                },
-                play() {
-                    player.playVideo();
-                    if (initialSeek >= 0) {
-                        player.seekTo(initialSeek);
-                        initialSeek = -1;
-                    }
-                },
-                pause() {
-                },
-            };
-
-            this.api.player.output.handler = handler;
-        },
-
-        /**
          * As Docs suggested, I should use api.renderTrack() to change track
          * But for some reason, some slide notes are not rendered correctly
          * So I just reload the whole AlphaTab instance instead.
