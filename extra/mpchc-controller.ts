@@ -72,8 +72,10 @@ function createInterval(ms: number) {
                 socket.emit("seek", state.position);
             }
 
-            if (currentState.position !== state.position) {
-                socket.emit("seek", state.position);
+            if (state.state !== "Playing") {
+                if (currentState.position !== state.position) {
+                    socket.emit("seek", state.position);
+                }
             }
 
             currentState = state;
