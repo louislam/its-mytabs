@@ -28,6 +28,7 @@ import {
 import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
+import {socketIO} from "./socket.ts";
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
@@ -78,6 +79,9 @@ export async function main() {
             }
         }
     });
+
+    // Socket Controller
+    const io = socketIO(httpServer);
 
     // CORS for development
     if (isDev()) {

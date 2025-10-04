@@ -18,6 +18,7 @@ export default defineComponent({
      * @type {SocketIOClient.Socket}
      */
     socket: null,
+    
     /**
      * @type {alphaTab.AlphaTabApi}
      */
@@ -319,12 +320,16 @@ export default defineComponent({
             });
         }
 
+        await this.initSocketIO();
+
         console.log("Mounted");
     },
     beforeUnmount() {
         console.log("Before unmount");
         this.destroyContainer();
         window.removeEventListener("keydown", this.keyEvents);
+        
+        this.socket.disconnect();
     },
     methods: {
         async load(trackID) {
@@ -639,9 +644,27 @@ export default defineComponent({
             this.socket.on("connect", () => {
                 console.log("Connected to server");
             });
-
+            
             this.socket.on("disconnect", () => {
                 console.log("Disconnected from server");
+            });
+
+            // Play
+            this.socket.on("play", () => {
+                this.play();
+            });
+            
+            // Pause
+            this.socket.on("pause", () => {
+                this.pause();
+            });
+            
+            // Seek
+            this.socket.on("seek", (time) => {
+                if (!this.api) {
+                    return;
+                }
+                api.timePosition = time;
             });
         },
 

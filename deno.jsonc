@@ -11,6 +11,9 @@
         "start": "deno run --allow-all backend/main.ts",
         "setup": "deno task install-frontend-deps && deno task build-frontend",
 
+        // Addons
+        "mpchc-controller": "deno run --allow-all extra/mpchc-controller.ts",
+
         // Dev
         "dev": "deno run -A npm:concurrently -k -r \"deno run -A npm:wait-on tcp:47777 && deno task frontend-dev\" \"deno task backend-dev\"",
         "frontend-dev": "cd frontend && deno run dev",

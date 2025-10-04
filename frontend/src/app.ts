@@ -4,7 +4,14 @@ import { notify } from "@kyvg/vue3-notification";
 import { SettingSchema } from "./zod.ts";
 
 export function connectSocketIO() {
-    return io(baseURL);
+    const socket = io(baseURL, {
+        query: {
+            clientType: "tabPlayer",
+        },
+        withCredentials: true,
+    });
+
+    return socket;
 }
 
 /**

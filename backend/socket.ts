@@ -1,56 +1,93 @@
-import { Server } from "socket.io";
+import { Server, ServerOptions, Socket } from "socket.io";
 import { ServerType } from "@hono/node-server";
-import { isDev } from "./util.ts";
+import {devOriginList, isDev} from "./util.ts";
+import {auth} from "./auth.ts";
 
-function socketIO(httpServer: ServerType) {
-    const config: Record<string, object> = {};
+export function socketIO(httpServer: ServerType) {
+    const config: Partial<ServerOptions> = {};
 
     if (isDev()) {
         config["cors"] = {
-            origin: "*",
+            origin: devOriginList,
+            credentials: true,
             methods: ["GET", "POST"],
         };
     }
 
+    config.cookie = true;
     const io = new Server(httpServer, config);
 
-    const waitMPCTimeout = 2000;
+    const tabPlayerList: Record<string, Socket> = {};
+    const controllerList: Record<string, Socket> = {};
 
-    io.on("connection", (socket) => {
-        console.log(`socket ${socket.id} connected`);
-        socket.emit("hello", "world");
+    io.on("connection", async (socket) => {
+        const clientType = socket.handshake.query.clientType;
+        console.log(`socket ${socket.id} connected, client type:`, clientType);
 
-        socket.on("waitMPC", async (data) => {
-            const mpcURL = "http://localhost:13579";
+        let session;
 
-            // See if the URL is reachable
-            try {
-                const response = await fetch(mpcURL);
-                if (response.ok) {
-                    socket.emit("mpcStatus", { status: "ready" });
-                } else {
-                    socket.emit("mpcStatus", { status: "error", message: `MPC not ready, status code: ${response.status}` });
+        // Get Auth Session
+        if (clientType === "tabPlayer") {
+            const context = {
+                headers: new Headers(),
+            };
+            context.headers.set("cookie", socket.request.headers.cookie || "");
+            session = await auth.api.getSession(context);
+        } else if (clientType === "controller") {
+            const email = socket.handshake.query.email as string;
+            const password = socket.handshake.query.password as string;
+            session = await auth.api.signInEmail({
+                body: {
+                    email: email,
+                    password: password,
                 }
-            } catch (error) {
-                socket.emit("mpcStatus", { status: "error", message: `MPC not reachable: ${error}` });
+            })
+        }
+
+        if (session) {
+            if (clientType === "tabPlayer") {
+                tabPlayerList[socket.id] = socket;
+                console.log("Tab Player connected. Total:", Object.keys(tabPlayerList).length);
+
+            } else if (clientType === "controller") {
+                controllerList[socket.id] = socket;
+                console.log("Controller connected. Total:", Object.keys(controllerList).length);
             }
 
-            // Play the video on MPC-HC
-            try {
-                const response = await fetch(`${mpcURL}/command.html?wm_command=889`);
-                if (response.ok) {
-                    socket.emit("mpcStatus", { status: "playing" });
-                } else {
-                    socket.emit("mpcStatus", { status: "error", message: `Failed to play video, status code: ${response.status}` });
+            // Play
+            socket.on("play", () => {
+                for (const id in tabPlayerList) {
+                    tabPlayerList[id].emit("play");
                 }
-            } catch (error) {
-                socket.emit("mpcStatus", { status: "error", message: `Error playing video: ${error}` });
-            }
-        });
+            });
 
-        socket.on("disconnect", (reason) => {
-            console.log(`socket ${socket.id} disconnected due to ${reason}`);
-        });
+            // Pause
+            socket.on("pause", () => {
+                for (const id in tabPlayerList) {
+                    tabPlayerList[id].emit("pause");
+                }
+            });
+
+            // Seek
+            socket.on("seek", (position: number) => {
+                for (const id in tabPlayerList) {
+                    tabPlayerList[id].emit("seek", position);
+                }
+            });
+
+            socket.on("disconnect", (reason) => {
+                if (clientType === "tabPlayer") {
+                    delete tabPlayerList[socket.id];
+                    console.log("Tab Player disconnected. Total:", Object.keys(tabPlayerList).length);
+                } else if (clientType === "controller") {
+                    delete controllerList[socket.id];
+                    console.log("Controller disconnected. Total:", Object.keys(controllerList).length);
+                }
+            });
+        } else {
+            // Disconnect the socket if not authenticated
+            socket.disconnect();
+        }
     });
 
     return io;
