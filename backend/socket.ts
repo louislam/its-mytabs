@@ -34,14 +34,19 @@ export function socketIO(httpServer: ServerType) {
             context.headers.set("cookie", socket.request.headers.cookie || "");
             session = await auth.api.getSession(context);
         } else if (clientType === "controller") {
-            const email = socket.handshake.query.email as string;
-            const password = socket.handshake.query.password as string;
-            session = await auth.api.signInEmail({
-                body: {
-                    email: email,
-                    password: password,
-                }
-            })
+
+            try {
+                const email = socket.handshake.query.email as string;
+                const password = socket.handshake.query.password as string;
+                session = await auth.api.signInEmail({
+                    body: {
+                        email: email,
+                        password: password,
+                    }
+                })
+            } catch (e) {
+                // Sign in failed, could be wrong email format
+            }
         }
 
         if (session) {

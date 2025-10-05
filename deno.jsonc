@@ -26,6 +26,8 @@
         "build-docker-local": "deno task build-frontend && docker build -t louislam/its-mytabs:nightly -f Dockerfile .",
         "build-frontend": "cd frontend && deno run build",
         "start-with-build": "deno task build-frontend && deno task start",
+
+        "build-mpchc-controller": "deno compile --allow-all --output=mpchc-controller extra/mpchc-controller.ts"
     },
 
     "lock": false,
