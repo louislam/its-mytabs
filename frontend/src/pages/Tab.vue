@@ -1,5 +1,15 @@
 <script>
-import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting } from "../app.js";
+import {
+    ActionBuffer,
+    baseURL,
+    checkFetch,
+    connectSocketIO,
+    convertAlphaTexSyncPoint,
+    generalError,
+    getInstrumentName,
+    getSetting, releaseWakeLock,
+    requestWakeLock
+} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
@@ -160,8 +170,10 @@ export default defineComponent({
                 this.api.settings.player.scrollMode = ScrollMode.Continuous;
                 this.api.updateSettings();
                 this.api.play();
+                requestWakeLock();
             } else {
                 this.api.pause();
+                releaseWakeLock();
             }
 
             // Hide the cursor when playing

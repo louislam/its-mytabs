@@ -155,3 +155,33 @@ export class ActionBuffer {
         }
     }
 }
+
+let wakeLock: WakeLockSentinel = null;
+
+export async function requestWakeLock() {
+    try {
+        if ("wakeLock" in navigator) {
+            wakeLock = await navigator.wakeLock.request("screen");
+            console.log("Wake lock is active");
+            wakeLock.addEventListener("release", () => {
+                console.log("Wake lock was released");
+            });
+        } else {
+            console.log("Wake Lock API not supported.");
+        }
+    } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+    }
+}
+
+export async function releaseWakeLock() {
+    try {
+        if (wakeLock != null) {
+            await wakeLock.release();
+            wakeLock = null;
+            console.log("Wake lock released manually");
+        }
+    } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+    }
+}
