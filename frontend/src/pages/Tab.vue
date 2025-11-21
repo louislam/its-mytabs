@@ -446,7 +446,7 @@ export default defineComponent({
                         barSeparatorColor: "#6D6D6D",
                         mainGlyphColor: "#A4A4A4",
                         secondaryGlyphColor: "#A4A4A4",
-                        scoreInfoColor: "#A4A4A4",
+                        scoreInfoColor: "#A3A3A3",
                         barNumberColor: "#6D6D6D",
                     };
                 }
