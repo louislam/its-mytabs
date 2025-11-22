@@ -66,6 +66,7 @@ export default defineComponent({
             youtubeList: [],
             audioList: [],
             audio: {},
+            scrollMode: ScrollMode.Continuous,
 
             keyEvents: (e) => {
                 if (e.code === "Space") {
@@ -75,6 +76,7 @@ export default defineComponent({
             },
             setting: {},
             simpleSyncSecond: -1,
+            ScrollMode,
         };
     },
     computed: {
@@ -167,7 +169,6 @@ export default defineComponent({
             }
 
             if (this.playing) {
-                this.api.settings.player.scrollMode = ScrollMode.Continuous;
                 this.api.updateSettings();
                 this.api.play();
                 requestWakeLock();
@@ -252,6 +253,14 @@ export default defineComponent({
                 this.api.playbackSpeed = parseFloat((speed / 100).toFixed(2));
                 this.setConfig("speed", speed);
             });
+        },
+
+        scrollMode(newVal) {
+            if (!this.api) {
+                return;
+            }
+            this.api.settings.player.scrollMode = ScrollMode[newVal];
+            this.setConfig("scrollMode", newVal);
         },
 
         // Switch Audio Source
@@ -387,6 +396,10 @@ export default defineComponent({
             this.enableMetronome = !this.enableMetronome;
         },
 
+        scroll() {
+            this.scrollMode === ScrollMode.Continuous ? this.scrollMode = ScrollMode.Off : this.scrollMode = ScrollMode.Continuous;
+        },
+
         loop() {
             this.isLooping = !this.isLooping;
         },
@@ -493,7 +506,7 @@ export default defineComponent({
                         enableUserInteraction: true,
                         soundFont: "/soundfont/sonivox.sf2",
                         //nativeBrowserSmoothScroll: true,
-                        scrollMode: ScrollMode.Off,
+                        scrollMode: this.scrollMode,
                         scrollOffsetY: -50,
                         playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
                     },
@@ -533,6 +546,9 @@ export default defineComponent({
                     // Speed
                     this.speed = 100;
                     this.speed = this.getConfig("speed", 100);
+
+                    // Metronome
+                    this.scrollMode = this.getConfig("scrollMode", 'Continuous');
 
                     this.tracks = [];
 
@@ -577,6 +593,7 @@ export default defineComponent({
             this.enableCountIn = false;
             this.isLooping = false;
             this.speed = 100;
+            this.scrollMode = ScrollMode.Continuous;
             this.soloTrackID = -1;
             this.youtube = {};
             this.simpleSyncSecond = -1;
@@ -816,7 +833,7 @@ export default defineComponent({
                 await this.initYoutubePlayer();
             }
 
-            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
+            // Bug? If change to EnabledExternalMedia, and this.api.updateSettings(), this sync point can not be applied correctly.
             // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
@@ -1093,6 +1110,14 @@ export default defineComponent({
             ], mute);
         },
 
+        toggleVolume(trackID, volume) {
+            if (!this.api) {
+                return;
+            }
+            const track = this.api.score.tracks.find(({index}) => index === trackID);
+            this.api.changeTrackVolume(track, volume / 100);
+        },
+
         edit() {
             this.$router.push(`/tab/${this.tabID}/edit/info`);
         },
@@ -1207,9 +1232,14 @@ export default defineComponent({
                     Metronome
                 </button>
 
-                <div class="speed">
+                <div class="select-percentage">
                     Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
                 </div>
+
+                <button class="btn btn-secondary" @click="scroll()" :class='{ active: scrollMode === ScrollMode.Continuous }'>
+                    <font-awesome-icon :icon='["fas", "check"]' v-if="scrollMode === ScrollMode.Continuous" />
+                    Scroll
+                </button>
 
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
@@ -1227,6 +1257,9 @@ export default defineComponent({
                     <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
                     <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
                     <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
+                    <div class="list-button select-percentage">
+                        Volume: <input type="number" min="0" max="1000" step="1" value="100" @change="toggleVolume(track.id, $event.target.value)" /> (%)
+                    </div>
                 </div>
             </div>
 
@@ -1437,7 +1470,6 @@ $padding: 20px;
     border-radius: 3px;
     bottom: $toolbar-height;
     left: 15px;
-    width: 400px;
     overflow: scroll;
     max-height: calc(100vh - 90px);
 
@@ -1502,9 +1534,10 @@ $padding: 20px;
     position: relative;
 }
 
-.speed {
+.select-percentage {
     display: flex;
     align-items: center;
+    gap: 4px;
 
     input {
         border: 0;
