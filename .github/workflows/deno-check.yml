@@ -1,24 +1,22 @@
-# Run `deno check` on push and pull request events
 name: Deno Check
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+    push:
+        branches:
+            - master
+    pull_request:
+        branches:
+            - master
 
 jobs:
     deno-check:
         runs-on: ubuntu-latest
         steps:
-          - name: Checkout repository
-            uses: actions/checkout@v6
+            - name: Checkout repository
+              uses: actions/checkout@v6
 
-          - name: Set up Deno
-            uses: denoland/setup-deno@v2
-            with:
-              deno-version: v2.x
+            - name: Set up Deno
+              uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
 
-          - name: Run deno check
-            run: deno check
+            - run: deno fmt --check
