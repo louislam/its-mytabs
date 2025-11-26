@@ -1,15 +1,5 @@
 <script>
-import {
-    ActionBuffer,
-    baseURL,
-    checkFetch,
-    connectSocketIO,
-    convertAlphaTexSyncPoint,
-    generalError,
-    getInstrumentName,
-    getSetting, releaseWakeLock,
-    requestWakeLock
-} from "../app.js";
+import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
@@ -28,18 +18,18 @@ export default defineComponent({
      * @type {SocketIOClient.Socket}
      */
     socket: null,
-    
+
     /**
      * @type {alphaTab.AlphaTabApi}
      */
     api: null,
-    
+
     audioHandler: null,
 
     alphaTabYoutubeHandler: null,
 
     youtubePlayer: null,
-    
+
     components: { FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
     data() {
         return {
@@ -66,6 +56,7 @@ export default defineComponent({
             youtubeList: [],
             audioList: [],
             audio: {},
+            scrollMode: ScrollMode.Continuous,
 
             keyEvents: (e) => {
                 if (e.code === "Space") {
@@ -75,22 +66,23 @@ export default defineComponent({
             },
             setting: {},
             simpleSyncSecond: -1,
+            ScrollMode,
         };
     },
     computed: {
         animatedCursor() {
             return this.setting.cursor === "animated";
         },
-        
+
         syncMethod() {
-            if (this.currentAudio.startsWith("youtube-"))  {  
+            if (this.currentAudio.startsWith("youtube-")) {
                 return this.youtube.syncMethod;
             } else if (this.currentAudio.startsWith("audio-")) {
                 return this.audio.syncMethod;
             } else {
                 return undefined;
             }
-        }
+        },
     },
 
     watch: {
@@ -98,10 +90,10 @@ export default defineComponent({
             if (!this.api) {
                 return;
             }
-            
+
             let obj;
-            
-            if (this.currentAudio.startsWith("youtube-"))  {  
+
+            if (this.currentAudio.startsWith("youtube-")) {
                 if (!this.youtube) {
                     return;
                 }
@@ -127,10 +119,9 @@ export default defineComponent({
             // Restore
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
-   
 
             // Save
-            if (this.currentAudio.startsWith("youtube-"))  {
+            if (this.currentAudio.startsWith("youtube-")) {
                 this.api.player.output.handler = this.alphaTabYoutubeHandler;
                 syncOffsetYoutubeActionBuffer.run(() => {
                     if (oldVal !== -1) {
@@ -153,7 +144,7 @@ export default defineComponent({
             }
             this.simpleSyncSecond = parseFloat((this.youtube.simpleSync / 1000).toFixed(2));
         },
-        
+
         "audio.simpleSync"() {
             if (!this.api || !this.audio) {
                 return;
@@ -167,7 +158,7 @@ export default defineComponent({
             }
 
             if (this.playing) {
-                this.api.settings.player.scrollMode = ScrollMode.Continuous;
+                this.api.settings.player.scrollMode = this.scrollMode;
                 this.api.updateSettings();
                 this.api.play();
                 requestWakeLock();
@@ -252,6 +243,14 @@ export default defineComponent({
                 this.api.playbackSpeed = parseFloat((speed / 100).toFixed(2));
                 this.setConfig("speed", speed);
             });
+        },
+
+        scrollMode(newVal) {
+            if (!this.api) {
+                return;
+            }
+            this.api.settings.player.scrollMode = newVal;
+            this.setConfig("scrollMode", newVal);
         },
 
         // Switch Audio Source
@@ -340,7 +339,7 @@ export default defineComponent({
         console.log("Before unmount");
         this.destroyContainer();
         window.removeEventListener("keydown", this.keyEvents);
-        
+
         this.socket.disconnect();
     },
     methods: {
@@ -385,6 +384,10 @@ export default defineComponent({
 
         metronome() {
             this.enableMetronome = !this.enableMetronome;
+        },
+
+        scroll() {
+            this.scrollMode === ScrollMode.Continuous ? this.scrollMode = ScrollMode.Off : this.scrollMode = ScrollMode.Continuous;
         },
 
         loop() {
@@ -493,7 +496,7 @@ export default defineComponent({
                         enableUserInteraction: true,
                         soundFont: "/soundfont/sonivox.sf2",
                         //nativeBrowserSmoothScroll: true,
-                        scrollMode: ScrollMode.Off,
+                        scrollMode: this.scrollMode,
                         scrollOffsetY: -50,
                         playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
                     },
@@ -533,6 +536,9 @@ export default defineComponent({
                     // Speed
                     this.speed = 100;
                     this.speed = this.getConfig("speed", 100);
+
+                    // Scroll Mode
+                    this.scrollMode = this.getConfig("scrollMode", ScrollMode.Continuous);
 
                     this.tracks = [];
 
@@ -577,6 +583,7 @@ export default defineComponent({
             this.enableCountIn = false;
             this.isLooping = false;
             this.speed = 100;
+            this.scrollMode = ScrollMode.Continuous;
             this.soloTrackID = -1;
             this.youtube = {};
             this.simpleSyncSecond = -1;
@@ -675,7 +682,7 @@ export default defineComponent({
             this.socket.on("connect", () => {
                 console.log("Connected to server");
             });
-            
+
             this.socket.on("disconnect", () => {
                 console.log("Disconnected from server");
             });
@@ -684,12 +691,12 @@ export default defineComponent({
             this.socket.on("play", () => {
                 this.play();
             });
-            
+
             // Pause
             this.socket.on("pause", () => {
                 this.pause();
             });
-            
+
             // Seek
             this.socket.on("seek", (time) => {
                 if (!this.api) {
@@ -708,24 +715,23 @@ export default defineComponent({
             this.currentAudio = "youtube-" + videoID;
             this.closeAllList();
         },
-        
+
         async audioFile(filename) {
             this.currentAudio = "audio-" + filename;
             this.closeAllList();
         },
-        
+
         async initAudio(filename) {
             if (!this.api) {
                 return;
             }
-            
+
             this.closeAllList();
 
             const audioPlayer = this.$refs.audioPlayer;
-            
+
             // Init the audio handler if not exists
             if (!this.audioHandler) {
-                
                 this.audioHandler = {
                     get backingTrackDuration() {
                         const duration = audioPlayer.duration;
@@ -751,40 +757,39 @@ export default defineComponent({
                     },
                     pause() {
                         audioPlayer.pause();
-                    }
+                    },
                 };
 
                 let updateTimer = 0;
                 const onTimeUpdate = () => {
                     this.api?.player?.output?.updatePosition(
-                        audioPlayer.currentTime * 1000
+                        audioPlayer.currentTime * 1000,
                     );
-                }
+                };
 
-                audioPlayer.addEventListener('timeupdate', onTimeUpdate);
-                audioPlayer.addEventListener('seeked', onTimeUpdate);
-                audioPlayer.addEventListener('play', () => {
+                audioPlayer.addEventListener("timeupdate", onTimeUpdate);
+                audioPlayer.addEventListener("seeked", onTimeUpdate);
+                audioPlayer.addEventListener("play", () => {
                     window.clearInterval(updateTimer);
                     this.api?.play();
                     updateTimer = window.setInterval(onTimeUpdate, 50);
                 });
 
                 // state updates
-                audioPlayer.addEventListener('pause', () => {
+                audioPlayer.addEventListener("pause", () => {
                     this.api.pause();
                     window.clearInterval(updateTimer.current);
                 });
-                audioPlayer.addEventListener('ended', () => {
+                audioPlayer.addEventListener("ended", () => {
                     this.api.pause();
                     window.clearInterval(updateTimer.current);
                 });
-                audioPlayer.addEventListener('volumechange', () => {
+                audioPlayer.addEventListener("volumechange", () => {
                     this.api.masterVolume = audioPlayer.volume;
                 });
-                audioPlayer.addEventListener('ratechange', () => {
+                audioPlayer.addEventListener("ratechange", () => {
                     this.api.playbackSpeed = audioPlayer.playbackRate;
                 });
-                
             }
 
             // Bug? If change to EnabledExternalMedia, and this.api.updateSettings(), this sync point can not be applied correctly.
@@ -821,15 +826,15 @@ export default defineComponent({
 
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
             this.api.updateSettings();
-            
+
             this.api.player.output.handler = this.audioHandler;
-            
+
             const path = baseURL + `/api/tab/${this.tabID}/audio/${encodeURIComponent(filename)}`;
-            
+
             audioPlayer.src = path;
             audioPlayer.load();
             audioPlayer.playbackRate = this.api.playbackSpeed;
-            
+
             this.pause();
         },
 
@@ -840,7 +845,7 @@ export default defineComponent({
                 await this.initYoutubePlayer();
             }
 
-            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
+            // Bug? If change to EnabledExternalMedia, and this.api.updateSettings(), this sync point can not be applied correctly.
             // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
             this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
             this.api.updateSettings();
@@ -1117,6 +1122,14 @@ export default defineComponent({
             ], mute);
         },
 
+        toggleVolume(trackID, volume) {
+            if (!this.api) {
+                return;
+            }
+            const track = this.api.score.tracks.find(({ index }) => index === trackID);
+            this.api.changeTrackVolume(track, volume / 100);
+        },
+
         edit() {
             this.$router.push(`/tab/${this.tabID}/edit/info`);
         },
@@ -1209,14 +1222,14 @@ export default defineComponent({
                 </div>
 
                 <button class="btn btn-primary" @click="playPause" :class="{ active: playing }">
-                <span v-if="!playing">
-                    <font-awesome-icon :icon='["fas", "play"]' />
-                    Play
-                </span>
+                    <span v-if="!playing">
+                        <font-awesome-icon :icon='["fas", "play"]' />
+                        Play
+                    </span>
                     <span v-else>
-                    <font-awesome-icon :icon='["fas", "pause"]' />
-                    Pause
-                </span>
+                        <font-awesome-icon :icon='["fas", "pause"]' />
+                        Pause
+                    </span>
                 </button>
                 <button class="btn btn-secondary" @click="loop()" :class="{ active: isLooping }">
                     <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
@@ -1231,7 +1244,12 @@ export default defineComponent({
                     Metronome
                 </button>
 
-                <div class="speed">
+                <button class="btn btn-secondary" @click="scroll()" :class="{ active: scrollMode === ScrollMode.Continuous }">
+                    <font-awesome-icon :icon='["fas", "check"]' v-if="scrollMode === ScrollMode.Continuous" />
+                    Scroll
+                </button>
+
+                <div class="select-percentage">
                     Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
                 </div>
 
@@ -1251,6 +1269,9 @@ export default defineComponent({
                     <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
                     <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
                     <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
+                    <div class="list-button select-percentage">
+                        Volume: <input type="number" min="0" max="1000" step="1" value="100" @change="toggleVolume(track.id, $event.target.value)" /> (%)
+                    </div>
                 </div>
             </div>
 
@@ -1279,9 +1300,9 @@ export default defineComponent({
                 <div
                     class="audio item"
                     @click='
-                            currentAudio = "none";
-                            closeAllList();
-                        '
+                        currentAudio = "none";
+                        closeAllList();
+                    '
                     :class='{ active: currentAudio === "none" }'
                 >
                     <div class="name">No Audio (Mute)</div>
@@ -1298,16 +1319,14 @@ export default defineComponent({
                 <div class="sync-offset ps-3 pe-3 p-2" v-if='syncMethod === "simple" && isLoggedIn'>
                     Sync Offset: <input type="number" class="form-control" min="-100000" max="100000" step="0.1" v-model="simpleSyncSecond" /> s
                 </div>
-                
+
                 <!-- Youtube Player -->
                 <div v-show='currentAudio.startsWith("youtube-")'>
                     <div ref="youtube" class="player"></div>
                 </div>
-               
-                
+
                 <!-- Audio Player -->
                 <audio ref="audioPlayer" class="player" controls v-show='currentAudio.startsWith("audio-")' hidden></audio>
-              
             </div>
         </div>
     </div>
@@ -1353,7 +1372,7 @@ $youtube-height: 200px;
     .light & {
         background-color: rgba(33, 37, 41, 0.8);
     }
-    
+
     // Allow horizontal scroll
     .scroll {
         padding: 8px 15px;
@@ -1361,7 +1380,7 @@ $youtube-height: 200px;
         align-items: center;
         flex-grow: 4;
         column-gap: 10px;
-        
+
         .btn-edit {
             flex-grow: 1;
             text-align: right;
@@ -1461,7 +1480,7 @@ $padding: 20px;
     border-radius: 3px;
     bottom: $toolbar-height;
     left: 15px;
-    width: 400px;
+    min-width: 400px;
     overflow: scroll;
     max-height: calc(100vh - 90px);
 
@@ -1526,11 +1545,13 @@ $padding: 20px;
     position: relative;
 }
 
-.speed {
+.select-percentage {
     display: flex;
     align-items: center;
+    gap: 4px;
 
     input {
+        min-width: 90px;
         border: 0;
     }
 }
@@ -1539,28 +1560,28 @@ $padding: 20px;
     h1 {
         font-size: 20px;
     }
-    
+
     h2 {
         font-size: 16px;
     }
-    
+
     .list {
         width: 100%;
         left: 0;
     }
-    
+
     .toolbar {
         .scroll {
             overflow-x: scroll;
         }
-        
+
         .player-container {
             .sync-offset {
                 display: none;
             }
         }
     }
-    
+
     .speed {
         input {
             width: 100px;
