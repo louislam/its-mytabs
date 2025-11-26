@@ -22,12 +22,12 @@ app.mount("#app");
 
 function checkMobile() {
     if (window.innerWidth <= 768) {
-        document.documentElement.classList.add('mobile');
+        document.documentElement.classList.add("mobile");
     } else {
-        document.documentElement.classList.remove('mobile');
+        document.documentElement.classList.remove("mobile");
     }
 }
-window.addEventListener('resize', checkMobile);
+window.addEventListener("resize", checkMobile);
 checkMobile();
 
 // HMR is not working properly with AlphaTab, so we do a full reload on update
@@ -43,4 +43,3 @@ if (import.meta.hot) {
         }
     });
 }
-

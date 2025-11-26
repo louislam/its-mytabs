@@ -2,11 +2,11 @@ import { serve } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, SyncRequestSchema } from "./zod.ts";
-import {db, hasUser, isInitDB, kv} from "./db.ts";
+import { SignUpSchema, SyncRequestSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { db, hasUser, isInitDB, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import {appVersion, devOriginList, getFrontendDir, host, isDev, port, start, tabDir} from "./util.ts";
+import { appVersion, devOriginList, getFrontendDir, host, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -21,14 +21,15 @@ import {
     getYoutubeList,
     removeAudio,
     removeYoutube,
-    replaceTab, updateAudio,
+    replaceTab,
+    updateAudio,
     updateTab,
     updateYoutube,
 } from "./tab.ts";
 import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
-import {socketIO} from "./socket.ts";
+import { socketIO } from "./socket.ts";
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
@@ -372,7 +373,6 @@ export async function main() {
             return c.json({
                 ok: true,
             });
-
         } catch (e) {
             return generalError(c, e);
         }

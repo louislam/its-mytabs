@@ -621,14 +621,10 @@ export default defineComponent({
 
             // traverse hierarchy and apply colors as desired
             for (const track of score.tracks) {
-    
-       
-                
                 for (const staff of track.staves) {
-                    
-                    console.log(this.setting.noteColor, staff.stringTuning.tunings.length)
-                    
-                    // Coloring 5string bass line for louis-bass-v 
+                    console.log(this.setting.noteColor, staff.stringTuning.tunings.length);
+
+                    // Coloring 5string bass line for louis-bass-v
                     if (this.setting.noteColor === "louis-bass-v" && staff.stringTuning.tunings.length === 5) {
                         stringColors = {
                             1: alphaTab.model.Color.fromJson("#b1da68"),
@@ -638,7 +634,7 @@ export default defineComponent({
                             5: alphaTab.model.Color.fromJson("#e07b39"),
                         };
                     }
-                    
+
                     for (const bar of staff.bars) {
                         for (const voice of bar.voices) {
                             for (const beat of voice.beats) {
@@ -657,9 +653,6 @@ export default defineComponent({
                                 }
 
                                 if (this.setting.noteColor !== "none") {
-                                    
-                             
-                                    
                                     for (const note of beat.notes) {
                                         note.style = new alphaTab.model.NoteStyle();
                                         note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
@@ -703,7 +696,7 @@ export default defineComponent({
                     return;
                 }
                 const diff = Math.abs(this.api.timePosition - time);
-                console.log(this.api.timePosition, time, diff)
+                console.log(this.api.timePosition, time, diff);
                 if (diff < 100) {
                     return;
                 }

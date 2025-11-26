@@ -43,7 +43,7 @@ export default defineComponent({
         this.syncMethodInternal = this.syncMethod;
         this.simpleSyncInternal = this.simpleSync;
         this.advancedSyncInternal = this.advancedSync;
-        
+
         this.simpleSyncSecond = this.simpleSyncInternal / 1000;
     },
 });

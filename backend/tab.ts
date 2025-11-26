@@ -85,8 +85,6 @@ async function getNextID(): Promise<number> {
     }
 }
 
-
-
 export async function getTab(id: number) {
     if (isNaN(id)) {
         throw new Error("Invalid tab ID");
