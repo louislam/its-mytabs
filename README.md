@@ -37,7 +37,6 @@ Tip: Youtube videos may not work on a private ip address (e.g. 192.168.x.x), use
 
 Download the latest release (its-mytabs-v1.x.x-windows.zip) from [Releases](https://github.com/louislam/its-mytabs/releases/latest) page, unzip it, and run `its-mytabs.exe`.
 
-
 ### Docker Compose
 
 Download the [compose.yaml]() file and put it in an empty folder.
@@ -53,7 +52,7 @@ services:
             # Host Path:Container Path
             - ./data:/app/data
         restart: unless-stopped
-````
+```
 
 ```bash
 docker compose up  # Run in foreground
@@ -90,9 +89,6 @@ Go to `http://localhost:47777` to access the web UI.
 
 ## Screenshots
 
-
-
-
 <img width="300"  alt="image" src="https://github.com/user-attachments/assets/266c6c5a-ae86-4b88-8305-3ae120cf4dd8" />
 
 <img width="300"  alt="image" src="https://github.com/user-attachments/assets/a57293a4-5399-4a76-a14d-da026d0c4a7a" />
@@ -101,14 +97,11 @@ Go to `http://localhost:47777` to access the web UI.
 
 <img width="300" alt="image" src="https://github.com/user-attachments/assets/a617af33-ba33-4022-b9d2-6fe96e11e85d" />
 
-
-
 ## Environment Variables
 
 You can create a `.env` file to use these env vars.
 
 ```ini
-
 # (string) Server Host (Default: not set, bind to all interfaces)
 MYTABS_HOST=
 

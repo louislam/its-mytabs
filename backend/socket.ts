@@ -1,7 +1,7 @@
 import { Server, ServerOptions, Socket } from "socket.io";
 import { ServerType } from "@hono/node-server";
-import {devOriginList, isDev} from "./util.ts";
-import {auth} from "./auth.ts";
+import { devOriginList, isDev } from "./util.ts";
+import { auth } from "./auth.ts";
 
 export function socketIO(httpServer: ServerType) {
     const config: Partial<ServerOptions> = {};
@@ -34,7 +34,6 @@ export function socketIO(httpServer: ServerType) {
             context.headers.set("cookie", socket.request.headers.cookie || "");
             session = await auth.api.getSession(context);
         } else if (clientType === "controller") {
-
             try {
                 const email = socket.handshake.query.email as string;
                 const password = socket.handshake.query.password as string;
@@ -42,8 +41,8 @@ export function socketIO(httpServer: ServerType) {
                     body: {
                         email: email,
                         password: password,
-                    }
-                })
+                    },
+                });
             } catch (e) {
                 // Sign in failed, could be wrong email format
             }
@@ -53,7 +52,6 @@ export function socketIO(httpServer: ServerType) {
             if (clientType === "tabPlayer") {
                 tabPlayerList[socket.id] = socket;
                 console.log("Tab Player connected. Total:", Object.keys(tabPlayerList).length);
-
             } else if (clientType === "controller") {
                 controllerList[socket.id] = socket;
                 console.log("Controller connected. Total:", Object.keys(controllerList).length);

@@ -1,5 +1,5 @@
 import { io } from "npm:socket.io-client@~4.8.1";
-import * as cheerio from 'npm:cheerio@~1.1.2';
+import * as cheerio from "npm:cheerio@~1.1.2";
 import "@std/dotenv/load";
 
 const host = Deno.env.get("MYTABS_HOST") || "localhost";
@@ -19,7 +19,6 @@ try {
 } catch (e) {
 }
 
-
 console.log("Connecting to server at", baseURL);
 
 let interval: number | undefined = undefined;
@@ -33,7 +32,7 @@ const socket = io(baseURL, {
         clientType: "controller",
         email,
         password,
-    }
+    },
 });
 
 socket.on("connect", async () => {
@@ -85,7 +84,6 @@ function createInterval(ms: number) {
                 createInterval(checkTime);
                 isSlow = false;
             }
-
         } catch (e) {
             if (!isSlow) {
                 console.error("MPC-HC is not running");
@@ -108,5 +106,5 @@ async function getMPCHCStatus() {
     return {
         state: $("#statestring").text(),
         position: parseInt($("#position").text()) - (offsetList[file] || 0),
-    }
+    };
 }

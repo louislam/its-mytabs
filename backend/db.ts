@@ -1,8 +1,8 @@
 import * as fs from "@std/fs";
 import { DatabaseSync } from "node:sqlite";
 import * as path from "@std/path";
-import {dataDir, getSourceDir, tabDir} from "./util.ts";
-import {getNextTabID} from "./tab.ts";
+import { dataDir, getSourceDir, tabDir } from "./util.ts";
+import { getNextTabID } from "./tab.ts";
 
 let dbPath = path.join(dataDir, "config.db");
 
@@ -53,18 +53,17 @@ export async function addDemoTab() {
             filename: "tab.gp",
             originalFilename: "汐れいら-ハレの日に (Bass Only)-09-18-2025.gp",
             createdAt: "2025-09-26T07:29:56.450Z",
-            public: false
+            public: false,
         });
 
         // Add Youtube Source
         const videoID = "VuKSlOT__9s";
-        await kv.set(["youtube", id, videoID],    {
+        await kv.set(["youtube", id, videoID], {
             videoID,
             syncMethod: "simple",
             simpleSync: 2900,
-            advancedSync: ""
+            advancedSync: "",
         });
-
     } catch (e) {
         console.log("Skip: Failed to add demo tab:", e);
     }

@@ -104,7 +104,7 @@ export default defineComponent({
             color: $color2-dark;
         }
     }
-    
+
     // Dont take full height
     button {
         align-self: center;

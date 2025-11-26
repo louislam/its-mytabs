@@ -129,7 +129,7 @@ export default defineComponent({
             height: 75px;
             font-size: 15px;
         }
-        
+
         .toolbar {
             padding: 0 0 0 10px;
 

@@ -77,5 +77,3 @@ export function start(path: string) {
         childProcess.exec(`start "" ${escapedPath}`);
     }
 }
-
-

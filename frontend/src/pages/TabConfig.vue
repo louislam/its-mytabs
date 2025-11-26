@@ -116,7 +116,7 @@ export default defineComponent({
                 generalError(e);
             }
         },
-        
+
         async saveYoutube(video) {
             let res;
             try {
@@ -144,7 +144,7 @@ export default defineComponent({
                 generalError(e);
             }
         },
-        
+
         async removeYoutube(video) {
             try {
                 if (!confirm("Are you sure you want to remove this YouTube video?")) {
@@ -277,7 +277,7 @@ export default defineComponent({
 
                 const tabID = this.tab.id;
                 const encoded = encodeURIComponent(audio.filename);
-                
+
                 const res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}`, {
                     method: "DELETE",
                     credentials: "include",
@@ -363,9 +363,8 @@ export default defineComponent({
 
         <!-- Audio Page -->
         <div v-else-if='this.page === "audio"'>
-
             <h3 class="mt-4 mb-2">Youtube</h3>
-            
+
             <!-- Show alert if using a local ip -->
             <div class="alert alert-info mt-3" role="alert">
                 Tip: Youtube videos may not work on a private ip (such as 127.0.0.1). Please use <strong>localhost</strong> or other hostname.
@@ -380,7 +379,6 @@ export default defineComponent({
             </div>
 
             <div class="mb-4">
-
                 <!-- Youtube Item -->
                 <div v-for="video in youtubeList" :key="video.id" class="mb-3 pb-5 youtube-item">
                     <iframe
