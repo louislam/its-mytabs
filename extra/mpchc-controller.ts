@@ -1,5 +1,5 @@
 import { io } from "npm:socket.io-client@~4.8.1";
-import * as cheerio from 'npm:cheerio@~1.1.2';
+import * as cheerio from "npm:cheerio@~1.1.2";
 import "@std/dotenv/load";
 
 const host = Deno.env.get("MYTABS_HOST") || "localhost";
@@ -14,11 +14,14 @@ const slowCheckTime = 2000;
 let isSlow = false;
 let offsetList: Record<string, number> = {};
 
+const offsetFilePath = "./data/offset.json";
+
 try {
-    offsetList = JSON.parse(await Deno.readTextFile("./data/offset.json"));
+    offsetList = JSON.parse(await Deno.readTextFile(offsetFilePath));
 } catch (e) {
 }
 
+const watcher = await offsetFileWatcher();
 
 console.log("Connecting to server at", baseURL);
 
@@ -27,13 +30,14 @@ let currentState = {
     state: "Unknown",
     position: -1,
 };
+let lastUpdate = Date.now();
 
 const socket = io(baseURL, {
     query: {
         clientType: "controller",
         email,
         password,
-    }
+    },
 });
 
 socket.on("connect", async () => {
@@ -61,7 +65,7 @@ function createInterval(ms: number) {
             //console.log(state);
 
             // If state changed, send to server
-            if (currentState.state !== state.state) {
+            if (currentState.state !== state.state || lastUpdate + 1000 < Date.now()) {
                 if (state.state === "Playing") {
                     socket.emit("play");
                     //createInterval(200);
@@ -85,7 +89,6 @@ function createInterval(ms: number) {
                 createInterval(checkTime);
                 isSlow = false;
             }
-
         } catch (e) {
             if (!isSlow) {
                 console.error("MPC-HC is not running");
@@ -108,5 +111,28 @@ async function getMPCHCStatus() {
     return {
         state: $("#statestring").text(),
         position: parseInt($("#position").text()) - (offsetList[file] || 0),
-    }
+    };
+}
+
+async function offsetFileWatcher() {
+    // Watch offsetFilePath
+    const watcher = Deno.watchFs(offsetFilePath);
+
+    const runner = async function () {
+        for await (const event of watcher) {
+            console.log("Offset file changed, reloading...");
+            try {
+                offsetList = JSON.parse(await Deno.readTextFile(offsetFilePath));
+                console.log("Offset file reloaded");
+            } catch (e) {
+                console.error("Failed to reload offset file:", e);
+            }
+        }
+    };
+
+    runner().then((r) => {}).catch(() => {
+        console.error("Offset file watcher stopped unexpectedly");
+    });
+
+    return watcher;
 }
