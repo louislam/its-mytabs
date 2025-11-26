@@ -599,7 +599,7 @@ export default defineComponent({
 
         // Style the score with custom colors
         applyColors(score) {
-            const stringColors = {
+            let stringColors = {
                 1: alphaTab.model.Color.fromJson("#bf3732"),
                 2: alphaTab.model.Color.fromJson("#fff800"),
                 3: alphaTab.model.Color.fromJson("#0080ff"),
@@ -614,7 +614,24 @@ export default defineComponent({
 
             // traverse hierarchy and apply colors as desired
             for (const track of score.tracks) {
+    
+       
+                
                 for (const staff of track.staves) {
+                    
+                    console.log(this.setting.noteColor, staff.stringTuning.tunings.length)
+                    
+                    // Coloring 5string bass line for louis-bass-v 
+                    if (this.setting.noteColor === "louis-bass-v" && staff.stringTuning.tunings.length === 5) {
+                        stringColors = {
+                            1: alphaTab.model.Color.fromJson("#b1da68"),
+                            2: alphaTab.model.Color.fromJson("#bf3732"),
+                            3: alphaTab.model.Color.fromJson("#fff800"),
+                            4: alphaTab.model.Color.fromJson("#0080ff"),
+                            5: alphaTab.model.Color.fromJson("#e07b39"),
+                        };
+                    }
+                    
                     for (const bar of staff.bars) {
                         for (const voice of bar.voices) {
                             for (const beat of voice.beats) {
@@ -632,10 +649,12 @@ export default defineComponent({
                                     );
                                 }
 
-                                if (this.setting.noteColor === "rocksmith") {
+                                if (this.setting.noteColor !== "none") {
+                                    
+                             
+                                    
                                     for (const note of beat.notes) {
                                         note.style = new alphaTab.model.NoteStyle();
-                                        //note.style.colors.set(alphaTab.model.NoteSubElement.StandardNotationNoteHead, stringColors[note.string]);
                                         note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
                                     }
                                 }
@@ -676,7 +695,12 @@ export default defineComponent({
                 if (!this.api) {
                     return;
                 }
-                api.timePosition = time;
+                const diff = Math.abs(this.api.timePosition - time);
+                console.log(this.api.timePosition, time, diff)
+                if (diff < 100) {
+                    return;
+                }
+                this.api.timePosition = time;
             });
         },
 

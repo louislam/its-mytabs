@@ -60,6 +60,7 @@ export default defineComponent({
             <select id="noteColor" class="form-select" v-model="setting.noteColor">
                 <option value="none">No Color</option>
                 <option value="rocksmith">Rocksmith 2014 Color Scheme</option>
+                <option value="louis-bass-v">Louis' 5-string Bass Color Scheme</option>
             </select>
         </div>
 
