@@ -44,12 +44,12 @@ export default defineComponent({
 
             const query = this.searchQuery.trim().toLowerCase();
 
-            return this.tabList.filter(tab => {
-                const title = (tab.title || '').toLowerCase();
-                const artist = (tab.artist || '').toLowerCase();
+            return this.tabList.filter((tab) => {
+                const title = (tab.title || "").toLowerCase();
+                const artist = (tab.artist || "").toLowerCase();
                 return title.includes(query) || artist.includes(query);
             });
-        }
+        },
     },
     methods: {
         async deleteTab(id, title, artist) {
@@ -100,7 +100,7 @@ export default defineComponent({
                 <button
                     class="input-group-text bg-transparent border-0 cursor-pointer"
                     type="button"
-                    @click="searchQuery = ''"
+                    @click='searchQuery = ""'
                     v-if="searchQuery"
                     aria-label="Clear search"
                 >
@@ -128,7 +128,7 @@ export default defineComponent({
 
         <div v-if="ready && filteredTabList.length === 0 && searchQuery" class="empty-state text-center py-5 mb-4 fs-5">
             <p class="text-muted">No tabs found for "{{ searchQuery }}"</p>
-            <button class="btn btn-sm btn-outline-secondary" @click="searchQuery = ''">
+            <button class="btn btn-sm btn-outline-secondary" @click='searchQuery = ""'>
                 Clear search
             </button>
         </div>
