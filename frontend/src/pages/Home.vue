@@ -10,9 +10,14 @@ export default defineComponent({
             tabList: [],
             ready: false,
             isLoggedIn: false,
+<<<<<<< HEAD
             searchQuery: "",
+=======
+            groupByArtist: false,
+>>>>>>> 0d78a36 (feat : add checkbox to group by artist)
         };
     },
+
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
 
@@ -36,6 +41,7 @@ export default defineComponent({
             });
         }
     },
+<<<<<<< HEAD
     computed: {
         filteredTabList() {
             if (!this.searchQuery.trim()) {
@@ -51,6 +57,50 @@ export default defineComponent({
             });
         },
     },
+=======
+
+    computed: {
+        sortedTabs() {
+            return [...this.tabList].sort((a, b) => {
+                const artistA = a.artist.toLowerCase();
+                const artistB = b.artist.toLowerCase();
+
+                if (artistA < artistB) return -1;
+                if (artistA > artistB) return 1;
+
+                return a.title.localeCompare(b.title);
+            });
+        },
+
+        tabsByArtist() {
+            const groups = {};
+
+            for (const tab of this.sortedTabs) {
+                const key = tab.artist.trim().toLowerCase();
+
+                if (!groups[key]) {
+                    groups[key] = {
+                        displayName: tab.artist,
+                        tabs: [],
+                    };
+                }
+
+                groups[key].tabs.push(tab);
+            }
+
+            return Object.fromEntries(
+                Object.entries(groups).sort((a, b) =>
+                    a[0].localeCompare(b[0])
+                )
+            );
+        },
+
+        displayedTabs() {
+            return this.groupByArtist ? this.tabsByArtist : this.sortedTabs;
+        },
+    },
+
+>>>>>>> 0d78a36 (feat : add checkbox to group by artist)
     methods: {
         async deleteTab(id, title, artist) {
             if (!confirm(`Are you sure you want to delete ${artist} - ${title}?`)) {
@@ -84,6 +134,7 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
+<<<<<<< HEAD
         <div class="search-section mb-4 mt-5" v-if="ready">
             <div class="input-group">
                 <span class="input-group-text">
@@ -121,9 +172,74 @@ export default defineComponent({
                 <div class="title">{{ tab.title }}</div>
                 <div class="artist">{{ tab.artist }}</div>
             </router-link>
+=======
+        <div class="mb-4 mt-5 ms-3" v-if="ready">
+            Total Tabs: {{ tabList.length }}
 
-            <button class="btn btn-secondary me-2" @click="$router.push(`/tab/${tab.id}/edit/info`)">Edit</button>
-            <button class="btn btn-danger" @click="deleteTab(tab.id, tab.title, tab.artist)">Delete</button>
+            <div class="form-check mt-2">
+                <input type="checkbox" class="form-check-input" id="groupByArtist" v-model="groupByArtist" />
+                <label class="form-check-label" for="groupByArtist">Group by artist    </label>
+            </div>
+        </div>
+
+        <div v-if="groupByArtist && ready">
+            <div
+                v-for="(group, key) in displayedTabs"
+                :key="key"
+                class="artist-group mb-4"
+            >
+                <h4 class="ms-2">{{ group.displayName }}</h4>
+>>>>>>> 0d78a36 (feat : add checkbox to group by artist)
+
+                <div
+                    v-for="tab in group.tabs"
+                    :key="tab.id"
+                    class="tab-item p-3 rounded"
+                >
+                    <router-link class="info" :to="`/tab/${tab.id}`">
+                        <div class="title">{{ tab.title }}</div>
+                    </router-link>
+
+                    <button
+                        class="btn btn-secondary me-2"
+                        @click="$router.push(`/tab/${tab.id}/edit/info`)"
+                    >
+                        Edit
+                    </button>
+                    <button
+                        class="btn btn-danger"
+                        @click="deleteTab(tab.id, tab.title, tab.artist)"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="ready">
+            <div
+                v-for="tab in displayedTabs"
+                :key="tab.id"
+                class="tab-item p-3 rounded"
+            >
+                <router-link class="info" :to="`/tab/${tab.id}`">
+                    <div class="title">{{ tab.title }}</div>
+                    <div class="artist">{{ tab.artist }}</div>
+                </router-link>
+
+                <button
+                    class="btn btn-secondary me-2"
+                    @click="$router.push(`/tab/${tab.id}/edit/info`)"
+                >
+                    Edit
+                </button>
+                <button
+                    class="btn btn-danger"
+                    @click="deleteTab(tab.id, tab.title, tab.artist)"
+                >
+                    Delete
+                </button>
+            </div>
         </div>
 
         <div v-if="ready && filteredTabList.length === 0 && searchQuery" class="empty-state text-center py-5 mb-4 fs-5">
@@ -138,7 +254,13 @@ export default defineComponent({
 <style scoped lang="scss">
 @import "../styles/vars.scss";
 
-.my-container {}
+
+.artist-group {
+    h3 {
+        margin-bottom: 8px;
+        margin-top: 20px;
+    }
+}
 
 .tab-item {
     display: flex;
@@ -150,6 +272,7 @@ export default defineComponent({
 
     .info {
         flex-grow: 1;
+
         .title {
             font-size: 20px;
         }
@@ -159,7 +282,6 @@ export default defineComponent({
         }
     }
 
-    // Dont take full height
     button {
         align-self: center;
     }
