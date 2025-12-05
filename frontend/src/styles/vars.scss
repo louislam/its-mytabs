@@ -8,3 +8,5 @@ $link-hover-color-dark: white;
 $border-color-dark: #222;
 $border-radius: 3px;
 $form-check-input-bg: $dark1;
+$checkbox-border-color-dark: #b0c5d5;
+$form-check-input-border: var(--bs-border-width) solid #{$checkbox-border-color-dark};
