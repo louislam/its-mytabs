@@ -10,6 +10,7 @@ export default defineComponent({
             tabList: [],
             ready: false,
             isLoggedIn: false,
+            searchQuery: "",
         };
     },
     async mounted() {
@@ -25,10 +26,28 @@ export default defineComponent({
             const data = await res.json();
             this.tabList = data.tabs;
             this.ready = true;
+
+            await this.$nextTick();
+            this.$refs.searchInput?.focus();
         } catch (error) {
             notify({
                 text: error.message,
                 type: "error",
+            });
+        }
+    },
+    computed: {
+        filteredTabList() {
+            if (!this.searchQuery.trim()) {
+                return this.tabList;
+            }
+
+            const query = this.searchQuery.trim().toLowerCase();
+
+            return this.tabList.filter(tab => {
+                const title = (tab.title || '').toLowerCase();
+                const artist = (tab.artist || '').toLowerCase();
+                return title.includes(query) || artist.includes(query);
             });
         }
     },
@@ -65,11 +84,39 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
-        <div class="mb-4 mt-5 ms-3" v-if="ready">
-            Total Tabs: {{ tabList.length }}
+        <div class="search-section mb-4 mt-5" v-if="ready">
+            <div class="input-group">
+                <span class="input-group-text">
+                    <font-awesome-icon icon="magnifying-glass" />
+                </span>
+                <input
+                    type="text"
+                    class="form-control search-input"
+                    v-model="searchQuery"
+                    placeholder="Search by title or artist..."
+                    aria-label="Search tabs"
+                    ref="searchInput"
+                />
+                <button
+                    class="input-group-text bg-transparent border-0 cursor-pointer"
+                    type="button"
+                    @click="searchQuery = ''"
+                    v-if="searchQuery"
+                    aria-label="Clear search"
+                >
+                    ✕
+                </button>
+            </div>
         </div>
 
-        <div v-for="tab in tabList" :key="tab.id" class="tab-item p-3 rounded">
+        <div class="mb-4 ms-3" v-if="ready">
+            Total Tabs: {{ filteredTabList.length }}
+            <span v-if="searchQuery" class="text-muted">
+                (of {{ tabList.length }})
+            </span>
+        </div>
+
+        <div v-for="tab in filteredTabList" :key="tab.id" class="tab-item p-3 rounded">
             <router-link class="info" :to="`/tab/${tab.id}`">
                 <div class="title">{{ tab.title }}</div>
                 <div class="artist">{{ tab.artist }}</div>
@@ -77,6 +124,13 @@ export default defineComponent({
 
             <button class="btn btn-secondary me-2" @click="$router.push(`/tab/${tab.id}/edit/info`)">Edit</button>
             <button class="btn btn-danger" @click="deleteTab(tab.id, tab.title, tab.artist)">Delete</button>
+        </div>
+
+        <div v-if="ready && filteredTabList.length === 0 && searchQuery" class="empty-state text-center py-5 mb-4 fs-5">
+            <p class="text-muted">No tabs found for "{{ searchQuery }}"</p>
+            <button class="btn btn-sm btn-outline-secondary" @click="searchQuery = ''">
+                Clear search
+            </button>
         </div>
     </div>
 </template>
