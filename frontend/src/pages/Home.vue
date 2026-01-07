@@ -11,8 +11,10 @@ export default defineComponent({
             ready: false,
             isLoggedIn: false,
             searchQuery: "",
+            groupByArtist: false,
         };
     },
+
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
 
@@ -36,11 +38,10 @@ export default defineComponent({
             });
         }
     },
+
     computed: {
         filteredTabList() {
-            if (!this.searchQuery.trim()) {
-                return this.tabList;
-            }
+            if (!this.searchQuery.trim()) return this.tabList;
 
             const query = this.searchQuery.trim().toLowerCase();
 
@@ -50,19 +51,53 @@ export default defineComponent({
                 return title.includes(query) || artist.includes(query);
             });
         },
+
+        groupedTabs() {
+            if (!this.groupByArtist) return null;
+
+            const groups = {};
+
+            for (const tab of this.filteredTabList) {
+                const rawArtist = tab.artist || "Unknown Artist";
+
+                // Normalize for grouping (ignore case + trim)
+                const key = rawArtist.trim().toLowerCase();
+
+                if (!groups[key]) {
+                    groups[key] = {
+                        displayName: rawArtist.trim() || "Unknown Artist",
+                        tabs: [],
+                    };
+                }
+
+                groups[key].tabs.push(tab);
+            }
+
+            // Sort artists alphabetically
+            const sortedArtists = Object.values(groups).sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+            // Sort songs alphabetically inside each artist
+            sortedArtists.forEach((group) => {
+                group.tabs.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+            });
+
+            return sortedArtists;
+        },
     },
+
     methods: {
         async deleteTab(id, title, artist) {
-            if (!confirm(`Are you sure you want to delete ${artist} - ${title}?`)) {
-                return;
-            }
+            if (!confirm(`Are you sure you want to delete ${artist} - ${title}?`)) return;
+
             try {
                 const res = await fetch(baseURL + `/api/tab/${id}`, {
                     method: "DELETE",
                     credentials: "include",
                 });
+
                 if (res.status === 200) {
                     this.tabList = this.tabList.filter((tab) => tab.id !== id);
+
                     notify({
                         text: "Tab deleted successfully",
                         type: "success",
@@ -89,23 +124,36 @@ export default defineComponent({
                 <span class="input-group-text">
                     <font-awesome-icon icon="magnifying-glass" />
                 </span>
+
                 <input
                     type="text"
                     class="form-control search-input"
                     v-model="searchQuery"
                     placeholder="Search by title or artist..."
-                    aria-label="Search tabs"
                     ref="searchInput"
                 />
+
                 <button
                     class="input-group-text bg-transparent border-0 cursor-pointer"
                     type="button"
                     @click='searchQuery = ""'
                     v-if="searchQuery"
-                    aria-label="Clear search"
                 >
                     ✕
                 </button>
+            </div>
+
+            <!-- Group toggle -->
+            <div class="form-check mt-2">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="groupArtist"
+                    v-model="groupByArtist"
+                >
+                <label class="form-check-label" for="groupArtist">
+                    Group by artist
+                </label>
             </div>
         </div>
 
@@ -116,18 +164,64 @@ export default defineComponent({
             </span>
         </div>
 
-        <div v-for="tab in filteredTabList" :key="tab.id" class="tab-item p-3 rounded">
-            <router-link class="info" :to="`/tab/${tab.id}`">
-                <div class="title">{{ tab.title }}</div>
-                <div class="artist">{{ tab.artist }}</div>
-            </router-link>
+        <template v-if="groupByArtist && groupedTabs">
+            <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4">
+                <h4 class="ms-2">{{ group.displayName }}</h4>
 
-            <button class="btn btn-secondary me-2" @click="$router.push(`/tab/${tab.id}/edit/info`)">Edit</button>
-            <button class="btn btn-danger" @click="deleteTab(tab.id, tab.title, tab.artist)">Delete</button>
-        </div>
+                <div
+                    v-for="tab in group.tabs"
+                    :key="tab.id"
+                    class="tab-item p-3 rounded"
+                >
+                    <router-link class="info" :to="`/tab/${tab.id}`">
+                        <div class="title">{{ tab.title }}</div>
+                        <div class="artist">{{ tab.artist }}</div>
+                    </router-link>
 
-        <div v-if="ready && filteredTabList.length === 0 && searchQuery" class="empty-state text-center py-5 mb-4 fs-5">
+                    <button
+                        class="btn btn-secondary me-2"
+                        @click="$router.push(`/tab/${tab.id}/edit/info`)"
+                    >
+                        Edit
+                    </button>
+
+                    <button
+                        class="btn btn-danger"
+                        @click="deleteTab(tab.id, tab.title, tab.artist)"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <template v-else>
+            <div
+                v-for="tab in filteredTabList"
+                :key="tab.id"
+                class="tab-item p-3 rounded"
+            >
+                <router-link class="info" :to="`/tab/${tab.id}`">
+                    <div class="title">{{ tab.title }}</div>
+                    <div class="artist">{{ tab.artist }}</div>
+                </router-link>
+
+                <button class="btn btn-secondary me-2" @click="$router.push(`/tab/${tab.id}/edit/info`)">
+                    Edit
+                </button>
+
+                <button class="btn btn-danger" @click="deleteTab(tab.id, tab.title, tab.artist)">
+                    Delete
+                </button>
+            </div>
+        </template>
+
+        <div
+            v-if="ready && filteredTabList.length === 0 && searchQuery"
+            class="empty-state text-center py-5 mb-4 fs-5"
+        >
             <p class="text-muted">No tabs found for "{{ searchQuery }}"</p>
+
             <button class="btn btn-sm btn-outline-secondary" @click='searchQuery = ""'>
                 Clear search
             </button>
@@ -138,7 +232,12 @@ export default defineComponent({
 <style scoped lang="scss">
 @import "../styles/vars.scss";
 
-.my-container {}
+.artist-group {
+    h3 {
+        margin-bottom: 8px;
+        margin-top: 20px;
+    }
+}
 
 .tab-item {
     display: flex;
@@ -150,6 +249,7 @@ export default defineComponent({
 
     .info {
         flex-grow: 1;
+
         .title {
             font-size: 20px;
         }
@@ -159,7 +259,6 @@ export default defineComponent({
         }
     }
 
-    // Dont take full height
     button {
         align-self: center;
     }
