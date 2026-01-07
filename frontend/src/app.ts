@@ -22,7 +22,7 @@ export function connectSocketIO() {
 export function getBaseURL(): string {
     const env = process.env.NODE_ENV;
     if (env === "development") {
-        return location.protocol + "//" + location.hostname + ":47778";
+        return location.protocol + "//" + location.hostname + ":47777";
     } else {
         return "";
     }
