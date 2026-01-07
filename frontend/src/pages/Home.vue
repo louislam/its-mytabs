@@ -131,6 +131,7 @@ export default defineComponent({
                     v-model="searchQuery"
                     placeholder="Search by title or artist..."
                     ref="searchInput"
+                    aria-label="Search tabs"
                 />
 
                 <button
@@ -138,6 +139,7 @@ export default defineComponent({
                     type="button"
                     @click='searchQuery = ""'
                     v-if="searchQuery"
+                    aria-label="Clear search"
                 >
                     ✕
                 </button>
@@ -175,7 +177,6 @@ export default defineComponent({
                 >
                     <router-link class="info" :to="`/tab/${tab.id}`">
                         <div class="title">{{ tab.title }}</div>
-                        <div class="artist">{{ tab.artist }}</div>
                     </router-link>
 
                     <button
