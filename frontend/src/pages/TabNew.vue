@@ -14,59 +14,69 @@ export default defineComponent({
         return {
             files: [],
             supportedFormatCommaString,
+            isUploading: false,
         };
     },
     methods: {
         async upload() {
-            try {
-                if (this.files.length === 0) {
-                    throw new Error("Please select a file to upload");
-                }
-
-                const file = this.files[0].file;
-
-                // Try to parse the file with AlphaTab to ensure it's valid
-                const data = await file.arrayBuffer();
-
-                const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(
-                    new Uint8Array(data),
-                    new alphaTab.Settings(),
-                );
-
-                // Upload to /api/new-tab
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("title", score.title);
-                formData.append("artist", score.artist);
-
-                const response = await fetch(baseURL + "/api/new-tab", {
-                    method: "POST",
-                    credentials: "include",
-                    body: formData,
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.msg);
-                } else {
-                    const data = await response.json();
-
-                    this.$router.push(`/tab/${data.id}`);
-                }
-            } catch (error) {
-                notify({
-                    text: error.message,
-                    type: "error",
-                });
+            if (this.files.length === 0) {
+                notify({ text: "Please select at least one file to upload", type: "error" });
+                return;
             }
+
+            this.isUploading = true;
+
+            const uploadPromises = this.files.map(async f => {
+                try {
+                    const file = f.file;
+                    // Try to parse the file with AlphaTab to ensure it's valid
+                    const data = await file.arrayBuffer();
+
+                    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(
+                        new Uint8Array(data),
+                        new alphaTab.Settings()
+                    );
+
+                    // Upload to /api/new-tab
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    formData.append("title", score.title);
+                    formData.append("artist", score.artist);
+
+                    const res = await fetch(baseURL + "/api/new-tab", {
+                        method: "POST",
+                        credentials: "include",
+                        body: formData,
+                    });
+
+                    if (!res.ok) {
+                        const errorData = await res.json();
+                        throw new Error(errorData.msg || "Upload failed");
+                    }
+
+                    const respData = await res.json();
+                    notify({ text: `Uploaded: ${score.artist} - ${score.title}`, type: "success" });
+                    return respData.id;
+
+                } catch (err) {
+                    notify({ text: `Error with ${f.name}: ${err.message}`, type: "error" });
+                    return null;
+                }
+            });
+
+            const results = await Promise.all(uploadPromises);
+
+            const firstId = results.find(id => id !== null);
+            if (firstId) {
+                this.$router.push(`/tab/${firstId}`);
+            }
+
+            // Reset Dropzone
+            this.isUploading = false;
         },
         dropzoneError(err) {
             console.log(err);
-            let error = err.type;
-            notify({
-                text: error,
-                type: "error",
-            });
+            notify({ text: err.type || "Dropzone error", type: "error" });
         },
     },
 });
@@ -74,22 +84,26 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
-        <div class="display-6 mb-4 mt-5">
-            Upload a Guitar Pro or MusicXML file
-        </div>
+        <div class="display-6 mb-4 mt-5">Upload Guitar Pro or MusicXML files</div>
 
         <Vue3Dropzone
             v-model="files"
             :maxFileSize="500"
+            :multiple="true"
+            :maxFiles="10"
             @error="dropzoneError"
         >
-            <template #title>
-                Drop your tab here
-            </template>
+            <template #title>Drop your tabs here</template>
             <template #description>Supports {{ supportedFormatCommaString }}</template>
         </Vue3Dropzone>
 
-        <button @click="upload" class="btn btn-primary w-100 mt-4">Upload</button>
+        <button
+            @click="upload"
+            class="btn btn-primary w-100 mt-4"
+            :disabled="isUploading"
+        >
+            {{ isUploading ? "Uploading..." : "Upload" }}
+        </button>
 
         <h4 class="mt-5">Free Resources</h4>
 
@@ -115,3 +129,4 @@ export default defineComponent({
     margin-bottom: 15px;
 }
 </style>
+
