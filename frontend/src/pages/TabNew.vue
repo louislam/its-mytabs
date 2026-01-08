@@ -26,7 +26,7 @@ export default defineComponent({
 
             this.isUploading = true;
 
-            const uploadPromises = this.files.map(async f => {
+            const uploadPromises = this.files.map(async (f) => {
                 try {
                     const file = f.file;
                     // Try to parse the file with AlphaTab to ensure it's valid
@@ -34,7 +34,7 @@ export default defineComponent({
 
                     const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(
                         new Uint8Array(data),
-                        new alphaTab.Settings()
+                        new alphaTab.Settings(),
                     );
 
                     // Upload to /api/new-tab
@@ -57,7 +57,6 @@ export default defineComponent({
                     const respData = await res.json();
                     notify({ text: `Uploaded: ${score.artist} - ${score.title}`, type: "success" });
                     return respData.id;
-
                 } catch (err) {
                     notify({ text: `Error with ${f.name}: ${err.message}`, type: "error" });
                     return null;
@@ -66,7 +65,7 @@ export default defineComponent({
 
             const results = await Promise.all(uploadPromises);
 
-            const firstId = results.find(id => id !== null);
+            const firstId = results.find((id) => id !== null);
             if (firstId) {
                 this.$router.push(`/tab/${firstId}`);
             }
@@ -129,4 +128,3 @@ export default defineComponent({
     margin-bottom: 15px;
 }
 </style>
-
