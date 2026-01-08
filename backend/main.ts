@@ -152,7 +152,7 @@ export async function main() {
             }
 
             let title = form.get("title") || fileName;
-            let artist = form.get("artist") || "Unknown";
+            let artist = form.get("artist") || "";
 
             // Check title and artist type is string
             if (typeof title !== "string" || typeof artist !== "string") {
