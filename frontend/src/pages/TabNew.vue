@@ -57,7 +57,6 @@ export default defineComponent({
                     const respData = await res.json();
                     notify({ text: `Uploaded: ${score.artist} - ${score.title}`, type: "success" });
                     return respData.id;
-
                 } catch (err) {
                     notify({ text: `Error with ${f.name}: ${err.message}`, type: "error" });
                     return null;
@@ -129,4 +128,3 @@ export default defineComponent({
     margin-bottom: 15px;
 }
 </style>
-

@@ -119,7 +119,7 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
-        <div class="search-section mb-4 mt-5" v-if="ready">
+        <div class="search-section mb-4 mt-5 pe-3 ps-3" v-if="ready">
             <div class="input-group">
                 <span class="input-group-text">
                     <font-awesome-icon icon="magnifying-glass" />
@@ -146,7 +146,7 @@ export default defineComponent({
             </div>
 
             <!-- Group toggle -->
-            <div class="form-check mt-2">
+            <div class="form-check mt-4">
                 <input
                     class="form-check-input"
                     type="checkbox"
@@ -167,8 +167,8 @@ export default defineComponent({
         </div>
 
         <template v-if="groupByArtist && groupedTabs">
-            <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4">
-                <h4 class="ms-2">{{ group.displayName }}</h4>
+            <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
+                <h4>{{ group.displayName }}</h4>
 
                 <div
                     v-for="tab in group.tabs"
@@ -238,6 +238,10 @@ export default defineComponent({
         margin-bottom: 8px;
         margin-top: 20px;
     }
+}
+
+h4 {
+    color: $color2-dark;
 }
 
 .tab-item {
