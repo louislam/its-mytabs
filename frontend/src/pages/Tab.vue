@@ -509,6 +509,11 @@ export default defineComponent({
                 // Exposing api to window for debugging
                 window.api = this.api;
 
+                // iOS 16.4+: Enable audio playback even when silent switch is ON
+                if ("audioSession" in navigator) {
+                    navigator.audioSession.type = "playback";
+                }
+
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
                     console.log("Score loaded");
