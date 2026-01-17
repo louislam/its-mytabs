@@ -144,6 +144,9 @@ export async function deleteTab(id: number) {
     }
 }
 
+// OGG Vorbis quality setting: 8 ≈ 256kbps for stereo
+const DEFAULT_OGG_QUALITY = 8;
+
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
     // To avoid issues with special characters in filenames in different OS
     let filename = sanitize(originalFilename);
@@ -170,9 +173,8 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             throw new Error("Audio file with the same name already exists");
         }
         
+        const decoder = new FLACDecoder();
         try {
-            // Decode FLAC to PCM using WASM decoder
-            const decoder = new FLACDecoder();
             await decoder.ready;
             
             // Decode the entire FLAC file
@@ -190,7 +192,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             encoder.configure({
                 sampleRate: sampleRate,
                 channels: channels,
-                vbrQuality: 8, // Quality 8 ≈ 256kbps for stereo
+                vbrQuality: DEFAULT_OGG_QUALITY,
             });
             
             // Collect all encoded OGG data
@@ -218,15 +220,15 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
                 offset += chunk.length;
             }
             
-            // Free decoder resources
-            decoder.free();
-            
             // Write OGG file
             const oggPath = path.join(tabDirPath, filename);
             await Deno.writeFile(oggPath, oggData);
         } catch (error) {
             console.error("FLAC to OGG conversion failed:", error);
             throw new Error(`Failed to convert FLAC to OGG: ${error instanceof Error ? error.message : String(error)}`);
+        } finally {
+            // Always free decoder resources
+            decoder.free();
         }
     } else {
         // Check if kv entry already exists
