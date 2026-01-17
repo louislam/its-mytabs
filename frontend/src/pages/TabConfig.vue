@@ -231,6 +231,7 @@ export default defineComponent({
                     text: "Upload audio successfully",
                     type: "success",
                 });
+                this.$refs.audioDropzone.clearFiles();
                 await this.load();
             } catch (error) {
                 notify({
@@ -448,6 +449,7 @@ export default defineComponent({
                 </div>
 
                 <Vue3Dropzone
+                    ref="audioDropzone"
                     v-model="audioFiles"
                     :maxFileSize="100"
                     @error="dropzoneError"
