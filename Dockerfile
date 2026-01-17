@@ -22,7 +22,7 @@ EXPOSE 47777
 RUN mkdir -p /app/data && chown -R deno:deno /app/data
 
 RUN apt update && \
-    apt --yes --no-install-recommends install gosu && \
+    apt --yes --no-install-recommends install gosu ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 USER deno

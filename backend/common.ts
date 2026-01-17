@@ -18,6 +18,7 @@ export const supportedFormatCommaString = supportedFormatList.map((ext) => {
 export const supportedAudioFormatList = [
     "mp3",
     "ogg",
+    "flac",
 ];
 
 export const supportedAudioFormatCommaString = supportedAudioFormatList.map((ext) => {

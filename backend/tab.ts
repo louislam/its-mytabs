@@ -144,16 +144,64 @@ export async function deleteTab(id: number) {
 
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
     // To avoid issues with special characters in filenames in different OS
-    const filename = sanitize(originalFilename);
-
-    // Check if kv entry already exists
-    const existing = await kv.get(["audio", tab.id, filename]);
-    if (existing.value) {
-        throw new Error("Audio file with the same name already exists");
+    let filename = sanitize(originalFilename);
+    
+    // Check file extension
+    const ext = filename.split(".").pop()?.toLowerCase();
+    
+    // If it's a FLAC file, convert to OGG
+    if (ext === "flac") {
+        // Change filename extension to .ogg
+        filename = filename.substring(0, filename.lastIndexOf(".")) + ".ogg";
+        
+        // Check if kv entry already exists
+        const existing = await kv.get(["audio", tab.id, filename]);
+        if (existing.value) {
+            throw new Error("Audio file with the same name already exists");
+        }
+        
+        // Write the FLAC file temporarily
+        const tempFlacPath = path.join(tabDir, tab.id.toString(), "temp_" + Date.now() + ".flac");
+        await Deno.writeFile(tempFlacPath, audioFileData);
+        
+        // Convert FLAC to OGG using FFmpeg
+        const oggPath = path.join(tabDir, tab.id.toString(), filename);
+        const process = new Deno.Command("ffmpeg", {
+            args: [
+                "-i", tempFlacPath,
+                "-c:a", "libvorbis",
+                "-b:a", "256k",
+                "-y",
+                oggPath,
+            ],
+            stdout: "piped",
+            stderr: "piped",
+        });
+        
+        const { code, stderr } = await process.output();
+        
+        // Clean up temporary FLAC file
+        try {
+            await Deno.remove(tempFlacPath);
+        } catch (e) {
+            console.error("Failed to remove temporary FLAC file:", e);
+        }
+        
+        if (code !== 0) {
+            const errorMessage = new TextDecoder().decode(stderr);
+            console.error("FFmpeg conversion failed:", errorMessage);
+            throw new Error("Failed to convert FLAC to OGG");
+        }
+    } else {
+        // Check if kv entry already exists
+        const existing = await kv.get(["audio", tab.id, filename]);
+        if (existing.value) {
+            throw new Error("Audio file with the same name already exists");
+        }
+        
+        const filePath = path.join(tabDir, tab.id.toString(), filename);
+        await Deno.writeFile(filePath, audioFileData);
     }
-
-    const filePath = path.join(tabDir, tab.id.toString(), filename);
-    await Deno.writeFile(filePath, audioFileData);
 
     await kv.set(
         ["audio", tab.id, filename],
