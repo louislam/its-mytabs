@@ -61,9 +61,11 @@
         "@std/jsonc": "jsr:@std/jsonc@~1.0.2",
         "@std/path": "jsr:@std/path@~1.1.2",
         "@types/sanitize-filename": "npm:@types/sanitize-filename@~1.6.3",
+        "@wasm-audio-decoders/flac": "npm:@wasm-audio-decoders/flac@~0.2.10",
         "better-auth": "npm:better-auth@~1.3.14",
         "sanitize-filename": "npm:sanitize-filename@~1.6.3",
         "socket.io": "npm:socket.io@~4.8.1",
+        "wasm-media-encoders": "npm:wasm-media-encoders@~0.7.0",
         "zod": "npm:zod@~4.1.11"
     }
 }

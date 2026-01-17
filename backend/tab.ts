@@ -1,4 +1,4 @@
-import { tabDir } from "./util.ts";
+import { flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
 import { AudioData, AudioDataSchema, TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
@@ -144,7 +144,17 @@ export async function deleteTab(id: number) {
 
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
     // To avoid issues with special characters in filenames in different OS
-    const filename = sanitize(originalFilename);
+    let filename = sanitize(originalFilename);
+    const tabDirPath = path.join(tabDir, tab.id.toString());
+
+    // If flac, will be converted to ogg, so change extension
+    if (filename.toLowerCase().endsWith(".flac")) {
+        const lastDotIndex = filename.lastIndexOf(".");
+        filename = filename.substring(0, lastDotIndex) + ".ogg";
+
+        // Convert flac to ogg
+        audioFileData = await flacToOgg(audioFileData);
+    }
 
     // Check if kv entry already exists
     const existing = await kv.get(["audio", tab.id, filename]);
@@ -152,7 +162,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
         throw new Error("Audio file with the same name already exists");
     }
 
-    const filePath = path.join(tabDir, tab.id.toString(), filename);
+    const filePath = path.join(tabDirPath, filename);
     await Deno.writeFile(filePath, audioFileData);
 
     await kv.set(
