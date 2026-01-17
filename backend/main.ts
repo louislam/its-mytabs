@@ -62,7 +62,7 @@ export async function main() {
     // Inject demo mode flag using cheerio
     const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
     const $ = cheerio.load(indexHTMLContent);
-    $("head").append(`<script>window.isDemo = ${isDemoMode};</script>`);
+    $("head").append(`<script>window.isDemo = ${JSON.stringify(isDemoMode)};</script>`);
     const indexHTML = $.html();
     
     const app = new Hono();

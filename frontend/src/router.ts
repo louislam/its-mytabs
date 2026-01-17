@@ -76,7 +76,7 @@ export const router = createRouter({
 
 // Demo mode navigation guard
 router.beforeEach((to, from, next) => {
-    if (window.isDemo) {
+    if (window.isDemo === true) {
         // Allow access to Settings, Tab pages, and Register (setup) page only
         const isTabPage = to.path.startsWith("/tab/");
         const isSettingsPage = to.path === "/settings";
