@@ -699,7 +699,9 @@ export default defineComponent({
                     // Override visibility flags based on user's Style setting
                     if (this.setting.scoreStyle === "tab") {
                         staff.showTablature = true;
+                        staff.showStandardNotation = false;
                     } else if (this.setting.scoreStyle === "score") {
+                        staff.showTablature = false;
                         staff.showStandardNotation = true;
                     } else if (this.setting.scoreStyle === "score-tab") {
                         staff.showTablature = true;
