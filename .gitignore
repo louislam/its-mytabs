@@ -6,3 +6,5 @@ node_modules
 /private/
 /*.exe
 .env
+frontend/package-lock.json
+frontend/public/
