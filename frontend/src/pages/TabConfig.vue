@@ -231,6 +231,7 @@ export default defineComponent({
                     text: "Upload audio successfully",
                     type: "success",
                 });
+                this.audioFiles = [];
                 await this.load();
             } catch (error) {
                 notify({

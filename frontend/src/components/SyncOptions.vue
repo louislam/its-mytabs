@@ -38,6 +38,16 @@ export default defineComponent({
         simpleSyncSecond(newSecond) {
             this.simpleSyncInternal = newSecond * 1000;
         },
+        syncMethod(newMethod) {
+            this.syncMethodInternal = newMethod;
+        },
+        simpleSync(newSimpleSync) {
+            this.simpleSyncInternal = newSimpleSync;
+            this.simpleSyncSecond = newSimpleSync / 1000;
+        },
+        advancedSync(newAdvancedSync) {
+            this.advancedSyncInternal = newAdvancedSync;
+        },
     },
     mounted() {
         this.syncMethodInternal = this.syncMethod;
