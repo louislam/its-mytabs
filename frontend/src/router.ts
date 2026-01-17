@@ -12,6 +12,9 @@ import { baseURL } from "./app.js";
 
 const Tab = () => import("./pages/Tab.vue");
 
+// Demo mode redirect URL
+const DEMO_TAB_URL = "/tab/1?audio=youtube-VuKSlOT__9s&track=2";
+
 const routes: RouteRecordRaw[] = [
     {
         path: "/empty",
@@ -93,11 +96,11 @@ router.beforeEach(async (to, from, next) => {
     if (isDemoMode) {
         // Allow Settings and Tab view pages (but not edit pages)
         const isSettingsPage = to.path === "/settings";
-        const isTabViewPage = to.name === "tab" || (to.path.match(/^\/tab\/\d+$/) !== null);
+        const isTabViewPage = to.name === "tab";
         
         if (!isSettingsPage && !isTabViewPage) {
             // Redirect to the demo tab
-            next("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
+            next(DEMO_TAB_URL);
             return;
         }
     }
