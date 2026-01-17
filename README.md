@@ -152,3 +152,20 @@ Reddit post: https://www.reddit.com/r/selfhosted/comments/1nuisjc/comment/nhbn1p
 ## Special Thanks
 
 - [AlphaTab](https://github.com/CoderLine/alphaTab) by [Daniel Kuschny](https://github.com/Danielku15) - The tab rendering engine
+
+## Development
+
+- Install Deno from https://deno.land/
+- Install dependencies:
+
+```bash
+# Install backend dependencies
+deno install
+
+# Install frontend dependencies
+cd frontend && deno install
+cd ..
+
+# Start development server (Hot Reload enabled)
+deno task dev
+```
