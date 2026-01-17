@@ -4,6 +4,8 @@ import * as path from "@std/path";
 import { AudioData, AudioDataSchema, TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
+import { FLACDecoder } from "@wasm-audio-decoders/flac";
+import { createOggEncoder } from "wasm-media-encoders";
 
 export async function createTab(tabFileData: Uint8Array, ext: string, title: string, artist: string, originalFilename: string) {
     const id = await getNextTabID();
@@ -156,7 +158,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
     const tabDirPath = path.join(tabDir, tab.id.toString());
     await fs.ensureDir(tabDirPath);
     
-    // If it's a FLAC file, convert to OGG
+    // If it's a FLAC file, convert to OGG using WASM
     if (ext === "flac") {
         // Change filename extension to .ogg
         const lastDotIndex = filename.lastIndexOf(".");
@@ -168,54 +170,76 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             throw new Error("Audio file with the same name already exists");
         }
         
-        // Write the FLAC file temporarily with unique filename
-        const tempFlacPath = path.join(tabDirPath, `flac_conversion_${globalThis.crypto.randomUUID()}.flac`);
-        await Deno.writeFile(tempFlacPath, audioFileData);
-        
-        // Convert FLAC to OGG using FFmpeg
-        const oggPath = path.join(tabDirPath, filename);
-        const process = new Deno.Command("ffmpeg", {
-            args: [
-                "-i", tempFlacPath,
-                "-c:a", "libvorbis",
-                "-b:a", "256k",
-                "-y",
-                oggPath,
-            ],
-            stdout: "piped",
-            stderr: "piped",
-        });
-        
-        const { code, stderr } = await process.output();
-        
-        if (code !== 0) {
-            const errorMessage = new TextDecoder().decode(stderr);
-            console.error("FFmpeg conversion failed:", errorMessage);
+        try {
+            // Decode FLAC to PCM using WASM decoder
+            const decoder = new FLACDecoder();
+            await decoder.ready;
             
-            // Clean up temporary FLAC file on failure
-            try {
-                await Deno.remove(tempFlacPath);
-            } catch (e) {
-                console.error("Failed to remove temporary FLAC file:", e);
+            // Decode the FLAC data
+            const decodedFrames: any[] = [];
+            decoder.decode(audioFileData);
+            
+            // Collect all decoded PCM data
+            let result = decoder.flush();
+            while (result) {
+                decodedFrames.push(result);
+                result = decoder.flush();
             }
             
-            // Clean up potentially incomplete OGG file
-            try {
-                await Deno.remove(oggPath);
-            } catch (e) {
-                if (!(e instanceof Deno.errors.NotFound)) {
-                    console.error("Failed to remove incomplete OGG file:", e);
+            if (decodedFrames.length === 0) {
+                throw new Error("Failed to decode FLAC: no audio data");
+            }
+            
+            // Get audio properties from first frame
+            const firstFrame = decodedFrames[0];
+            const sampleRate = firstFrame.sampleRate;
+            const channels = firstFrame.channelData.length;
+            
+            // Create OGG encoder
+            const encoder = await createOggEncoder();
+            encoder.configure({
+                sampleRate: sampleRate,
+                channels: channels,
+                vbrQuality: 8, // Quality 8 ≈ 256kbps for stereo
+            });
+            
+            // Collect all encoded OGG data
+            const oggChunks: Uint8Array[] = [];
+            
+            // Encode each frame
+            for (const frame of decodedFrames) {
+                const pcmData = frame.channelData; // Array of Float32Array, one per channel
+                const encoded = encoder.encode(pcmData);
+                if (encoded.length > 0) {
+                    // Copy the data as it's owned by the encoder
+                    oggChunks.push(new Uint8Array(encoded));
                 }
             }
             
-            throw new Error(`Failed to convert FLAC to OGG: ${errorMessage}`);
-        }
-        
-        // Clean up temporary FLAC file after successful conversion
-        try {
-            await Deno.remove(tempFlacPath);
-        } catch (e) {
-            console.error("Failed to remove temporary FLAC file:", e);
+            // Finalize encoding
+            const finalChunk = encoder.finalize();
+            if (finalChunk.length > 0) {
+                oggChunks.push(new Uint8Array(finalChunk));
+            }
+            
+            // Combine all chunks into single buffer
+            const totalLength = oggChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            const oggData = new Uint8Array(totalLength);
+            let offset = 0;
+            for (const chunk of oggChunks) {
+                oggData.set(chunk, offset);
+                offset += chunk.length;
+            }
+            
+            // Free decoder resources
+            decoder.free();
+            
+            // Write OGG file
+            const oggPath = path.join(tabDirPath, filename);
+            await Deno.writeFile(oggPath, oggData);
+        } catch (error) {
+            console.error("FLAC to OGG conversion failed:", error);
+            throw new Error(`Failed to convert FLAC to OGG: ${error instanceof Error ? error.message : String(error)}`);
         }
     } else {
         // Check if kv entry already exists
