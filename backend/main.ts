@@ -105,13 +105,6 @@ export async function main() {
         return c.json(isFinishSetup());
     });
 
-    // Is Demo Mode
-    app.get("/api/is-demo-mode", (c) => {
-        return c.json({
-            isDemoMode,
-        });
-    });
-
     // Register Admin account
     app.post("/register", async (c) => {
         try {
@@ -604,6 +597,29 @@ export async function main() {
             return generalError(c, e);
         }
     });
+
+    // Demo mode middleware - redirect non-allowed routes
+    if (isDemoMode) {
+        app.use("*", (c, next) => {
+            const path = c.req.path;
+            
+            // Allow API routes, static assets, settings, and tab view pages
+            if (
+                path.startsWith("/api/") ||
+                path.startsWith("/assets/") ||
+                path.startsWith("/font/") ||
+                path.startsWith("/soundfont/") ||
+                path === "/favicon.ico" ||
+                path === "/settings" ||
+                path.match(/^\/tab\/\d+$/)
+            ) {
+                return next();
+            }
+            
+            // Redirect everything else to the demo tab
+            return c.redirect("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
+        });
+    }
 
     app.get("/", (c) => {
         return c.html(indexHTML);
