@@ -75,24 +75,27 @@ export const router = createRouter({
     routes,
 });
 
-// Check if demo mode is enabled
-let isDemoMode = false;
-try {
-    const response = await fetch(`${baseURL}/api/is-demo-mode`);
-    const data = await response.json();
-    isDemoMode = data.isDemoMode || false;
-} catch (error) {
-    console.error("Failed to check demo mode:", error);
-}
-
 // Navigation guard to redirect to demo tab when in demo mode
-router.beforeEach((to, from, next) => {
+let isDemoMode: boolean | null = null;
+router.beforeEach(async (to, from, next) => {
+    // Lazy load demo mode status on first navigation
+    if (isDemoMode === null) {
+        try {
+            const response = await fetch(`${baseURL}/api/is-demo-mode`);
+            const data = await response.json();
+            isDemoMode = data.isDemoMode || false;
+        } catch (error) {
+            console.error("Failed to check demo mode:", error);
+            isDemoMode = false;
+        }
+    }
+
     if (isDemoMode) {
-        // Allow Settings and Tab pages
+        // Allow Settings and Tab view pages (but not edit pages)
         const isSettingsPage = to.path === "/settings";
-        const isTabPage = to.path.startsWith("/tab/");
+        const isTabViewPage = to.name === "tab" || (to.path.match(/^\/tab\/\d+$/) !== null);
         
-        if (!isSettingsPage && !isTabPage) {
+        if (!isSettingsPage && !isTabViewPage) {
             // Redirect to the demo tab
             next("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
             return;

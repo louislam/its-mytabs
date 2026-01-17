@@ -7,4 +7,3 @@ node_modules
 /*.exe
 .env
 frontend/package-lock.json
-frontend/public/
