@@ -3,6 +3,8 @@ import * as path from "@std/path";
 import { fileURLToPath } from "node:url";
 import childProcess from "node:child_process";
 import * as jsonc from "@std/jsonc";
+import { FLACDecoder } from "@wasm-audio-decoders/flac";
+import { createOggEncoder } from "wasm-media-encoders";
 
 const denoJSONCPath = path.join(getSourceDir(), "./deno.jsonc");
 export const denoJSONC = jsonc.parse(await Deno.readTextFile(denoJSONCPath));
@@ -75,5 +77,64 @@ export function start(path: string) {
     if (Deno.build.os === "windows") {
         const escapedPath = escapeString(path);
         childProcess.exec(`start "" ${escapedPath}`);
+    }
+}
+
+export async function flacToOgg(audioFileData: Uint8Array) {
+    const decoder = new FLACDecoder();
+    try {
+        await decoder.ready;
+
+        // Decode the entire FLAC file
+        const decoded = await decoder.decodeFile(audioFileData);
+
+        if (!decoded || !decoded.channelData || decoded.channelData.length === 0) {
+            throw new Error("Failed to decode FLAC: no audio data");
+        }
+
+        const { channelData, sampleRate } = decoded;
+        const channels: 1 | 2 = channelData.length === 2 ? 2 : 1;
+
+        // Create OGG encoder (Note: encoder doesn't require explicit cleanup, managed by GC)
+        const encoder = await createOggEncoder();
+        encoder.configure({
+            sampleRate: sampleRate,
+            channels: channels,
+            // OGG Vorbis quality setting: 8 ≈ 256kbps for stereo
+            vbrQuality: 8,
+        });
+
+        // Collect all encoded OGG data
+        const oggChunks: Uint8Array[] = [];
+
+        // Encode the PCM data
+        const encoded = encoder.encode(channelData);
+        if (encoded.length > 0) {
+            // Copy the data as it's owned by the encoder
+            oggChunks.push(new Uint8Array(encoded));
+        }
+
+        // Finalize encoding
+        const finalChunk = encoder.finalize();
+        if (finalChunk.length > 0) {
+            oggChunks.push(new Uint8Array(finalChunk));
+        }
+
+        // Combine all chunks into single buffer
+        const totalLength = oggChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const oggData = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of oggChunks) {
+            oggData.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        return oggData;
+    } catch (error) {
+        console.error("FLAC to OGG conversion failed:", error);
+        throw new Error(`Failed to convert FLAC to OGG: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+        // Always free decoder resources
+        decoder.free();
     }
 }
