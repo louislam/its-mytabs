@@ -6,7 +6,7 @@ import { SignUpSchema, SyncRequestSchema, TabInfo, TabInfoSchema, UpdateTabInfoS
 import { db, hasUser, isInitDB, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, devOriginList, getFrontendDir, host, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -30,6 +30,7 @@ import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
+import * as cheerio from "cheerio";
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
@@ -56,7 +57,17 @@ export async function main() {
     }
 
     // Read index.html content
-    const indexHTML = await Deno.readTextFile(path.join(frontendDir, "index.html"));
+    const indexHTMLContent = await Deno.readTextFile(path.join(frontendDir, "index.html"));
+
+    // Inject demo mode flag using cheerio
+    const $ = cheerio.load(indexHTMLContent);
+    $("head").append(`<script id="app-config" type="application/json">${JSON.stringify({ isDemo: isDemoMode })}</script>`);
+    const indexHTML = $.html();
+
+    if (isDemoMode) {
+        console.warn("Running in DEMO MODE.");
+    }
+
     const app = new Hono();
 
     const httpServer = serve({

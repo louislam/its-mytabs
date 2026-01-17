@@ -23,7 +23,7 @@
         // Build
         "build-binary": "deno task build-frontend && deno run --allow-all extra/build-binary.ts",
         "build-docker": "deno task build-frontend && deno run --allow-all --env-file extra/build-docker.ts",
-        "build-docker-local": "deno task build-frontend && docker build -t louislam/its-mytabs:nightly -f Dockerfile .",
+        "build-docker-nightly": "deno task build-frontend && docker build -t louislam/its-mytabs:nightly -f Dockerfile . --push",
         "build-frontend": "cd frontend && deno run build",
         "start-with-build": "deno task build-frontend && deno task start",
 
@@ -63,6 +63,7 @@
         "@types/sanitize-filename": "npm:@types/sanitize-filename@~1.6.3",
         "@wasm-audio-decoders/flac": "npm:@wasm-audio-decoders/flac@~0.2.10",
         "better-auth": "npm:better-auth@~1.3.14",
+        "cheerio": "npm:cheerio@~1.1.2",
         "sanitize-filename": "npm:sanitize-filename@~1.6.3",
         "socket.io": "npm:socket.io@~4.8.1",
         "wasm-media-encoders": "npm:wasm-media-encoders@~0.7.0",

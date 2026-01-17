@@ -1,7 +1,7 @@
 import * as fs from "@std/fs";
 import { DatabaseSync } from "node:sqlite";
 import * as path from "@std/path";
-import { dataDir, getSourceDir, tabDir } from "./util.ts";
+import { dataDir, getSourceDir, isDemoMode, tabDir } from "./util.ts";
 import { getNextTabID } from "./tab.ts";
 
 let dbPath = path.join(dataDir, "config.db");
@@ -53,7 +53,7 @@ export async function addDemoTab() {
             filename: "tab.gp",
             originalFilename: "汐れいら-ハレの日に (Bass Only)-09-18-2025.gp",
             createdAt: "2025-09-26T07:29:56.450Z",
-            public: false,
+            public: isDemoMode,
         });
 
         // Add Youtube Source
