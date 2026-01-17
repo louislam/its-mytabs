@@ -187,7 +187,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             const { channelData, sampleRate } = decoded;
             const channels = channelData.length;
             
-            // Create OGG encoder
+            // Create OGG encoder (Note: encoder doesn't require explicit cleanup, managed by GC)
             const encoder = await createOggEncoder();
             encoder.configure({
                 sampleRate: sampleRate,
