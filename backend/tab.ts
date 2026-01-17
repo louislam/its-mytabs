@@ -156,7 +156,11 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
     // If it's a FLAC file, convert to OGG
     if (ext === "flac") {
         // Change filename extension to .ogg
-        filename = filename.substring(0, filename.lastIndexOf(".")) + ".ogg";
+        const lastDotIndex = filename.lastIndexOf(".");
+        if (lastDotIndex === -1) {
+            throw new Error("Invalid FLAC filename: no extension found");
+        }
+        filename = filename.substring(0, lastDotIndex) + ".ogg";
         
         // Check if kv entry already exists
         const existing = await kv.get(["audio", tab.id, filename]);
@@ -165,7 +169,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
         }
         
         // Write the FLAC file temporarily with unique filename
-        const tempFlacPath = path.join(tabDirPath, "temp_" + Date.now() + "_" + globalThis.crypto.randomUUID() + ".flac");
+        const tempFlacPath = path.join(tabDirPath, `temp_${globalThis.crypto.randomUUID()}.flac`);
         await Deno.writeFile(tempFlacPath, audioFileData);
         
         // Convert FLAC to OGG using FFmpeg
@@ -202,7 +206,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
                 // Ignore if OGG file doesn't exist
             }
             
-            throw new Error("Failed to convert FLAC to OGG");
+            throw new Error(`Failed to convert FLAC to OGG: ${errorMessage}`);
         }
         
         // Clean up temporary FLAC file after successful conversion
