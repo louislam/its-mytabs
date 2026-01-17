@@ -30,6 +30,7 @@ import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
+import * as cheerio from "cheerio";
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
@@ -56,12 +57,13 @@ export async function main() {
     }
 
     // Read index.html content
-    let indexHTML = await Deno.readTextFile(path.join(frontendDir, "index.html"));
+    const indexHTMLContent = await Deno.readTextFile(path.join(frontendDir, "index.html"));
     
-    // Inject demo mode flag
+    // Inject demo mode flag using cheerio
     const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
-    const demoModeScript = `<script>window.isDemo = ${isDemoMode};</script>`;
-    indexHTML = indexHTML.replace("</head>", `${demoModeScript}\n    </head>`);
+    const $ = cheerio.load(indexHTMLContent);
+    $("head").append(`<script>window.isDemo = ${isDemoMode};</script>`);
+    const indexHTML = $.html();
     
     const app = new Hono();
 
