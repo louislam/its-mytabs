@@ -150,43 +150,43 @@ const DEFAULT_OGG_QUALITY = 8;
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
     // To avoid issues with special characters in filenames in different OS
     let filename = sanitize(originalFilename);
-    
+
     // Check file extension
     const ext = filename.split(".").pop()?.toLowerCase();
     if (!ext) {
         throw new Error("File has no extension");
     }
-    
+
     // Ensure tab directory exists
     const tabDirPath = path.join(tabDir, tab.id.toString());
     await fs.ensureDir(tabDirPath);
-    
+
     // If it's a FLAC file, convert to OGG using WASM
     if (ext === "flac") {
         // Change filename extension to .ogg
         const lastDotIndex = filename.lastIndexOf(".");
         filename = filename.substring(0, lastDotIndex) + ".ogg";
-        
+
         // Check if kv entry already exists
         const existing = await kv.get(["audio", tab.id, filename]);
         if (existing.value) {
             throw new Error("Audio file with the same name already exists");
         }
-        
+
         const decoder = new FLACDecoder();
         try {
             await decoder.ready;
-            
+
             // Decode the entire FLAC file
             const decoded = await decoder.decodeFile(audioFileData);
-            
+
             if (!decoded || !decoded.channelData || decoded.channelData.length === 0) {
                 throw new Error("Failed to decode FLAC: no audio data");
             }
-            
+
             const { channelData, sampleRate } = decoded;
-            const channels = channelData.length;
-            
+            const channels : 1 | 2 = channelData.length === 2 ? 2 : 1;
+
             // Create OGG encoder (Note: encoder doesn't require explicit cleanup, managed by GC)
             const encoder = await createOggEncoder();
             encoder.configure({
@@ -194,23 +194,23 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
                 channels: channels,
                 vbrQuality: DEFAULT_OGG_QUALITY,
             });
-            
+
             // Collect all encoded OGG data
             const oggChunks: Uint8Array[] = [];
-            
+
             // Encode the PCM data
             const encoded = encoder.encode(channelData);
             if (encoded.length > 0) {
                 // Copy the data as it's owned by the encoder
                 oggChunks.push(new Uint8Array(encoded));
             }
-            
+
             // Finalize encoding
             const finalChunk = encoder.finalize();
             if (finalChunk.length > 0) {
                 oggChunks.push(new Uint8Array(finalChunk));
             }
-            
+
             // Combine all chunks into single buffer
             const totalLength = oggChunks.reduce((sum, chunk) => sum + chunk.length, 0);
             const oggData = new Uint8Array(totalLength);
@@ -219,7 +219,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
                 oggData.set(chunk, offset);
                 offset += chunk.length;
             }
-            
+
             // Write OGG file
             const oggPath = path.join(tabDirPath, filename);
             await Deno.writeFile(oggPath, oggData);
@@ -236,7 +236,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
         if (existing.value) {
             throw new Error("Audio file with the same name already exists");
         }
-        
+
         const filePath = path.join(tabDirPath, filename);
         await Deno.writeFile(filePath, audioFileData);
     }
