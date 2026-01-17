@@ -148,6 +148,9 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
     
     // Check file extension
     const ext = filename.split(".").pop()?.toLowerCase();
+    if (!ext) {
+        throw new Error("File has no extension");
+    }
     
     // Ensure tab directory exists
     const tabDirPath = path.join(tabDir, tab.id.toString());
@@ -157,9 +160,6 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
     if (ext === "flac") {
         // Change filename extension to .ogg
         const lastDotIndex = filename.lastIndexOf(".");
-        if (lastDotIndex === -1) {
-            throw new Error("Invalid FLAC filename: no extension found");
-        }
         filename = filename.substring(0, lastDotIndex) + ".ogg";
         
         // Check if kv entry already exists
@@ -169,7 +169,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
         }
         
         // Write the FLAC file temporarily with unique filename
-        const tempFlacPath = path.join(tabDirPath, `temp_${globalThis.crypto.randomUUID()}.flac`);
+        const tempFlacPath = path.join(tabDirPath, `flac_conversion_${globalThis.crypto.randomUUID()}.flac`);
         await Deno.writeFile(tempFlacPath, audioFileData);
         
         // Convert FLAC to OGG using FFmpeg
@@ -203,7 +203,9 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             try {
                 await Deno.remove(oggPath);
             } catch (e) {
-                // Ignore if OGG file doesn't exist
+                if (!(e instanceof Deno.errors.NotFound)) {
+                    console.error("Failed to remove incomplete OGG file:", e);
+                }
             }
             
             throw new Error(`Failed to convert FLAC to OGG: ${errorMessage}`);
