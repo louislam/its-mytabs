@@ -77,11 +77,12 @@ export const router = createRouter({
 // Demo mode navigation guard
 router.beforeEach((to, from, next) => {
     if (window.isDemo) {
-        // Allow access to Settings and Tab pages only
+        // Allow access to Settings, Tab pages, and Register (setup) page only
         const isTabPage = to.path.startsWith("/tab/");
         const isSettingsPage = to.path === "/settings";
+        const isRegisterPage = to.path === "/register";
         
-        if (!isTabPage && !isSettingsPage) {
+        if (!isTabPage && !isSettingsPage && !isRegisterPage) {
             // Redirect to demo tab
             next("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
         } else {
