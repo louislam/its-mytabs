@@ -31,6 +31,9 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 
+// Demo mode redirect URL
+const DEMO_TAB_URL = "/tab/1?audio=youtube-VuKSlOT__9s&track=2";
+
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
 
@@ -617,7 +620,7 @@ export async function main() {
             }
             
             // Redirect everything else to the demo tab
-            return c.redirect("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
+            return c.redirect(DEMO_TAB_URL);
         });
     }
 
