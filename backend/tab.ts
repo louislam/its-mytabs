@@ -149,6 +149,10 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
     // Check file extension
     const ext = filename.split(".").pop()?.toLowerCase();
     
+    // Ensure tab directory exists
+    const tabDirPath = path.join(tabDir, tab.id.toString());
+    await fs.ensureDir(tabDirPath);
+    
     // If it's a FLAC file, convert to OGG
     if (ext === "flac") {
         // Change filename extension to .ogg
@@ -160,12 +164,8 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             throw new Error("Audio file with the same name already exists");
         }
         
-        // Ensure tab directory exists
-        const tabDirPath = path.join(tabDir, tab.id.toString());
-        await fs.ensureDir(tabDirPath);
-        
         // Write the FLAC file temporarily with unique filename
-        const tempFlacPath = path.join(tabDirPath, "temp_" + Date.now() + "_" + crypto.randomUUID() + ".flac");
+        const tempFlacPath = path.join(tabDirPath, "temp_" + Date.now() + "_" + globalThis.crypto.randomUUID() + ".flac");
         await Deno.writeFile(tempFlacPath, audioFileData);
         
         // Convert FLAC to OGG using FFmpeg
@@ -218,7 +218,7 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             throw new Error("Audio file with the same name already exists");
         }
         
-        const filePath = path.join(tabDir, tab.id.toString(), filename);
+        const filePath = path.join(tabDirPath, filename);
         await Deno.writeFile(filePath, audioFileData);
     }
 
