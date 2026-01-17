@@ -10,9 +10,9 @@
         <div id="app"></div>
         <script>
             try {
-                const appConfigElement = document.getElementById('app-config');
+                const appConfigElement = document.getElementById("app-config");
                 if (!appConfigElement) {
-                    throw new Error('App config element not found');
+                    throw new Error("App config element not found");
                 }
                 const config = JSON.parse(appConfigElement.textContent);
                 window.isDemo = config.isDemo;

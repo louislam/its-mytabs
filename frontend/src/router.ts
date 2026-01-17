@@ -81,7 +81,7 @@ router.beforeEach((to, from, next) => {
         const isTabPage = to.path.startsWith("/tab/");
         const isSettingsPage = to.path === "/settings";
         const isRegisterPage = to.path === "/register";
-        
+
         if (!isTabPage && !isSettingsPage && !isRegisterPage) {
             // Redirect to demo tab
             next("/tab/1?audio=youtube-VuKSlOT__9s&track=2");

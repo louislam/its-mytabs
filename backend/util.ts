@@ -8,6 +8,7 @@ import { createOggEncoder } from "wasm-media-encoders";
 
 const denoJSONCPath = path.join(getSourceDir(), "./deno.jsonc");
 export const denoJSONC = jsonc.parse(await Deno.readTextFile(denoJSONCPath));
+export const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
 
 let version = "unknown";
 if (denoJSONC && typeof denoJSONC === "object" && !Array.isArray(denoJSONC) && typeof denoJSONC.version === "string") {
