@@ -675,8 +675,21 @@ export default defineComponent({
             }
         },
 
-        // Override hidden staves to ensure tabs are always visible
-        // This fixes the issue where Guitar Pro hidden tabs don't display
+        /**
+         * Override hidden staves to ensure tabs are always visible.
+         * 
+         * This fixes the issue where Guitar Pro hidden tabs don't display even when
+         * the view is set to "Tab" mode. When a tab is hidden in Guitar Pro software,
+         * the .gp file stores showTablature and showStandardNotation flags as false.
+         * AlphaTab respects these flags, causing the tab to not render.
+         * 
+         * This method mutates the score object by setting both showTablature and
+         * showStandardNotation to true for all staves, ensuring visibility.
+         * 
+         * Should be called after the score is loaded but before rendering tracks.
+         * 
+         * @param {Score} score - The AlphaTab score object to modify
+         */
         overrideHiddenStaves(score) {
             for (const track of score.tracks) {
                 for (const staff of track.staves) {
