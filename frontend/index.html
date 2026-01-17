@@ -8,6 +8,18 @@
     </head>
     <body>
         <div id="app"></div>
+        <script>
+            try {
+                const appConfigElement = document.getElementById('app-config');
+                if (!appConfigElement) {
+                    throw new Error('App config element not found');
+                }
+                const config = JSON.parse(appConfigElement.textContent);
+                window.isDemo = config.isDemo;
+            } catch (e) {
+                window.isDemo = false;
+            }
+        </script>
         <script type="module" src="/src/main.ts"></script>
     </body>
 </html>

@@ -58,23 +58,13 @@ export async function main() {
 
     // Read index.html content
     const indexHTMLContent = await Deno.readTextFile(path.join(frontendDir, "index.html"));
-    
+
     // Inject demo mode flag using cheerio
     const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
     const $ = cheerio.load(indexHTMLContent);
-    
-    // Use a data island approach for safer injection
     $("head").append(`<script id="app-config" type="application/json">${JSON.stringify({ isDemo: isDemoMode })}</script>`);
-    $("head").append(`<script>
-        try {
-            const config = JSON.parse(document.getElementById('app-config').textContent);
-            window.isDemo = config.isDemo;
-        } catch (e) {
-            window.isDemo = false;
-        }
-    </script>`);
     const indexHTML = $.html();
-    
+
     const app = new Hono();
 
     const httpServer = serve({
