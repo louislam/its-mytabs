@@ -73,3 +73,21 @@ export const router = createRouter({
     history: createWebHistory(),
     routes,
 });
+
+// Demo mode navigation guard
+router.beforeEach((to, from, next) => {
+    if (window.isDemo) {
+        // Allow access to Settings and Tab pages only
+        const isTabPage = to.path.startsWith("/tab/");
+        const isSettingsPage = to.path === "/settings";
+        
+        if (!isTabPage && !isSettingsPage) {
+            // Redirect to demo tab
+            next("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
+        } else {
+            next();
+        }
+    } else {
+        next();
+    }
+});

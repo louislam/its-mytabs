@@ -56,7 +56,13 @@ export async function main() {
     }
 
     // Read index.html content
-    const indexHTML = await Deno.readTextFile(path.join(frontendDir, "index.html"));
+    let indexHTML = await Deno.readTextFile(path.join(frontendDir, "index.html"));
+    
+    // Inject demo mode flag
+    const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
+    const demoModeScript = `<script>window.isDemo = ${isDemoMode};</script>`;
+    indexHTML = indexHTML.replace("</head>", `${demoModeScript}\n    </head>`);
+    
     const app = new Hono();
 
     const httpServer = serve({
