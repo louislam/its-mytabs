@@ -31,8 +31,9 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 
-// Demo mode redirect URL
+// Demo mode configuration
 const DEMO_TAB_URL = "/tab/1?audio=youtube-VuKSlOT__9s&track=2";
+const TAB_VIEW_PATTERN = /^\/tab\/\d+$/;
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
@@ -614,7 +615,7 @@ export async function main() {
                 path.startsWith("/soundfont/") ||
                 path === "/favicon.ico" ||
                 path === "/settings" ||
-                path.match(/^\/tab\/\d+$/)
+                TAB_VIEW_PATTERN.test(path)
             ) {
                 return next();
             }
