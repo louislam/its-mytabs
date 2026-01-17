@@ -6,7 +6,7 @@ import { SignUpSchema, SyncRequestSchema, TabInfo, TabInfoSchema, UpdateTabInfoS
 import { db, hasUser, isInitDB, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, devOriginList, getFrontendDir, host, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, devOriginList, getFrontendDir, host, isDev, isDemoMode, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -103,6 +103,13 @@ export async function main() {
     // Is Disable Sign Up
     app.get("/api/is-finish-setup", (c) => {
         return c.json(isFinishSetup());
+    });
+
+    // Is Demo Mode
+    app.get("/api/is-demo-mode", (c) => {
+        return c.json({
+            isDemoMode,
+        });
     });
 
     // Register Admin account

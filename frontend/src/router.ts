@@ -8,6 +8,7 @@ import Login from "./pages/Login.vue";
 import TabConfig from "./pages/TabConfig.vue";
 import Settings from "./pages/Settings.vue";
 import TabNew from "./pages/TabNew.vue";
+import { baseURL } from "./app.js";
 
 const Tab = () => import("./pages/Tab.vue");
 
@@ -72,4 +73,30 @@ export const router = createRouter({
     linkActiveClass: "active",
     history: createWebHistory(),
     routes,
+});
+
+// Check if demo mode is enabled
+let isDemoMode = false;
+try {
+    const response = await fetch(`${baseURL}/api/is-demo-mode`);
+    const data = await response.json();
+    isDemoMode = data.isDemoMode || false;
+} catch (error) {
+    console.error("Failed to check demo mode:", error);
+}
+
+// Navigation guard to redirect to demo tab when in demo mode
+router.beforeEach((to, from, next) => {
+    if (isDemoMode) {
+        // Allow Settings and Tab pages
+        const isSettingsPage = to.path === "/settings";
+        const isTabPage = to.path.startsWith("/tab/");
+        
+        if (!isSettingsPage && !isTabPage) {
+            // Redirect to the demo tab
+            next("/tab/1?audio=youtube-VuKSlOT__9s&track=2");
+            return;
+        }
+    }
+    next();
 });

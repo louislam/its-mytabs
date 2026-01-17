@@ -19,6 +19,7 @@ export const appVersion: string = version;
 
 export const host = Deno.env.get("MYTABS_HOST");
 export const port = Deno.env.get("MYTABS_PORT") ? parseInt(Deno.env.get("MYTABS_PORT")!) : 47777;
+export const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
 
 export async function getDataDir() {
     let dataDir = Deno.env.get("DATA_DIR") || "./data";
