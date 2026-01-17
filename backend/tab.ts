@@ -175,25 +175,15 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             const decoder = new FLACDecoder();
             await decoder.ready;
             
-            // Decode the FLAC data
-            const decodedFrames: any[] = [];
-            decoder.decode(audioFileData);
+            // Decode the entire FLAC file
+            const decoded = await decoder.decodeFile(audioFileData);
             
-            // Collect all decoded PCM data
-            let result = decoder.flush();
-            while (result) {
-                decodedFrames.push(result);
-                result = decoder.flush();
-            }
-            
-            if (decodedFrames.length === 0) {
+            if (!decoded || !decoded.channelData || decoded.channelData.length === 0) {
                 throw new Error("Failed to decode FLAC: no audio data");
             }
             
-            // Get audio properties from first frame
-            const firstFrame = decodedFrames[0];
-            const sampleRate = firstFrame.sampleRate;
-            const channels = firstFrame.channelData.length;
+            const { channelData, sampleRate } = decoded;
+            const channels = channelData.length;
             
             // Create OGG encoder
             const encoder = await createOggEncoder();
@@ -206,14 +196,11 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             // Collect all encoded OGG data
             const oggChunks: Uint8Array[] = [];
             
-            // Encode each frame
-            for (const frame of decodedFrames) {
-                const pcmData = frame.channelData; // Array of Float32Array, one per channel
-                const encoded = encoder.encode(pcmData);
-                if (encoded.length > 0) {
-                    // Copy the data as it's owned by the encoder
-                    oggChunks.push(new Uint8Array(encoded));
-                }
+            // Encode the PCM data
+            const encoded = encoder.encode(channelData);
+            if (encoded.length > 0) {
+                // Copy the data as it's owned by the encoder
+                oggChunks.push(new Uint8Array(encoded));
             }
             
             // Finalize encoding
