@@ -676,15 +676,18 @@ export default defineComponent({
         },
 
         /**
-         * Override hidden staves to ensure tabs are always visible.
+         * Override hidden staves to ensure tabs/scores are visible based on Style settings.
          * 
          * This fixes the issue where Guitar Pro hidden tabs don't display even when
          * the view is set to "Tab" mode. When a tab is hidden in Guitar Pro software,
          * the .gp file stores showTablature and showStandardNotation flags as false.
          * AlphaTab respects these flags, causing the tab to not render.
          * 
-         * This method mutates the score object by setting both showTablature and
-         * showStandardNotation to true for all staves, ensuring visibility.
+         * This method mutates the score object by setting showTablature and/or
+         * showStandardNotation to true based on the user's Style setting:
+         * - Style "tab": Only force showTablature = true
+         * - Style "score": Only force showStandardNotation = true
+         * - Style "score-tab": Force both to true
          * 
          * Should be called after the score is loaded but before rendering tracks.
          * 
@@ -693,9 +696,15 @@ export default defineComponent({
         overrideHiddenStaves(score) {
             for (const track of score.tracks) {
                 for (const staff of track.staves) {
-                    // Force staves to be visible regardless of Guitar Pro settings
-                    staff.showTablature = true;
-                    staff.showStandardNotation = true;
+                    // Override visibility flags based on user's Style setting
+                    if (this.setting.scoreStyle === "tab") {
+                        staff.showTablature = true;
+                    } else if (this.setting.scoreStyle === "score") {
+                        staff.showStandardNotation = true;
+                    } else if (this.setting.scoreStyle === "score-tab") {
+                        staff.showTablature = true;
+                        staff.showStandardNotation = true;
+                    }
                 }
             }
         },
