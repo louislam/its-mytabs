@@ -160,12 +160,16 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
             throw new Error("Audio file with the same name already exists");
         }
         
-        // Write the FLAC file temporarily
-        const tempFlacPath = path.join(tabDir, tab.id.toString(), "temp_" + Date.now() + ".flac");
+        // Ensure tab directory exists
+        const tabDirPath = path.join(tabDir, tab.id.toString());
+        await fs.ensureDir(tabDirPath);
+        
+        // Write the FLAC file temporarily with unique filename
+        const tempFlacPath = path.join(tabDirPath, "temp_" + Date.now() + "_" + crypto.randomUUID() + ".flac");
         await Deno.writeFile(tempFlacPath, audioFileData);
         
         // Convert FLAC to OGG using FFmpeg
-        const oggPath = path.join(tabDir, tab.id.toString(), filename);
+        const oggPath = path.join(tabDirPath, filename);
         const process = new Deno.Command("ffmpeg", {
             args: [
                 "-i", tempFlacPath,
@@ -180,17 +184,32 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
         
         const { code, stderr } = await process.output();
         
-        // Clean up temporary FLAC file
+        if (code !== 0) {
+            const errorMessage = new TextDecoder().decode(stderr);
+            console.error("FFmpeg conversion failed:", errorMessage);
+            
+            // Clean up temporary FLAC file on failure
+            try {
+                await Deno.remove(tempFlacPath);
+            } catch (e) {
+                console.error("Failed to remove temporary FLAC file:", e);
+            }
+            
+            // Clean up potentially incomplete OGG file
+            try {
+                await Deno.remove(oggPath);
+            } catch (e) {
+                // Ignore if OGG file doesn't exist
+            }
+            
+            throw new Error("Failed to convert FLAC to OGG");
+        }
+        
+        // Clean up temporary FLAC file after successful conversion
         try {
             await Deno.remove(tempFlacPath);
         } catch (e) {
             console.error("Failed to remove temporary FLAC file:", e);
-        }
-        
-        if (code !== 0) {
-            const errorMessage = new TextDecoder().decode(stderr);
-            console.error("FFmpeg conversion failed:", errorMessage);
-            throw new Error("Failed to convert FLAC to OGG");
         }
     } else {
         // Check if kv entry already exists
