@@ -523,6 +523,7 @@ export default defineComponent({
                     console.log("Score loaded");
 
                     this.applyColors(score);
+                    this.overrideHiddenStaves(score);
 
                     // Track
                     if (trackID < 0 || trackID >= score.tracks.length) {
@@ -670,6 +671,18 @@ export default defineComponent({
                             }
                         }
                     }
+                }
+            }
+        },
+
+        // Override hidden staves to ensure tabs are always visible
+        // This fixes the issue where Guitar Pro hidden tabs don't display
+        overrideHiddenStaves(score) {
+            for (const track of score.tracks) {
+                for (const staff of track.staves) {
+                    // Force staves to be visible regardless of Guitar Pro settings
+                    staff.showTablature = true;
+                    staff.showStandardNotation = true;
                 }
             }
         },
