@@ -110,6 +110,9 @@ MYTABS_PORT=47777
 
 # (boolean) Whether to launch the browser when starting the app (Desktop only) (Default: true)
 MYTABS_LAUNCH_BROWSER=true
+
+# (boolean) Enable demo mode - redirects all pages except Settings and Tabs to /tab/1?audio=youtube-VuKSlOT__9s&track=2 (Default: false)
+MYTABS_DEMO_MODE=false
 ```
 
 ## Motivation
