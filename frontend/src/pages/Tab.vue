@@ -511,7 +511,11 @@ export default defineComponent({
 
                 // iOS 16.4+: Enable audio playback even when silent switch is ON
                 if ("audioSession" in navigator) {
-                    navigator.audioSession.type = "playback";
+                    try {
+                        navigator.audioSession.type = "playback";
+                    } catch (error) {
+                        console.error("Failed to set navigator.audioSession.type to 'playback':", error);
+                    }
                 }
 
                 // Score Loaded
