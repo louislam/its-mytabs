@@ -58,7 +58,7 @@ export default defineComponent({
         },
 
         favoritedTabs() {
-            return this.filteredTabList.filter((tab) => tab.fav);
+            return this.tabList.filter((tab) => tab.fav);
         },
 
         groupedTabs() {
