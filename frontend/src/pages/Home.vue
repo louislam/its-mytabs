@@ -244,12 +244,4 @@ export default defineComponent({
 h4 {
     color: $color2-dark;
 }
-
-.favorites-section {
-    .favorites-title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: $color2-dark;
-    }
-}
 </style>
