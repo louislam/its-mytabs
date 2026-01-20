@@ -65,7 +65,6 @@ export default defineComponent({
             class="fav-btn"
             @click="toggleFav"
             :class='{ "fav-active": tab.fav }'
-            :aria-label='tab.fav ? "Remove from favorites" : "Add to favorites"'
         >
             <font-awesome-icon
                 :icon='tab.fav ? "star" : ["far", "star"]'
