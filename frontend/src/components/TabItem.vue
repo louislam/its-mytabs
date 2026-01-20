@@ -119,6 +119,9 @@ export default defineComponent({
 
     .info {
         flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
 
         .title {
             font-size: 20px;
