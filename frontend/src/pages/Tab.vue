@@ -523,6 +523,7 @@ export default defineComponent({
                     console.log("Score loaded");
 
                     this.applyColors(score);
+                    this.overrideHiddenStaves(score);
 
                     // Track
                     if (trackID < 0 || trackID >= score.tracks.length) {
@@ -669,6 +670,30 @@ export default defineComponent({
                                 }
                             }
                         }
+                    }
+                }
+            }
+        },
+
+        /**
+         * Override hidden staves based on Style settings to fix Guitar Pro hidden tabs.
+         * - Style "tab": showTablature = true, showStandardNotation = false
+         * - Style "score": showTablature = false, showStandardNotation = true
+         * - Style "score-tab": both = true
+         */
+        overrideHiddenStaves(score) {
+            for (const track of score.tracks) {
+                for (const staff of track.staves) {
+                    // Override visibility flags based on user's Style setting
+                    if (this.setting.scoreStyle === "tab") {
+                        staff.showTablature = true;
+                        staff.showStandardNotation = false;
+                    } else if (this.setting.scoreStyle === "score") {
+                        staff.showTablature = false;
+                        staff.showStandardNotation = true;
+                    } else if (this.setting.scoreStyle === "score-tab") {
+                        staff.showTablature = true;
+                        staff.showStandardNotation = true;
                     }
                 }
             }
