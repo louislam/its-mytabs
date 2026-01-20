@@ -37,7 +37,11 @@
         "indentWidth": 4,
         "semiColons": true,
         "singleQuote": false,
-        "lineWidth": 200
+        "lineWidth": 200,
+        "exclude": [
+            "frontend/public/font/",
+            "frontend/public/soundfont/"
+        ]
     },
 
     // Lint

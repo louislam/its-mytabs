@@ -1,7 +1,7 @@
 import { flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { AudioData, AudioDataSchema, TabInfo, TabInfoSchema, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
+import { AudioData, AudioDataSchema, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
 
@@ -24,6 +24,7 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
         originalFilename,
         createdAt: new Date().toISOString(),
         public: false,
+        fav: false,
     };
 
     await kv.set(["tab", id], info);
@@ -102,6 +103,11 @@ export async function updateTab(tab: TabInfo, data: UpdateTabInfo) {
     tab.title = data.title;
     tab.artist = data.artist;
     tab.public = data.public;
+    await kv.set(["tab", tab.id], tab);
+}
+
+export async function updateTabFav(tab: TabInfo, data: UpdateTabFav) {
+    tab.fav = data.fav;
     await kv.set(["tab", tab.id], tab);
 }
 

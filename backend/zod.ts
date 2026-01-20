@@ -10,6 +10,7 @@ export type SignUpData = z.infer<typeof SignUpSchema>;
 const title = z.string().min(1);
 const artist = z.string().min(0);
 const isPublic = z.boolean();
+const isFav = z.boolean();
 
 export const TabInfoSchema = z.object({
     id: z.number().default(-1),
@@ -19,6 +20,7 @@ export const TabInfoSchema = z.object({
     originalFilename: z.string().default("Unknown"),
     createdAt: z.iso.datetime().default(() => new Date().toISOString()),
     public: isPublic.default(false),
+    fav: isFav.default(false),
 });
 export type TabInfo = z.infer<typeof TabInfoSchema>;
 
@@ -28,6 +30,11 @@ export const UpdateTabInfoSchema = z.object({
     public: isPublic,
 });
 export type UpdateTabInfo = z.infer<typeof UpdateTabInfoSchema>;
+
+export const UpdateTabFavSchema = z.object({
+    fav: isFav,
+});
+export type UpdateTabFav = z.infer<typeof UpdateTabFavSchema>;
 
 const videoID = z.string().min(1);
 const syncMethod = z.enum(["simple", "advanced"]);

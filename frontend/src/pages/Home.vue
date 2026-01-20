@@ -3,8 +3,13 @@ import { defineComponent } from "vue";
 import { notify } from "@kyvg/vue3-notification";
 import { baseURL } from "../app.js";
 import { isLoggedIn } from "../auth-client.js";
+import TabItem from "../components/TabItem.vue";
 
 export default defineComponent({
+    components: {
+        TabItem,
+    },
+
     data() {
         return {
             tabList: [],
@@ -52,6 +57,10 @@ export default defineComponent({
             });
         },
 
+        favoritedTabs() {
+            return this.tabList.filter((tab) => tab.fav);
+        },
+
         groupedTabs() {
             if (!this.groupByArtist) return null;
 
@@ -86,6 +95,11 @@ export default defineComponent({
     },
 
     methods: {
+        handleFavToggled() {
+            // Force re-render by creating a new array reference
+            this.tabList = [...this.tabList];
+        },
+
         async deleteTab(id, title, artist) {
             if (!confirm(`Are you sure you want to delete ${artist} - ${title}?`)) return;
 
@@ -119,6 +133,18 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
+        <!-- Favorites Section -->
+        <div class="favorites-section" v-if="ready && favoritedTabs.length > 0">
+            <TabItem
+                v-for="tab in favoritedTabs"
+                :key="`fav-${tab.id}`"
+                :tab="tab"
+                :show-artist="true"
+                @delete="deleteTab"
+                @favToggled="handleFavToggled"
+            />
+        </div>
+
         <div class="search-section mb-4 mt-5 pe-3 ps-3" v-if="ready">
             <div class="input-group">
                 <span class="input-group-text">
@@ -170,51 +196,26 @@ export default defineComponent({
             <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
                 <h4>{{ group.displayName }}</h4>
 
-                <div
+                <TabItem
                     v-for="tab in group.tabs"
                     :key="tab.id"
-                    class="tab-item p-3 rounded"
-                >
-                    <router-link class="info" :to="`/tab/${tab.id}`">
-                        <div class="title">{{ tab.title }}</div>
-                    </router-link>
-
-                    <button
-                        class="btn btn-secondary me-2"
-                        @click="$router.push(`/tab/${tab.id}/edit/info`)"
-                    >
-                        Edit
-                    </button>
-
-                    <button
-                        class="btn btn-danger"
-                        @click="deleteTab(tab.id, tab.title, tab.artist)"
-                    >
-                        Delete
-                    </button>
-                </div>
+                    :tab="tab"
+                    :show-artist="false"
+                    @delete="deleteTab"
+                    @favToggled="handleFavToggled"
+                />
             </div>
         </template>
 
         <template v-else>
-            <div
+            <TabItem
                 v-for="tab in filteredTabList"
                 :key="tab.id"
-                class="tab-item p-3 rounded"
-            >
-                <router-link class="info" :to="`/tab/${tab.id}`">
-                    <div class="title">{{ tab.title }}</div>
-                    <div class="artist">{{ tab.artist }}</div>
-                </router-link>
-
-                <button class="btn btn-secondary me-2" @click="$router.push(`/tab/${tab.id}/edit/info`)">
-                    Edit
-                </button>
-
-                <button class="btn btn-danger" @click="deleteTab(tab.id, tab.title, tab.artist)">
-                    Delete
-                </button>
-            </div>
+                :tab="tab"
+                :show-artist="true"
+                @delete="deleteTab"
+                @favToggled="handleFavToggled"
+            />
         </template>
 
         <div
@@ -242,30 +243,5 @@ export default defineComponent({
 
 h4 {
     color: $color2-dark;
-}
-
-.tab-item {
-    display: flex;
-    transition: background-color 0.1s;
-
-    &:hover {
-        background-color: rgba(0, 0, 0, 0.05);
-    }
-
-    .info {
-        flex-grow: 1;
-
-        .title {
-            font-size: 20px;
-        }
-
-        .artist {
-            color: $color2-dark;
-        }
-    }
-
-    button {
-        align-self: center;
-    }
 }
 </style>

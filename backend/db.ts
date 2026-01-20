@@ -54,6 +54,7 @@ export async function addDemoTab() {
             originalFilename: "汐れいら-ハレの日に (Bass Only)-09-18-2025.gp",
             createdAt: "2025-09-26T07:29:56.450Z",
             public: isDemoMode,
+            fav: false,
         });
 
         // Add Youtube Source
