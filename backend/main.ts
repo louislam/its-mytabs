@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, SyncRequestSchema, TabInfo, TabInfoSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { SignUpSchema, SyncRequestSchema, TabInfo, TabInfoSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
 import { db, hasUser, isInitDB, kv } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
@@ -24,6 +24,7 @@ import {
     replaceTab,
     updateAudio,
     updateTab,
+    updateTabFav,
     updateYoutube,
 } from "./tab.ts";
 import { ZodError } from "zod";
@@ -258,6 +259,28 @@ export async function main() {
 
             const tab = await getTab(id);
             await updateTab(tab, data);
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Update Tab Favorite Status
+    app.post("/api/tab/:id/fav", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = parseInt(c.req.param("id"));
+            if (isNaN(id)) {
+                throw new Error("Invalid tab ID");
+            }
+
+            const body = await c.req.json();
+            const data = UpdateTabFavSchema.parse(body);
+
+            const tab = await getTab(id);
+            await updateTabFav(tab, data);
             return c.json({
                 ok: true,
             });

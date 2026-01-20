@@ -57,6 +57,10 @@ export default defineComponent({
             });
         },
 
+        favoritedTabs() {
+            return this.tabList.filter((tab) => tab.fav);
+        },
+
         groupedTabs() {
             if (!this.groupByArtist) return null;
 
@@ -91,6 +95,11 @@ export default defineComponent({
     },
 
     methods: {
+        handleFavToggled() {
+            // Force re-render by creating a new array reference
+            this.tabList = [...this.tabList];
+        },
+
         async deleteTab(id, title, artist) {
             if (!confirm(`Are you sure you want to delete ${artist} - ${title}?`)) return;
 
@@ -124,6 +133,18 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
+        <!-- Favorites Section -->
+        <div class="favorites-section" v-if="ready && favoritedTabs.length > 0">
+            <TabItem
+                v-for="tab in favoritedTabs"
+                :key="`fav-${tab.id}`"
+                :tab="tab"
+                :show-artist="true"
+                @delete="deleteTab"
+                @favToggled="handleFavToggled"
+            />
+        </div>
+
         <div class="search-section mb-4 mt-5 pe-3 ps-3" v-if="ready">
             <div class="input-group">
                 <span class="input-group-text">
@@ -181,6 +202,7 @@ export default defineComponent({
                     :tab="tab"
                     :show-artist="false"
                     @delete="deleteTab"
+                    @favToggled="handleFavToggled"
                 />
             </div>
         </template>
@@ -192,6 +214,7 @@ export default defineComponent({
                 :tab="tab"
                 :show-artist="true"
                 @delete="deleteTab"
+                @favToggled="handleFavToggled"
             />
         </template>
 
