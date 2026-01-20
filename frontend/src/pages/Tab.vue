@@ -495,8 +495,8 @@ export default defineComponent({
                         enableAnimatedBeatCursor: this.animatedCursor,
                         enableUserInteraction: true,
                         soundFont: "/soundfont/sonivox.sf2",
-                        //nativeBrowserSmoothScroll: true,
-                        scrollMode: this.scrollMode,
+                        // Avoid initial scroll jump in scroll mode, which make it unable to see the title
+                        scrollMode: ScrollMode.Off,
                         scrollOffsetY: -50,
                         playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
                     },
