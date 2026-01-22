@@ -30,7 +30,7 @@ const simpleSync = z.number();
 const advancedSync = z.string();
 
 export const YoutubeSchema = z.object({
-    videoID: videoID,
+    videoID,
     syncMethod: syncMethod.default("simple"),
     simpleSync: simpleSync.default(0),
     advancedSync: advancedSync.default(""),
