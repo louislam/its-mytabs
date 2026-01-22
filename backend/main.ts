@@ -213,7 +213,7 @@ export async function main() {
 
             const config = await getConfigJSON(id);
             if (!config) {
-                throw new Error("Tab not found");
+                throw new Error("Config.json not found");
             }
 
             if (!config.tab.public) {
@@ -244,9 +244,6 @@ export async function main() {
             const data = UpdateTabInfoSchema.parse(body);
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
             await updateTab(tab, data);
             return c.json({
                 ok: true,
@@ -266,9 +263,6 @@ export async function main() {
             const data = UpdateTabFavSchema.parse(body);
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
             await updateTabFav(tab, data);
             return c.json({
                 ok: true,
@@ -285,9 +279,6 @@ export async function main() {
             const id = c.req.param("id");
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
 
             const form = await c.req.formData();
             const file = form.get("file");
@@ -341,9 +332,6 @@ export async function main() {
             const id = c.req.param("id");
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
 
             const form = await c.req.formData();
             const file = form.get("file");
@@ -383,9 +371,6 @@ export async function main() {
             const data = SyncRequestSchema.parse(body);
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
             const filename = c.req.param("filename");
 
             await updateAudio(tab, filename, data);
@@ -404,9 +389,6 @@ export async function main() {
             await checkLogin(c);
             const id = c.req.param("id");
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
             const filename = c.req.param("filename");
             await removeAudio(tab, filename);
 
@@ -423,9 +405,6 @@ export async function main() {
         try {
             const id = c.req.param("id");
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
             if (!tab.public) {
                 await checkLogin(c);
             }
@@ -549,9 +528,6 @@ export async function main() {
             }
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
             const filePath = getTabFilePath(tab);
 
             // Check if file exists
@@ -582,9 +558,6 @@ export async function main() {
             const id = c.req.param("id");
 
             const tab = await getTab(id);
-            if (!tab) {
-                throw new Error("Tab not found");
-            }
 
             if (!tab.public) {
                 await checkLogin(c);

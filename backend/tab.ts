@@ -114,7 +114,7 @@ export async function getAllTabs(): Promise<TabInfo[]> {
         }
 
         const id = entry.name;
-        const tab = await getTab(id);
+        const tab = await getOrCreateTab(id);
 
         if (tab) {
             tabs.push(tab);
@@ -169,8 +169,7 @@ export async function writeTabInfo(tab: TabInfo) {
     await writeConfigJSON(tab.id, config);
 }
 
-export async function getTab(id: string): Promise<TabInfo | null> {
-    const dirPath = path.join(tabDir, id);
+export async function getTab(id: string): Promise<TabInfo> {
     const configPath = getConfigJSONPath(id);
 
     // If config.json exists, read it
@@ -178,10 +177,22 @@ export async function getTab(id: string): Promise<TabInfo | null> {
         const config = await getConfigJSON(id, true);
         if (config) {
             return config.tab;
+        } else {
+            throw new Error("Failed to parse config.json");
         }
-        // config.json exists but failed to parse, return null
-        return null;
     }
+
+    throw new Error("Tab not found");
+}
+
+export async function getOrCreateTab(id: string): Promise<TabInfo | null> {
+    const dirPath = path.join(tabDir, id);
+
+   try {
+        return await getTab(id);
+   } catch {
+        // Continue to create
+   }
 
     // No config.json, try to find a valid tab file and create config.json
     const tabFile = await findTabFile(dirPath);
