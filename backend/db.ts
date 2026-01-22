@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import * as path from "@std/path";
 import { dataDir, getSourceDir, isDemoMode, tabDir } from "./util.ts";
 import { getNextTabID } from "./tab.ts";
-import { AudioDataSchema, ConfigJsonSchema, TabInfoSchema, YoutubeSchema } from "./zod.ts";
+import { AudioDataSchema, ConfigJSONSchema, TabInfoSchema, YoutubeSchema } from "./zod.ts";
 
 let dbPath = path.join(dataDir, "config.db");
 
@@ -47,7 +47,7 @@ export async function addDemoTab() {
         await Deno.copyFile(demoTabPath, path.join(dir, "tab.gp"));
 
         // Create config.json with the new structure
-        const configJson = ConfigJsonSchema.parse({
+        const configJson = ConfigJSONSchema.parse({
             tab: {
                 id: id.toString(),
                 title: "Hare no Hi ni (Bass Only)",
@@ -65,7 +65,7 @@ export async function addDemoTab() {
                     syncMethod: "simple",
                     simpleSync: 2900,
                     advancedSync: "",
-                }
+                },
             ],
         });
 
@@ -144,7 +144,7 @@ export async function migrate() {
             }
 
             // Create config.json
-            const configJson = ConfigJsonSchema.parse({
+            const configJson = ConfigJSONSchema.parse({
                 tab,
                 audio: audioList,
                 youtube: youtubeList,
@@ -163,7 +163,6 @@ export async function migrate() {
             }
 
             migratedCount++;
-
         } catch (e) {
             console.error(`Failed to migrate tab entry:`, entry.key, e);
         }

@@ -70,9 +70,9 @@ export const AudioDataSchema = z.object({
 
 export type AudioData = z.infer<typeof AudioDataSchema>;
 
-export const ConfigJsonSchema = z.object({
+export const ConfigJSONSchema = z.object({
     tab: TabInfoSchema,
     audio: z.array(AudioDataSchema).default([]),
     youtube: z.array(YoutubeSchema).default([]),
 });
-export type ConfigJson = z.infer<typeof ConfigJsonSchema>;
+export type ConfigJSON = z.infer<typeof ConfigJSONSchema>;

@@ -1,10 +1,10 @@
 import { flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { AudioData, AudioDataSchema, ConfigJson, ConfigJsonSchema, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
+import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
-import { supportedFormatList, supportedAudioFormatList } from "./common.ts";
+import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 
 /**
  * Get the config.json path for a tab
@@ -64,14 +64,14 @@ async function findAudioFiles(dirPath: string): Promise<string[]> {
  * Read the full config.json file
  * Audio list is populated from actual files in the directory, merged with stored metadata
  */
-export async function getConfigJSON(id: string, excludeAudio = false): Promise<ConfigJson | null> {
+export async function getConfigJSON(id: string, excludeAudio = false): Promise<ConfigJSON | null> {
     const configPath = getConfigJSONPath(id);
 
     if (await fs.exists(configPath)) {
         try {
             const content = await Deno.readTextFile(configPath);
             const data = JSON.parse(content);
-            const config = ConfigJsonSchema.parse(data);
+            const config = ConfigJSONSchema.parse(data);
 
             // Scan directory for audio files and merge with stored metadata
             if (!excludeAudio) {
@@ -98,7 +98,7 @@ export async function getConfigJSON(id: string, excludeAudio = false): Promise<C
 /**
  * Write the full config.json file
  */
-async function writeConfigJson(id: string, config: ConfigJson): Promise<void> {
+async function writeConfigJSON(id: string, config: ConfigJSON): Promise<void> {
     const configPath = getConfigJSONPath(id);
     await Deno.writeTextFile(configPath, JSON.stringify(config, null, 2));
 }
@@ -108,7 +108,6 @@ export async function getAllTabs(): Promise<TabInfo[]> {
 
     // Scan the tabs folder
     for await (const entry of Deno.readDir(tabDir)) {
-
         // Only process directories, ignore "deleted" folder
         if (!entry.isDirectory || entry.name === "deleted") {
             continue;
@@ -150,13 +149,13 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
         fav: false,
     });
 
-    const info: ConfigJson = {
+    const info: ConfigJSON = {
         tab,
         audio: [],
         youtube: [],
     };
 
-    await writeConfigJson(id.toString(), info);
+    await writeConfigJSON(id.toString(), info);
 
     return id;
 }
@@ -167,7 +166,7 @@ export async function writeTabInfo(tab: TabInfo) {
         throw new Error("Tab not found");
     }
     config.tab = tab;
-    await writeConfigJson(tab.id, config);
+    await writeConfigJSON(tab.id, config);
 }
 
 export async function getTab(id: string): Promise<TabInfo | null> {
@@ -203,13 +202,13 @@ export async function getTab(id: string): Promise<TabInfo | null> {
         fav: false,
     });
 
-    const newConfig: ConfigJson = {
+    const newConfig: ConfigJSON = {
         tab,
         audio: [],
         youtube: [],
     };
 
-    await writeConfigJson(id, newConfig);
+    await writeConfigJSON(id, newConfig);
     return tab;
 }
 
@@ -335,7 +334,7 @@ export async function removeAudio(tab: TabInfo, filename: string) {
     const config = await getConfigJSON(tab.id);
     if (config) {
         config.audio = config.audio.filter((a: AudioData) => a.filename !== filename);
-        await writeConfigJson(tab.id, config);
+        await writeConfigJSON(tab.id, config);
     }
 }
 
@@ -361,7 +360,7 @@ export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeS
         config.audio.push(audioData);
     }
 
-    await writeConfigJson(tab.id, config);
+    await writeConfigJSON(tab.id, config);
 }
 
 export async function addYoutube(id: string, videoID: string) {
@@ -377,7 +376,7 @@ export async function addYoutube(id: string, videoID: string) {
 
     config.youtube.push(YoutubeSchema.parse({ videoID }));
 
-    await writeConfigJson(id, config);
+    await writeConfigJSON(id, config);
 }
 
 export async function updateYoutube(id: string, videoID: string, data: YoutubeSaveRequest) {
@@ -395,7 +394,7 @@ export async function updateYoutube(id: string, videoID: string, data: YoutubeSa
         info.youtube.push(youtubeData);
     }
 
-    await writeConfigJson(id, info);
+    await writeConfigJSON(id, info);
 }
 
 export async function removeYoutube(id: string, videoID: string) {
@@ -405,5 +404,5 @@ export async function removeYoutube(id: string, videoID: string) {
     }
 
     info.youtube = info.youtube.filter((y: Youtube) => y.videoID !== videoID);
-    await writeConfigJson(id, info);
+    await writeConfigJSON(id, info);
 }
