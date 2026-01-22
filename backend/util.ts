@@ -153,7 +153,7 @@ export function checkAudioFormat(filename: string): void {
 
 export function checkFilename(filename: string): void {
     // No path traversal
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    if (filename.includes("..") || filename.includes("/") || filename.includes("\\") || filename.trim() === "") {
         throw new Error("Invalid filename");
     }
 }
