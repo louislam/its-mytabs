@@ -16,7 +16,7 @@ import {
     createTab,
     deleteTab,
     getAllTabs,
-    getConfigJson,
+    getConfigJSON,
     getTab,
     getTabFilePath,
     getTabFullFilePath,
@@ -211,7 +211,7 @@ export async function main() {
         try {
             const id = c.req.param("id");
 
-            const config = await getConfigJson(id);
+            const config = await getConfigJSON(id);
             if (!config) {
                 throw new Error("Tab not found");
             }

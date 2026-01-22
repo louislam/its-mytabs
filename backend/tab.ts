@@ -9,7 +9,7 @@ import { supportedFormatList, supportedAudioFormatList } from "./common.ts";
 /**
  * Get the config.json path for a tab
  */
-function getConfigJsonPath(id: string): string {
+function getConfigJSONPath(id: string): string {
     return path.join(tabDir, id, "config.json");
 }
 
@@ -17,7 +17,7 @@ function getConfigJsonPath(id: string): string {
  * Check if a tab exists (by checking if config.json exists)
  */
 export async function tabExists(id: string): Promise<boolean> {
-    const configPath = getConfigJsonPath(id);
+    const configPath = getConfigJSONPath(id);
     return await fs.exists(configPath);
 }
 
@@ -64,8 +64,8 @@ async function findAudioFiles(dirPath: string): Promise<string[]> {
  * Read the full config.json file
  * Audio list is populated from actual files in the directory, merged with stored metadata
  */
-export async function getConfigJson(id: string, excludeAudio = false): Promise<ConfigJson | null> {
-    const configPath = getConfigJsonPath(id);
+export async function getConfigJSON(id: string, excludeAudio = false): Promise<ConfigJson | null> {
+    const configPath = getConfigJSONPath(id);
 
     if (await fs.exists(configPath)) {
         try {
@@ -99,7 +99,7 @@ export async function getConfigJson(id: string, excludeAudio = false): Promise<C
  * Write the full config.json file
  */
 async function writeConfigJson(id: string, config: ConfigJson): Promise<void> {
-    const configPath = getConfigJsonPath(id);
+    const configPath = getConfigJSONPath(id);
     await Deno.writeTextFile(configPath, JSON.stringify(config, null, 2));
 }
 
@@ -162,7 +162,7 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
 }
 
 export async function writeTabInfo(tab: TabInfo) {
-    const config = await getConfigJson(tab.id, true);
+    const config = await getConfigJSON(tab.id, true);
     if (!config) {
         throw new Error("Tab not found");
     }
@@ -172,11 +172,11 @@ export async function writeTabInfo(tab: TabInfo) {
 
 export async function getTab(id: string): Promise<TabInfo | null> {
     const dirPath = path.join(tabDir, id);
-    const configPath = getConfigJsonPath(id);
+    const configPath = getConfigJSONPath(id);
 
     // If config.json exists, read it
     if (await fs.exists(configPath)) {
-        const config = await getConfigJson(id, true);
+        const config = await getConfigJSON(id, true);
         if (config) {
             return config.tab;
         }
@@ -332,7 +332,7 @@ export async function removeAudio(tab: TabInfo, filename: string) {
     await Deno.remove(filePath);
 
     // Remove metadata from config.json if exists
-    const config = await getConfigJson(tab.id);
+    const config = await getConfigJSON(tab.id);
     if (config) {
         config.audio = config.audio.filter((a: AudioData) => a.filename !== filename);
         await writeConfigJson(tab.id, config);
@@ -346,7 +346,7 @@ export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeS
         throw new Error("Audio file not found");
     }
 
-    const config = await getConfigJson(tab.id, true);
+    const config = await getConfigJSON(tab.id, true);
     if (!config) {
         throw new Error("Tab not found");
     }
@@ -365,7 +365,7 @@ export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeS
 }
 
 export async function addYoutube(id: string, videoID: string) {
-    const config = await getConfigJson(id, true);
+    const config = await getConfigJSON(id, true);
     if (!config) {
         throw new Error("Tab not found");
     }
@@ -381,7 +381,7 @@ export async function addYoutube(id: string, videoID: string) {
 }
 
 export async function updateYoutube(id: string, videoID: string, data: YoutubeSaveRequest) {
-    const info = await getConfigJson(id, true);
+    const info = await getConfigJSON(id, true);
     if (!info) {
         throw new Error("Tab not found");
     }
@@ -399,7 +399,7 @@ export async function updateYoutube(id: string, videoID: string, data: YoutubeSa
 }
 
 export async function removeYoutube(id: string, videoID: string) {
-    const info = await getConfigJson(id, true);
+    const info = await getConfigJSON(id, true);
     if (!info) {
         throw new Error("Tab not found");
     }
