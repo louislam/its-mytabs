@@ -5,6 +5,7 @@ import childProcess from "node:child_process";
 import * as jsonc from "@std/jsonc";
 import { FLACDecoder } from "@wasm-audio-decoders/flac";
 import { createOggEncoder } from "wasm-media-encoders";
+import { supportedAudioFormatList } from "./common.ts";
 
 const denoJSONCPath = path.join(getSourceDir(), "./deno.jsonc");
 export const denoJSONC = jsonc.parse(await Deno.readTextFile(denoJSONCPath));
@@ -137,5 +138,22 @@ export async function flacToOgg(audioFileData: Uint8Array) {
     } finally {
         // Always free decoder resources
         decoder.free();
+    }
+}
+
+/**
+ * Check if filename has supported audio format, throw error if not
+ */
+export function checkAudioFormat(filename: string): void {
+    const ext = path.extname(filename).slice(1).toLowerCase();
+    if (!supportedAudioFormatList.includes(ext)) {
+        throw new Error("Unsupported audio format");
+    }
+}
+
+export function checkFilename(filename: string): void {
+    // No path traversal
+    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+        throw new Error("Invalid filename");
     }
 }

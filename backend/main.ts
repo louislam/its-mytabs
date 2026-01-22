@@ -6,7 +6,7 @@ import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchem
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, checkFilename, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -409,7 +409,8 @@ export async function main() {
                 await checkLogin(c);
             }
 
-            const filename = sanitize(c.req.param("filename"));
+            const filename = c.req.param("filename");
+            checkFilename(filename);
             const filePath = path.join(tabDir, id, filename);
 
             // Check if file exists

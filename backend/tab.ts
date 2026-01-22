@@ -1,4 +1,4 @@
-import { flacToOgg, tabDir } from "./util.ts";
+import { checkAudioFormat, checkFilename, flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
 import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
@@ -10,6 +10,7 @@ import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
  * Get the config.json path for a tab
  */
 function getConfigJSONPath(id: string): string {
+    checkFilename(id);
     return path.join(tabDir, id, "config.json");
 }
 
@@ -188,11 +189,11 @@ export async function getTab(id: string): Promise<TabInfo> {
 export async function getOrCreateTab(id: string): Promise<TabInfo | null> {
     const dirPath = path.join(tabDir, id);
 
-   try {
+    try {
         return await getTab(id);
-   } catch {
+    } catch {
         // Continue to create
-   }
+    }
 
     // No config.json, try to find a valid tab file and create config.json
     const tabFile = await findTabFile(dirPath);
@@ -332,6 +333,9 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
 }
 
 export async function removeAudio(tab: TabInfo, filename: string) {
+    checkAudioFormat(filename);
+    checkFilename(filename);
+
     // Check if file exists
     const filePath = path.join(tabDir, tab.id.toString(), filename);
     if (!await fs.exists(filePath)) {
@@ -350,6 +354,9 @@ export async function removeAudio(tab: TabInfo, filename: string) {
 }
 
 export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeSaveRequest) {
+    checkAudioFormat(filename);
+    checkFilename(filename);
+
     // Check if file exists
     const filePath = path.join(tabDir, tab.id.toString(), filename);
     if (!await fs.exists(filePath)) {
