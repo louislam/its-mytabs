@@ -48,7 +48,8 @@
     // Lint
     "lint": {
         "exclude": [
-            "frontend/"
+            "frontend/",
+            "extra/"
         ],
         "rules": {
             "tags": ["recommended"],
