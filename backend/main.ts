@@ -6,7 +6,7 @@ import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchem
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, checkFilename, dataDir, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, checkFilename, dataDir, devOriginList, getFrontendDir, getSourceDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -24,6 +24,7 @@ import {
     removeYoutube,
     replaceTab,
     updateAudio,
+    updateConfigJSON,
     updateTab,
     updateTabFav,
     updateYoutube,
@@ -190,6 +191,42 @@ export async function main() {
                 ok: true,
                 id,
             });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Create Empty Tab
+    app.post("/api/new-tab/template/:type", async (c) => {
+        try {
+            await checkLogin(c);
+
+            const templateTypeList: Record<string, string> = {
+                bass: "./extra/empty-bass.gp",
+                guitar: "./extra/empty-guitar.gp",
+            };
+
+            const type = c.req.param("type");
+            const srcDir = getSourceDir();
+            const rel = templateTypeList[type];
+            if (!rel) {
+                return c.json({ ok: false, msg: "Template not found" }, 400);
+            }
+
+            const templatePath = path.join(srcDir, rel);
+            const bytes = await Deno.readFile(templatePath);
+            const ext = templatePath.split(".").pop()?.toLowerCase() || "gp";
+            const title = "Empty Tab";
+            const artist = "";
+
+            const id = await createTab(bytes, ext, title, artist, path.basename(templatePath));
+
+            // Append the id to the title
+            await updateConfigJSON(id, async (config) => {
+                config.tab.title += " #" + id;
+            });
+
+            return c.json({ ok: true, id });
         } catch (e) {
             return generalError(c, e);
         }
