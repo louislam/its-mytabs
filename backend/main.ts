@@ -222,7 +222,7 @@ export async function main() {
             const id = await createTab(bytes, ext, title, artist, path.basename(templatePath));
 
             // Append the id to the title
-            await updateConfigJSON(id, (config) => {
+            await updateConfigJSON(id, async (config) => {
                 config.tab.title += " #" + id;
             });
 
