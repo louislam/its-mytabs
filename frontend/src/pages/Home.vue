@@ -1,7 +1,7 @@
 <script>
 import { defineComponent } from "vue";
 import { notify } from "@kyvg/vue3-notification";
-import { baseURL } from "../app.js";
+import { baseURL, getSetting } from "../app.js";
 import { isLoggedIn } from "../auth-client.js";
 import TabItem from "../components/TabItem.vue";
 
@@ -16,12 +16,13 @@ export default defineComponent({
             ready: false,
             isLoggedIn: false,
             searchQuery: "",
-            groupByArtist: false,
+            setting: {},
         };
     },
 
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
+        this.setting = getSetting();
 
         if (!this.isLoggedIn) {
             this.$router.push("/login");
@@ -62,8 +63,6 @@ export default defineComponent({
         },
 
         groupedTabs() {
-            if (!this.groupByArtist) return null;
-
             const groups = {};
 
             for (const tab of this.filteredTabList) {
@@ -145,7 +144,7 @@ export default defineComponent({
             />
         </div>
 
-        <div class="search-section mb-4 mt-5 pe-3 ps-3" v-if="ready">
+        <div class="search-section mb-3 mt-4 pe-3 ps-3" v-if="ready">
             <div class="input-group">
                 <span class="input-group-text">
                     <font-awesome-icon icon="magnifying-glass" />
@@ -170,19 +169,6 @@ export default defineComponent({
                     ✕
                 </button>
             </div>
-
-            <!-- Group toggle -->
-            <div class="form-check mt-4">
-                <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="groupArtist"
-                    v-model="groupByArtist"
-                >
-                <label class="form-check-label" for="groupArtist">
-                    Group by artist
-                </label>
-            </div>
         </div>
 
         <div class="mb-4 ms-3" v-if="ready">
@@ -192,7 +178,7 @@ export default defineComponent({
             </span>
         </div>
 
-        <template v-if="groupByArtist && groupedTabs">
+        <template v-if="this.setting.groupByArtist && groupedTabs">
             <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
                 <h4>{{ group.displayName }}</h4>
 
