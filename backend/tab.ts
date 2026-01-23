@@ -76,6 +76,9 @@ export async function getConfigJSON(id: string, excludeAudio = false): Promise<C
             const data = JSON.parse(content);
             const config = ConfigJSONSchema.parse(data);
 
+            // Override the id, in case the folder name changed
+            config.tab.id = id;
+
             // Scan directory for audio files and merge with stored metadata
             if (!excludeAudio) {
                 const dirPath = path.join(tabDir, id);
@@ -177,10 +180,6 @@ export async function getTab(id: string): Promise<TabInfo> {
     if (await fs.exists(configPath)) {
         const config = await getConfigJSON(id, true);
         if (config) {
-
-            // Override the id, in case the folder name changed
-            config.tab.id = id;
-
             return config.tab;
         } else {
             throw new Error("Failed to parse config.json");
