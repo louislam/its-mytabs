@@ -1,6 +1,6 @@
 // "deno task test" to run this test
 
-import { assertEquals, assertExists, assertThrows, assertRejects } from "jsr:@std/assert@^1.0.17";
+import { assertEquals, assertExists, assertRejects, assertThrows } from "jsr:@std/assert@^1.0.17";
 import * as fs from "@std/fs";
 
 // Set up temporary directory for tests
@@ -30,13 +30,21 @@ Deno.test("createTab and getTab", async () => {
 });
 
 Deno.test("getTab - path traversal protection", async () => {
-    assertRejects(async () => {
-        await getTab("../invalid");
-    }, Error, "Invalid filename");
+    assertRejects(
+        async () => {
+            await getTab("../invalid");
+        },
+        Error,
+        "Invalid filename",
+    );
 
-    assertRejects(async () => {
-        await getTab("invalid/../name");
-    }, Error, "Invalid filename");
+    assertRejects(
+        async () => {
+            await getTab("invalid/../name");
+        },
+        Error,
+        "Invalid filename",
+    );
 });
 
 Deno.test("tabExists - existing tab", async () => {
