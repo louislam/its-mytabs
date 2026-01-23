@@ -144,7 +144,7 @@ export default defineComponent({
             />
         </div>
 
-        <div class="search-section mb-4 mt-5 pe-3 ps-3" v-if="ready">
+        <div class="search-section mb-3 mt-4 pe-3 ps-3" v-if="ready">
             <div class="input-group">
                 <span class="input-group-text">
                     <font-awesome-icon icon="magnifying-glass" />
