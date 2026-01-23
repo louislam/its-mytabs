@@ -206,27 +206,16 @@ export async function main() {
                 guitar: "./extra/empty-guitar.gp",
             };
 
-            const t = c.req.param("type");
-            if (t !== "bass" && t !== "guitar") {
-                return c.json({ ok: false, msg: "Invalid template type" }, 400);
-            }
-
-            // Resolve template path from the templateTypeList so new types are easy to add
+            const type = c.req.param("type");
             const srcDir = getSourceDir();
-            const rel = templateTypeList[t];
+            const rel = templateTypeList[type];
             if (!rel) {
-                return c.json({ ok: false, msg: "Template not configured" }, 400);
+                return c.json({ ok: false, msg: "Template not found" }, 400);
             }
 
             const templatePath = path.join(srcDir, rel);
-            if (!(await fs.exists(templatePath))) {
-                throw new Error("Template file not found");
-            }
-
             const bytes = await Deno.readFile(templatePath);
             const ext = templatePath.split(".").pop()?.toLowerCase() || "gp";
-
-            // Default title/artist
             const title = "Empty Tab";
             const artist = "";
 
