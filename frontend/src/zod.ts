@@ -5,6 +5,6 @@ export const SettingSchema = z.object({
     scoreColor: z.enum(["light", "dark"]).default("dark"),
     noteColor: z.enum(["rocksmith", "louis-bass-v", "none"]).default("rocksmith"),
     cursor: z.enum(["animated", "instant", "bar", "invisible"]).default("animated"),
-    groupByArtist: z.enum(["true", "false"]).default("false"),
+    groupByArtist: z.boolean().default(false),
 });
 export type Setting = z.infer<typeof SettingSchema>;

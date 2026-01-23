@@ -11,7 +11,7 @@ export default defineComponent({
                 noteColor: "",
                 cursor: "",
                 scoreStyle: "",
-                groupByArtist: "",
+                groupByArtist: false,
             },
         };
     },
@@ -57,8 +57,8 @@ export default defineComponent({
         <div class="mb-3">
             <label for="groupByArtist" class="form-label">Group tabs by Artist</label>
             <select id="groupByArtist" class="form-select" v-model="setting.groupByArtist">
-                <option value="false">No</option>
-                <option value="true">Yes</option>
+                <option :value="false">No</option>
+                <option :value="true">Yes</option>
             </select>
         </div>
 
