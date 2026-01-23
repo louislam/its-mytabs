@@ -14,7 +14,7 @@ RUN deno install && \
     deno task build
 
 # Main image
-FROM denoland/deno:debian-2.4.4 AS release
+FROM denoland/deno:debian-2.6.6 AS release
 WORKDIR /app
 
 EXPOSE 47777
