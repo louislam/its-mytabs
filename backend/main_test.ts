@@ -39,7 +39,7 @@ Deno.test("private tab endpoints require authentication (HTTP)", async () => {
     assertEquals(config!.tab.public, false);
 
     // 1) GET /api/tab/:id should require auth -> returns 400 with msg "Not logged in"
-    const res1 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: 'GET' });
+    const res1 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: "GET" });
     const j1 = await res1.json();
     assertEquals(res1.status, 400);
     assertEquals(j1.ok, false);
@@ -48,17 +48,21 @@ Deno.test("private tab endpoints require authentication (HTTP)", async () => {
     // Add an audio file to the tab directory directly
     const { getTab } = await import("./tab.ts");
     const tab = await getTab(id);
-    await addAudio(tab, new Uint8Array([1,2,3]), "a.mp3");
+    await addAudio(tab, new Uint8Array([1, 2, 3]), "a.mp3");
 
-    const res2 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent('a.mp3')}`, { method: 'GET' });
+    const res2 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent("a.mp3")}`, { method: "GET" });
     const j2text = await res2.text();
     // Should be JSON error body
     let j2: unknown = {};
-    try { j2 = JSON.parse(j2text); } catch { j2 = null; }
+    try {
+        j2 = JSON.parse(j2text);
+    } catch {
+        j2 = null;
+    }
     assertEquals(res2.status, 400);
 
     // 3) GET /api/tab/:id/file should require auth for private tab
-    const res3 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file`, { method: 'GET' });
+    const res3 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file`, { method: "GET" });
     const j3 = await res3.json();
     assertEquals(res3.status, 400);
 });
@@ -78,30 +82,29 @@ Deno.test("public tab endpoints accessible (HTTP)", async () => {
     assertEquals(config!.tab.public, true);
 
     // GET tab info should be accessible without auth
-    const res1 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: 'GET' });
+    const res1 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: "GET" });
     const j1 = await res1.json();
     assertEquals(res1.status, 200);
     assertEquals(j1.ok, true);
 
-
     // Add audio and request it without auth
     const { getTab } = await import("./tab.ts");
     const tab = await getTab(id);
-    await addAudio(tab, new Uint8Array([9,9,9]), "pa.mp3");
+    await addAudio(tab, new Uint8Array([9, 9, 9]), "pa.mp3");
 
-    const res2 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent('pa.mp3')}`, { method: 'GET' });
+    const res2 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent("pa.mp3")}`, { method: "GET" });
     assertEquals(res2.status, 200);
     await res2.body?.cancel();
 
     // Obtain temp token for file access (public tab allows this without auth)
-    const resToken = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/temp-token`, { method: 'GET' });
+    const resToken = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/temp-token`, { method: "GET" });
     const tokenJson = await resToken.json();
     assertEquals(resToken.status, 200);
     assertEquals(!!tokenJson.token, true);
     const token = tokenJson.token;
 
     // Use temp token to fetch tab file
-    const resFile = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file?tempToken=${encodeURIComponent(token)}`, { method: 'GET' });
+    const resFile = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file?tempToken=${encodeURIComponent(token)}`, { method: "GET" });
     assertEquals(resFile.status, 200);
     // close it
     await resFile.body?.cancel();
@@ -137,7 +140,7 @@ Deno.test("logged-in user can access private resources (HTTP)", async () => {
     const cookiePair = setCookie!.split(";", 1)[0];
 
     // Create a private tab
-    const tabData = new Uint8Array([240,241,242]);
+    const tabData = new Uint8Array([240, 241, 242]);
     const id = await createTab(tabData, "gp", "Private For Auth", "Auth Artist", "auth.gp");
 
     const config = await getConfigJSON(id);
@@ -146,7 +149,7 @@ Deno.test("logged-in user can access private resources (HTTP)", async () => {
 
     // Access protected /api/tab/:id with cookie
     const resTab = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, {
-        method: 'GET',
+        method: "GET",
         headers: { Cookie: cookiePair },
     });
     assertEquals(resTab.status, 200);
@@ -156,10 +159,10 @@ Deno.test("logged-in user can access private resources (HTTP)", async () => {
     // Add audio and request it with cookie
     const { getTab } = await import("./tab.ts");
     const tab = await getTab(id);
-    await addAudio(tab, new Uint8Array([5,5,5]), "auth.mp3");
+    await addAudio(tab, new Uint8Array([5, 5, 5]), "auth.mp3");
 
-    const resAudio = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent('auth.mp3')}`, {
-        method: 'GET',
+    const resAudio = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent("auth.mp3")}`, {
+        method: "GET",
         headers: { Cookie: cookiePair },
     });
     assertEquals(resAudio.status, 200);
@@ -167,7 +170,7 @@ Deno.test("logged-in user can access private resources (HTTP)", async () => {
 
     // Fetch the tab file with cookie
     const resFile = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file`, {
-        method: 'GET',
+        method: "GET",
         headers: { Cookie: cookiePair },
     });
     assertEquals(resFile.status, 200);

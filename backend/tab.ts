@@ -177,6 +177,10 @@ export async function getTab(id: string): Promise<TabInfo> {
     if (await fs.exists(configPath)) {
         const config = await getConfigJSON(id, true);
         if (config) {
+
+            // Override the id, in case the folder name changed
+            config.tab.id = id;
+
             return config.tab;
         } else {
             throw new Error("Failed to parse config.json");
