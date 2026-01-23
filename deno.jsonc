@@ -15,10 +15,11 @@
         "mpchc-controller": "deno run --allow-all extra/mpchc-controller.ts",
 
         // Dev
-        "dev": "deno run -A npm:concurrently -k -r \"deno run -A npm:wait-on tcp:47777 && deno task frontend-dev\" \"deno task backend-dev\"",
+        "dev": "deno task build-frontend && deno run -A npm:concurrently -k -r \"deno run -A npm:wait-on tcp:47777 && deno task frontend-dev\" \"deno task backend-dev\"",
         "frontend-dev": "cd frontend && deno run dev",
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
         "install-frontend-deps": "cd frontend && deno install",
+        "test": "deno test --allow-all",
 
         // Build
         "build-binary": "deno task build-frontend && deno run --allow-all extra/build-binary.ts",
@@ -46,6 +47,10 @@
 
     // Lint
     "lint": {
+        "exclude": [
+            "frontend/",
+            "extra/"
+        ],
         "rules": {
             "tags": ["recommended"],
             "exclude": [

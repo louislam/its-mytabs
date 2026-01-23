@@ -1,9 +1,138 @@
-import { flacToOgg, tabDir } from "./util.ts";
+import { checkAudioFormat, checkFilename, flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { AudioData, AudioDataSchema, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
+import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, SyncRequest, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
+import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
+
+const updateQueues = new Map<string, Promise<void>>();
+
+/**
+ * Get the config.json path for a tab
+ */
+export function getConfigJSONPath(id: string): string {
+    checkFilename(id);
+    return path.join(tabDir, id, "config.json");
+}
+
+/**
+ * Check if a tab exists (by checking if config.json exists)
+ */
+export async function tabExists(id: string): Promise<boolean> {
+    const configPath = getConfigJSONPath(id);
+    return await fs.exists(configPath);
+}
+
+/**
+ * Check if a tab exists, throw error if not
+ */
+export async function checkTabExists(id: string): Promise<void> {
+    if (!await tabExists(id)) {
+        throw new Error("Tab not found");
+    }
+}
+
+/**
+ * Find a valid tab file in the directory
+ * Returns the filename if found, null otherwise
+ */
+async function findTabFile(dirPath: string): Promise<string | null> {
+    for await (const entry of Deno.readDir(dirPath)) {
+        if (!entry.isFile) continue;
+        const ext = path.extname(entry.name).slice(1).toLowerCase();
+        if (supportedFormatList.includes(ext)) {
+            return entry.name;
+        }
+    }
+    return null;
+}
+
+/**
+ * Find all audio files in the directory
+ */
+async function findAudioFiles(dirPath: string): Promise<string[]> {
+    const audioFiles: string[] = [];
+    for await (const entry of Deno.readDir(dirPath)) {
+        if (!entry.isFile) continue;
+        const ext = path.extname(entry.name).slice(1).toLowerCase();
+        if (supportedAudioFormatList.includes(ext)) {
+            audioFiles.push(entry.name);
+        }
+    }
+    return audioFiles;
+}
+
+/**
+ * Read the full config.json file
+ * Audio list is populated from actual files in the directory, merged with stored metadata
+ */
+export async function getConfigJSON(id: string, excludeAudio = false): Promise<ConfigJSON | null> {
+    const configPath = getConfigJSONPath(id);
+
+    if (await fs.exists(configPath)) {
+        try {
+            const content = await Deno.readTextFile(configPath);
+            const data = JSON.parse(content);
+            const config = ConfigJSONSchema.parse(data);
+
+            // Override the id, in case the folder name changed
+            config.tab.id = id;
+
+            // Scan directory for audio files and merge with stored metadata
+            if (!excludeAudio) {
+                const dirPath = path.join(tabDir, id);
+                const audioFiles = await findAudioFiles(dirPath);
+                config.audio = audioFiles.map((filename) => {
+                    const meta = config.audio.find((a: AudioData) => a.filename === filename);
+                    if (meta) {
+                        return meta;
+                    }
+                    return AudioDataSchema.parse({ filename });
+                });
+            }
+
+            return config;
+        } catch (e) {
+            console.error(`Failed to read config.json for tab ${id}:`, e);
+            return null;
+        }
+    }
+    return null;
+}
+
+/**
+ * Write the full config.json file
+ * Directly overwrites existing file, you should use updateConfigJSON for safe updates
+ */
+async function writeConfigJSON(id: string, config: ConfigJSON): Promise<void> {
+    const configPath = getConfigJSONPath(id);
+    await Deno.writeTextFile(configPath, JSON.stringify(config, null, 2));
+}
+
+export async function getAllTabs(): Promise<TabInfo[]> {
+    const tabs: TabInfo[] = [];
+
+    // Scan the tabs folder
+    for await (const entry of Deno.readDir(tabDir)) {
+        // Only process directories, ignore "deleted" folder
+        if (!entry.isDirectory || entry.name === "deleted") {
+            continue;
+        }
+
+        const id = entry.name;
+        const tab = await getOrCreateTab(id);
+
+        if (tab) {
+            tabs.push(tab);
+        }
+    }
+
+    // Sort by createdAt (newest first)
+    tabs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return tabs;
+}
 
 export async function createTab(tabFileData: Uint8Array, ext: string, title: string, artist: string, originalFilename: string) {
     const id = await getNextTabID();
@@ -15,9 +144,9 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
     const filename = "tab." + ext;
     await Deno.writeFile(path.join(dir, filename), tabFileData);
 
-    // Create info.json
-    const info: TabInfo = {
-        id,
+    // Create config.json
+    const tab: TabInfo = TabInfoSchema.parse({
+        id: id.toString(),
         title,
         artist,
         filename,
@@ -25,11 +154,81 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
         createdAt: new Date().toISOString(),
         public: false,
         fav: false,
+    });
+
+    const info: ConfigJSON = {
+        tab,
+        audio: [],
+        youtube: [],
     };
 
-    await kv.set(["tab", id], info);
+    await writeConfigJSON(id.toString(), info);
 
-    return id;
+    return id.toString();
+}
+
+export async function writeTabInfo(tab: TabInfo) {
+    await updateConfigJSON(tab.id, async (config) => {
+        config.tab = tab;
+    });
+}
+
+export async function getTab(id: string): Promise<TabInfo> {
+    const configPath = getConfigJSONPath(id);
+
+    // If config.json exists, read it
+    if (await fs.exists(configPath)) {
+        const config = await getConfigJSON(id, true);
+        if (config) {
+            return config.tab;
+        } else {
+            throw new Error("Failed to parse config.json");
+        }
+    }
+
+    throw new Error("Tab not found");
+}
+
+/**
+ * Should only be used by getAllTabs() to auto-create missing config.json
+ * @param id
+ */
+export async function getOrCreateTab(id: string): Promise<TabInfo | null> {
+    const dirPath = path.join(tabDir, id);
+
+    try {
+        return await getTab(id);
+    } catch {
+        // Continue to create
+    }
+
+    // No config.json, try to find a valid tab file and create config.json
+    const tabFile = await findTabFile(dirPath);
+    if (!tabFile) {
+        // No valid tab file, skip this folder
+        return null;
+    }
+
+    // Create a new config.json
+    const tab: TabInfo = TabInfoSchema.parse({
+        id,
+        title: id,
+        artist: "",
+        filename: tabFile,
+        originalFilename: tabFile,
+        createdAt: new Date().toISOString(),
+        public: false,
+        fav: false,
+    });
+
+    const newConfig: ConfigJSON = {
+        tab,
+        audio: [],
+        youtube: [],
+    };
+
+    await writeConfigJSON(id, newConfig);
+    return tab;
 }
 
 // Replace Tab
@@ -47,7 +246,7 @@ export async function replaceTab(tab: TabInfo, tabFileData: Uint8Array, ext: str
     // Update tab info
     tab.filename = filename;
     tab.originalFilename = originalFilename;
-    await kv.set(["tab", tab.id], tab);
+    await writeTabInfo(tab);
 }
 
 /**
@@ -86,29 +285,16 @@ async function getNextID(): Promise<number> {
     }
 }
 
-export async function getTab(id: number) {
-    if (isNaN(id)) {
-        throw new Error("Invalid tab ID");
-    }
-
-    const tab = await kv.get(["tab", id]);
-    if (!tab.value) {
-        throw new Error("Tab not found");
-    }
-
-    return TabInfoSchema.parse(tab.value);
-}
-
 export async function updateTab(tab: TabInfo, data: UpdateTabInfo) {
     tab.title = data.title;
     tab.artist = data.artist;
     tab.public = data.public;
-    await kv.set(["tab", tab.id], tab);
+    await writeTabInfo(tab);
 }
 
 export async function updateTabFav(tab: TabInfo, data: UpdateTabFav) {
     tab.fav = data.fav;
-    await kv.set(["tab", tab.id], tab);
+    await writeTabInfo(tab);
 }
 
 export function getTabFilePath(tab: TabInfo) {
@@ -119,36 +305,21 @@ export function getTabFullFilePath(tab: TabInfo) {
     return path.join(Deno.cwd(), getTabFilePath(tab));
 }
 
-export async function deleteTab(id: number) {
+export async function deleteTab(id: string) {
     // Check if tab exists
-    const tab = await kv.get(["tab", id]);
-    if (!tab.value) {
-        throw new Error("Tab not found");
-    }
+    await checkTabExists(id);
 
     // Rename the directory to ./data/tabs/deleted/
-    const oldPath = path.join(tabDir, id.toString());
-    const newPath = path.join(tabDir, "deleted", id.toString() + "-" + Date.now().toString());
+    const oldPath = path.join(tabDir, id);
+    const newPath = path.join(tabDir, "deleted", id + "-" + Date.now().toString());
     await fs.ensureDir(path.join(tabDir, "deleted"));
     await Deno.rename(oldPath, newPath);
-
-    // Delete from KV
-    await kv.delete(["tab", id]);
-
-    // Delete all youtube entries
-    const youtubeIter = kv.list({ prefix: ["youtube", id] });
-    for await (const entry of youtubeIter) {
-        await kv.delete(entry.key);
-    }
-
-    // Delete all preference entries
-    const prefIter = kv.list({ prefix: ["tab_preference", id] });
-    for await (const entry of prefIter) {
-        await kv.delete(entry.key);
-    }
 }
 
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
+    checkAudioFormat(originalFilename);
+    checkFilename(originalFilename);
+
     // To avoid issues with special characters in filenames in different OS
     let filename = sanitize(originalFilename);
     const tabDirPath = path.join(tabDir, tab.id.toString());
@@ -162,104 +333,97 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
         audioFileData = await flacToOgg(audioFileData);
     }
 
-    // Check if kv entry already exists
-    const existing = await kv.get(["audio", tab.id, filename]);
-    if (existing.value) {
+    // Check if file already exists
+    const filePath = path.join(tabDirPath, filename);
+    if (await fs.exists(filePath)) {
         throw new Error("Audio file with the same name already exists");
     }
 
-    const filePath = path.join(tabDirPath, filename);
     await Deno.writeFile(filePath, audioFileData);
-
-    await kv.set(
-        ["audio", tab.id, filename],
-        AudioDataSchema.parse({
-            filename,
-        }),
-    );
-}
-
-export async function getAudio(tab: TabInfo, filename: string) {
-    // Check if kv entry exists
-    const res = await kv.get(["audio", tab.id, filename]);
-    if (!res.value) {
-        throw new Error("Audio file not found");
-    }
-    return AudioDataSchema.parse(res.value);
 }
 
 export async function removeAudio(tab: TabInfo, filename: string) {
-    // Check if kv entry exists
-    await getAudio(tab, filename);
+    checkAudioFormat(filename);
+    checkFilename(filename);
+
+    // Check if file exists
+    const filePath = path.join(tabDir, tab.id.toString(), filename);
+    if (!await fs.exists(filePath)) {
+        throw new Error("Audio file not found");
+    }
 
     // Delete file
-    const filePath = path.join(tabDir, tab.id.toString(), filename);
     await Deno.remove(filePath);
 
-    // Delete from KV
-    await kv.delete(["audio", tab.id, filename]);
+    // Remove metadata from config.json if exists
+    await updateConfigJSON(tab.id, async (config) => {
+        config.audio = config.audio.filter((a: AudioData) => a.filename !== filename);
+    });
 }
 
-export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeSaveRequest) {
-    await getAudio(tab, filename); // Check if exists
-    await kv.set(
-        ["audio", tab.id, filename],
-        AudioDataSchema.parse({
-            filename,
-            ...data,
-        }),
-    );
-}
-
-export async function getAudioList(tabID: number): Promise<AudioData[]> {
-    const list: AudioData[] = [];
-    const iter = kv.list({ prefix: ["audio", tabID] });
-
-    for await (const entry of iter) {
-        try {
-            list.push(AudioDataSchema.parse(entry.value));
-        } catch (e) {
-            console.error("Invalid AudioData entry in KV:", entry.key, entry.value);
+export async function updateConfigJSON(id: string, callback: (config: ConfigJSON) => Promise<void>) {
+    const queue = updateQueues.get(id) || Promise.resolve();
+    const newQueue = queue.then(async () => {
+        const config = await getConfigJSON(id, true);
+        if (!config) {
+            throw new Error("Tab not found");
         }
+        await callback(config);
+        await writeConfigJSON(id, config);
+    });
+    updateQueues.set(id, newQueue);
+    return newQueue;
+}
+
+export async function updateAudio(tab: TabInfo, filename: string, data: SyncRequest) {
+    checkAudioFormat(filename);
+    checkFilename(filename);
+
+    // Check if file exists
+    const filePath = path.join(tabDir, tab.id.toString(), filename);
+    if (!await fs.exists(filePath)) {
+        throw new Error("Audio file not found");
     }
 
-    return list;
-}
+    await updateConfigJSON(tab.id, async (config) => {
+        // Find existing audio entry or create new one
+        const existingIndex = config.audio.findIndex((a: AudioData) => a.filename === filename);
+        const audioData = AudioDataSchema.parse({ filename, ...data });
 
-export async function addYoutube(tabID: number, videoID: string) {
-    await kv.set(
-        ["youtube", tabID, videoID],
-        YoutubeSchema.parse({
-            videoID,
-        }),
-    );
-}
-
-export async function updateYoutube(tabID: number, videoID: string, data: YoutubeSaveRequest) {
-    await kv.set(
-        ["youtube", tabID, videoID],
-        YoutubeSchema.parse({
-            videoID,
-            ...data,
-        }),
-    );
-}
-
-export async function removeYoutube(tabID: number, videoID: string) {
-    await kv.delete(["youtube", tabID, videoID]);
-}
-
-export async function getYoutubeList(tabID: number): Promise<Youtube[]> {
-    const list: Youtube[] = [];
-    const iter = kv.list({ prefix: ["youtube", tabID] });
-
-    for await (const entry of iter) {
-        try {
-            list.push(YoutubeSchema.parse(entry.value));
-        } catch (e) {
-            console.error("Invalid youtube entry in KV:", entry.key, entry.value);
+        if (existingIndex >= 0) {
+            config.audio[existingIndex] = audioData;
+        } else {
+            config.audio.push(audioData);
         }
-    }
+    });
+}
 
-    return list;
+export async function addYoutube(id: string, videoID: string) {
+    await updateConfigJSON(id, async (config) => {
+        // Check if already exists
+        if (config.youtube.some((y: Youtube) => y.videoID === videoID)) {
+            throw new Error("YouTube video already exists");
+        }
+
+        config.youtube.push(YoutubeSchema.parse({ videoID }));
+    });
+}
+
+export async function updateYoutube(id: string, videoID: string, data: SyncRequest) {
+    await updateConfigJSON(id, async (config) => {
+        const existingIndex = config.youtube.findIndex((y: Youtube) => y.videoID === videoID);
+        const youtubeData = YoutubeSchema.parse({ videoID, ...data });
+
+        if (existingIndex >= 0) {
+            config.youtube[existingIndex] = youtubeData;
+        } else {
+            config.youtube.push(youtubeData);
+        }
+    });
+}
+
+export async function removeYoutube(id: string, videoID: string) {
+    await updateConfigJSON(id, async (config) => {
+        config.youtube = config.youtube.filter((y: Youtube) => y.videoID !== videoID);
+    });
 }

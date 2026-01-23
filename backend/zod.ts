@@ -13,9 +13,9 @@ const isPublic = z.boolean();
 const isFav = z.boolean();
 
 export const TabInfoSchema = z.object({
-    id: z.number().default(-1),
+    id: z.string().default("-1"),
     title: title.default("Unknown"),
-    artist: artist.default("Unknown"),
+    artist: artist.default(""),
     filename: z.string().default("tab.gp"),
     originalFilename: z.string().default("Unknown"),
     createdAt: z.iso.datetime().default(() => new Date().toISOString()),
@@ -59,7 +59,7 @@ export const SyncRequestSchema = z.object({
     simpleSync,
     advancedSync,
 });
-export type YoutubeSaveRequest = z.infer<typeof SyncRequestSchema>;
+export type SyncRequest = z.infer<typeof SyncRequestSchema>;
 
 export const AudioDataSchema = z.object({
     filename: z.string().min(1),
@@ -69,3 +69,10 @@ export const AudioDataSchema = z.object({
 });
 
 export type AudioData = z.infer<typeof AudioDataSchema>;
+
+export const ConfigJSONSchema = z.object({
+    tab: TabInfoSchema,
+    audio: z.array(AudioDataSchema).default([]),
+    youtube: z.array(YoutubeSchema).default([]),
+});
+export type ConfigJSON = z.infer<typeof ConfigJSONSchema>;
