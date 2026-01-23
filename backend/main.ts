@@ -1,28 +1,30 @@
-import { serve } from "@hono/node-server";
+import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, SyncRequestSchema, TabInfo, TabInfoSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
-import { db, hasUser, isInitDB, kv } from "./db.ts";
+import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, checkFilename, dataDir, devOriginList, getFrontendDir, getSourceDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
     addAudio,
     addYoutube,
+    checkTabExists,
     createTab,
     deleteTab,
-    getAudioList,
+    getAllTabs,
+    getConfigJSON,
     getTab,
     getTabFilePath,
     getTabFullFilePath,
-    getYoutubeList,
     removeAudio,
     removeYoutube,
     replaceTab,
     updateAudio,
+    updateConfigJSON,
     updateTab,
     updateTabFav,
     updateYoutube,
@@ -33,12 +35,17 @@ import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
 
+let httpServer: ServerType;
+
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
 
     if (isInitDB()) {
         console.log("Database initialized.");
     }
+
+    console.log("Migrating....");
+    await migrate();
 
     const frontendDir = getFrontendDir();
 
@@ -71,7 +78,7 @@ export async function main() {
 
     const app = new Hono();
 
-    const httpServer = serve({
+    httpServer = serve({
         fetch: app.fetch,
         port,
         hostname: host,
@@ -80,6 +87,9 @@ export async function main() {
         if (address == "0.0.0.0") {
             address = "localhost";
         }
+
+        // Print DATA_DIR so it's visible on startup
+        console.log(`Data Dir:`, dataDir);
 
         const url = `http://${address}:${info.port}`;
         console.log(`Server running on ${url}`);
@@ -186,25 +196,48 @@ export async function main() {
         }
     });
 
+    // Create Empty Tab
+    app.post("/api/new-tab/template/:type", async (c) => {
+        try {
+            await checkLogin(c);
+
+            const templateTypeList: Record<string, string> = {
+                bass: "./extra/empty-bass.gp",
+                guitar: "./extra/empty-guitar.gp",
+            };
+
+            const type = c.req.param("type");
+            const srcDir = getSourceDir();
+            const rel = templateTypeList[type];
+            if (!rel) {
+                return c.json({ ok: false, msg: "Template not found" }, 400);
+            }
+
+            const templatePath = path.join(srcDir, rel);
+            const bytes = await Deno.readFile(templatePath);
+            const ext = templatePath.split(".").pop()?.toLowerCase() || "gp";
+            const title = "Empty Tab";
+            const artist = "";
+
+            const id = await createTab(bytes, ext, title, artist, path.basename(templatePath));
+
+            // Append the id to the title
+            await updateConfigJSON(id, async (config) => {
+                config.tab.title += " #" + id;
+            });
+
+            return c.json({ ok: true, id });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     // Get Tab List
     app.get("/api/tabs", async (c) => {
         try {
             await checkLogin(c);
 
-            const tabGenerator = kv.list({
-                prefix: ["tab"],
-            });
-
-            const tabList: TabInfo[] = [];
-
-            for await (const entry of tabGenerator) {
-                try {
-                    // add to head
-                    tabList.unshift(TabInfoSchema.parse(entry.value));
-                } catch (e) {
-                    console.warn("Invalid tab info in KV:", entry.key, entry.value);
-                }
-            }
+            const tabList = await getAllTabs();
 
             return c.json({
                 ok: true,
@@ -218,26 +251,24 @@ export async function main() {
     // Get Tab
     app.get("/api/tab/:id", async (c) => {
         try {
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
+            const id = c.req.param("id");
+
+            const config = await getConfigJSON(id);
+            if (!config) {
+                throw new Error("Config.json not found");
             }
 
-            const tab = await getTab(id);
-
-            if (!tab.public) {
+            if (!config.tab.public) {
                 await checkLogin(c);
             }
 
-            const youtubeList = await getYoutubeList(id);
-            const audioList = await getAudioList(id);
-            const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(tab) : "";
+            const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(config.tab) : "";
 
             return c.json({
                 ok: true,
-                tab,
-                youtubeList,
-                audioList,
+                tab: config.tab,
+                youtubeList: config.youtube,
+                audioList: config.audio,
                 filePath,
             });
         } catch (e) {
@@ -249,10 +280,7 @@ export async function main() {
     app.post("/api/tab/:id", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const body = await c.req.json();
             const data = UpdateTabInfoSchema.parse(body);
@@ -271,10 +299,7 @@ export async function main() {
     app.post("/api/tab/:id/fav", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const body = await c.req.json();
             const data = UpdateTabFavSchema.parse(body);
@@ -293,10 +318,7 @@ export async function main() {
     app.post("/api/tab/:id/replace", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const tab = await getTab(id);
 
@@ -333,10 +355,7 @@ export async function main() {
     app.delete("/api/tab/:id", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             await deleteTab(id);
 
@@ -352,10 +371,7 @@ export async function main() {
     app.post("/api/tab/:id/audio", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const tab = await getTab(id);
 
@@ -391,10 +407,7 @@ export async function main() {
     app.post("/api/tab/:id/audio/:filename", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const body = await c.req.json();
             const data = SyncRequestSchema.parse(body);
@@ -416,10 +429,7 @@ export async function main() {
     app.delete("/api/tab/:id/audio/:filename", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
             const tab = await getTab(id);
             const filename = c.req.param("filename");
             await removeAudio(tab, filename);
@@ -435,27 +445,15 @@ export async function main() {
     // Serve audio file
     app.get("/api/tab/:id/audio/:filename", async (c) => {
         try {
-            const id = parseInt(c.req.param("id") || "");
+            const id = c.req.param("id");
             const tab = await getTab(id);
             if (!tab.public) {
                 await checkLogin(c);
             }
 
-            const filename = sanitize(c.req.param("filename"));
-            let audioList = await getAudioList(id);
-            let found = false;
-
-            for (let audio of audioList) {
-                if (audio.filename === filename) {
-                    found = true;
-                }
-            }
-
-            if (!found) {
-                throw new Error("Audio record not found");
-            }
-
-            const filePath = path.join(tabDir, tab.id.toString(), filename);
+            const filename = c.req.param("filename");
+            checkFilename(filename);
+            const filePath = path.join(tabDir, id, filename);
 
             // Check if file exists
             if (!await fs.exists(filePath)) {
@@ -492,15 +490,12 @@ export async function main() {
     app.post("/api/tab/:id/youtube", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const body = await c.req.json();
             const data = YoutubeAddDataSchema.parse(body);
 
-            await getTab(id);
+            await checkTabExists(id);
             await addYoutube(id, data.videoID);
 
             return c.json({
@@ -515,16 +510,13 @@ export async function main() {
     app.post("/api/tab/:id/youtube/:videoID", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
+            const id = c.req.param("id");
             const videoID = c.req.param("videoID");
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
 
             const body = await c.req.json();
             const data = SyncRequestSchema.parse(body);
 
-            await getTab(id);
+            await checkTabExists(id);
             await updateYoutube(id, videoID, data);
 
             return c.json({
@@ -539,13 +531,10 @@ export async function main() {
     app.delete("/api/tab/:id/youtube/:videoID", async (c) => {
         try {
             await checkLogin(c);
-            const id = parseInt(c.req.param("id"));
+            const id = c.req.param("id");
             const videoID = c.req.param("videoID");
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
 
-            await getTab(id);
+            await checkTabExists(id);
             await removeYoutube(id, videoID);
 
             return c.json({
@@ -559,7 +548,7 @@ export async function main() {
     // Serve tab file
     app.get("/api/tab/:id/file", async (c) => {
         try {
-            const id = parseInt(c.req.param("id") || "");
+            const id = c.req.param("id");
 
             // Unfortunately AlphaTab does not support cookie auth, we need a short lived temp token to auth via query param
             const tempToken = c.req.query("tempToken");
@@ -609,10 +598,7 @@ export async function main() {
     // Generate temp token for tab file access
     app.get("/api/tab/:id/temp-token", async (c) => {
         try {
-            const id = parseInt(c.req.param("id"));
-            if (isNaN(id)) {
-                throw new Error("Invalid tab ID");
-            }
+            const id = c.req.param("id");
 
             const tab = await getTab(id);
 
@@ -659,10 +645,7 @@ export async function main() {
     });
 
     const signalHandler = () => {
-        httpServer.close();
-        kv.close();
-        db.close();
-        console.log("Server closed");
+        closeServer();
         Deno.exit();
     };
 
@@ -678,6 +661,15 @@ export async function main() {
         console.log("unhandled rejection at:", e.promise, "reason:", e.reason);
         e.preventDefault();
     });
+}
+
+export function closeServer() {
+    if (httpServer) {
+        httpServer.close();
+    }
+    kv.close();
+    db.close();
+    console.log("Server closed");
 }
 
 function generalError(c: Context, e: unknown) {

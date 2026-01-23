@@ -24,6 +24,7 @@ export default defineComponent({
             filePath: "",
             tabFiles: [],
             audioFiles: [],
+            isLoading: true,
         };
     },
     async mounted() {
@@ -40,15 +41,20 @@ export default defineComponent({
     },
     methods: {
         async load() {
-            const res = await fetch(baseURL + `/api/tab/${this.tabID}`, {
-                credentials: "include",
-            });
-            await checkFetch(res);
-            const data = await res.json();
-            this.tab = data.tab;
-            this.youtubeList = data.youtubeList;
-            this.audioList = data.audioList;
-            this.filePath = data.filePath;
+            this.isLoading = true;
+            try {
+                const res = await fetch(baseURL + `/api/tab/${this.tabID}`, {
+                    credentials: "include",
+                });
+                await checkFetch(res);
+                const data = await res.json();
+                this.tab = data.tab;
+                this.youtubeList = data.youtubeList;
+                this.audioList = data.audioList;
+                this.filePath = data.filePath;
+            } finally {
+                this.isLoading = false;
+            }
         },
 
         async submitInfo() {
@@ -314,7 +320,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="my-container container">
+    <div class="my-container container" v-if="!isLoading">
         <div class="mt-4 mb-4">
             <router-link :to="`/tab/${tab.id}`" class="btn btn-primary">
                 Back to Tab</router-link>

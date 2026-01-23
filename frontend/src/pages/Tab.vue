@@ -840,12 +840,12 @@ export default defineComponent({
                 }
             }
 
-            // Probably provided a video ID not in the list, switch to synth
+            // Probably provided an audio file not in the list, switch to synth
             if (!found) {
                 notify({
                     type: "error",
                     title: "Error",
-                    text: "YouTube video not found, fallback to synth.",
+                    text: "Audio file not found, fallback to synth.",
                 });
                 this.currentAudio = "synth";
                 return;
