@@ -4,9 +4,15 @@ import { assertEquals, assertExists, assertRejects, assertThrows } from "jsr:@st
 import * as fs from "@std/fs";
 import * as path from "@std/path";
 
-// Set up temporary directory for tests
-const tempDir = await Deno.makeTempDir();
-Deno.env.set("DATA_DIR", tempDir);
+async function setupTest() {
+    // Set up temporary directory for tests
+    const tempDir = await Deno.makeTempDir();
+    Deno.env.set("DATA_DIR", tempDir);
+    Deno.env.set("MYTABS_PORT", "47778");
+    return tempDir;
+}
+
+const tempDir = await setupTest();
 
 // Now import after setting env
 const {

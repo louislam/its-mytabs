@@ -1,4 +1,4 @@
-import { serve } from "@hono/node-server";
+import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
@@ -6,7 +6,7 @@ import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchem
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, checkFilename, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, checkFilename, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir, dataDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -33,6 +33,8 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
+
+let httpServer: ServerType;
 
 export async function main() {
     console.log(`It's MyTabs v${appVersion}`);
@@ -75,7 +77,7 @@ export async function main() {
 
     const app = new Hono();
 
-    const httpServer = serve({
+    httpServer = serve({
         fetch: app.fetch,
         port,
         hostname: host,
@@ -84,6 +86,9 @@ export async function main() {
         if (address == "0.0.0.0") {
             address = "localhost";
         }
+
+        // Print DATA_DIR so it's visible on startup
+        console.log(`Data Dir:`, dataDir);
 
         const url = `http://${address}:${info.port}`;
         console.log(`Server running on ${url}`);
@@ -603,10 +608,7 @@ export async function main() {
     });
 
     const signalHandler = () => {
-        httpServer.close();
-        kv.close();
-        db.close();
-        console.log("Server closed");
+        closeServer();
         Deno.exit();
     };
 
@@ -622,6 +624,15 @@ export async function main() {
         console.log("unhandled rejection at:", e.promise, "reason:", e.reason);
         e.preventDefault();
     });
+}
+
+export function closeServer() {
+    if (httpServer) {
+        httpServer.close();
+    }
+    kv.close();
+    db.close();
+    console.log("Server closed");
 }
 
 function generalError(c: Context, e: unknown) {
