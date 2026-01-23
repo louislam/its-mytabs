@@ -77,6 +77,31 @@ export default defineComponent({
             console.log(err);
             notify({ text: err.type || "Dropzone error", type: "error" });
         },
+        // New method: create a tab from server-side template (bass/guitar)
+        async createEmpty(type) {
+            this.isUploading = true;
+            try {
+                const res = await fetch(baseURL + `/api/new-tab/template/${type}`, {
+                    method: "POST",
+                    credentials: "include",
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.msg || "Failed to create tab from template");
+                }
+
+                const data = await res.json();
+                notify({ text: `Created ${type} tab`, type: "success" });
+                if (data.id) {
+                    this.$router.push(`/tab/${data.id}`);
+                }
+            } catch (e) {
+                notify({ text: e.message || "Unknown error", type: "error" });
+            } finally {
+                this.isUploading = false;
+            }
+        },
     },
 });
 </script>
@@ -103,6 +128,20 @@ export default defineComponent({
         >
             {{ isUploading ? "Uploading..." : "Upload" }}
         </button>
+
+        <ul class="mt-3">
+            <li>
+                <a href="#" @click.prevent="createEmpty('bass')" class="me-3">Create Empty Bass Tab</a>
+            </li>
+            <li>
+                <a href="#" @click.prevent="createEmpty('guitar')">Create Empty Guitar Tab</a>
+            </li>
+        </ul>
+
+        
+        <div>
+
+        </div>
 
         <h4 class="mt-5">Free Resources</h4>
 

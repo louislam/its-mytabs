@@ -6,7 +6,7 @@ import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchem
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
-import { appVersion, checkFilename, dataDir, devOriginList, getFrontendDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
+import { appVersion, checkFilename, dataDir, devOriginList, getFrontendDir, getSourceDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
 import * as path from "@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 import {
@@ -23,7 +23,7 @@ import {
     removeAudio,
     removeYoutube,
     replaceTab,
-    updateAudio,
+    updateAudio, updateConfigJSON,
     updateTab,
     updateTabFav,
     updateYoutube,
@@ -190,6 +190,53 @@ export async function main() {
                 ok: true,
                 id,
             });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Create tab from built-in template (empty bass/guitar) - new endpoint
+    app.post("/api/new-tab/template/:type", async (c) => {
+        try {
+            await checkLogin(c);
+
+            const templateTypeList: Record<string, string> = {
+                bass: "./extra/empty-bass.gp",
+                guitar: "./extra/empty-guitar.gp",
+            };
+
+            const t = c.req.param("type");
+            if (t !== "bass" && t !== "guitar") {
+                return c.json({ ok: false, msg: "Invalid template type" }, 400);
+            }
+
+            // Resolve template path from the templateTypeList so new types are easy to add
+            const srcDir = getSourceDir();
+            const rel = templateTypeList[t];
+            if (!rel) {
+                return c.json({ ok: false, msg: "Template not configured" }, 400);
+            }
+
+            const templatePath = path.join(srcDir, rel);
+            if (!(await fs.exists(templatePath))) {
+                throw new Error("Template file not found");
+            }
+
+            const bytes = await Deno.readFile(templatePath);
+            const ext = templatePath.split(".").pop()?.toLowerCase() || "gp";
+
+            // Default title/artist
+            const title = "Empty Tab";
+            const artist = "";
+
+            const id = await createTab(bytes, ext, title, artist, path.basename(templatePath));
+
+            // Append the id to the title
+            await updateConfigJSON(id, (config) => {
+                config.tab.title += " #" + id;
+            });
+
+            return c.json({ ok: true, id });
         } catch (e) {
             return generalError(c, e);
         }
@@ -645,7 +692,7 @@ function generalError(c: Context, e: unknown) {
             ok: false,
             msg: message,
         }, 400);
-    } else if (e instanceof Error) {
+     } else if (e instanceof Error) {
         return c.json({
             ok: false,
             msg: e.message,
