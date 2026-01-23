@@ -77,7 +77,7 @@ export default defineComponent({
             console.log(err);
             notify({ text: err.type || "Dropzone error", type: "error" });
         },
-        // New method: create a tab from server-side template (bass/guitar)
+
         async createEmpty(type) {
             this.isUploading = true;
             try {
@@ -131,17 +131,14 @@ export default defineComponent({
 
         <ul class="mt-3">
             <li>
-                <a href="#" @click.prevent="createEmpty('bass')" class="me-3">Create Empty Bass Tab</a>
+                <a href="#" @click.prevent='createEmpty("bass")' class="me-3">Create Empty Bass Tab</a>
             </li>
             <li>
-                <a href="#" @click.prevent="createEmpty('guitar')">Create Empty Guitar Tab</a>
+                <a href="#" @click.prevent='createEmpty("guitar")'>Create Empty Guitar Tab</a>
             </li>
         </ul>
 
-        
-        <div>
-
-        </div>
+        <div></div>
 
         <h4 class="mt-5">Free Resources</h4>
 

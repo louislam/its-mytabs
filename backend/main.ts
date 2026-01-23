@@ -23,7 +23,8 @@ import {
     removeAudio,
     removeYoutube,
     replaceTab,
-    updateAudio, updateConfigJSON,
+    updateAudio,
+    updateConfigJSON,
     updateTab,
     updateTabFav,
     updateYoutube,
@@ -692,7 +693,7 @@ function generalError(c: Context, e: unknown) {
             ok: false,
             msg: message,
         }, 400);
-     } else if (e instanceof Error) {
+    } else if (e instanceof Error) {
         return c.json({
             ok: false,
             msg: e.message,
