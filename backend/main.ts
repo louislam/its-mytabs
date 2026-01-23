@@ -196,7 +196,7 @@ export async function main() {
         }
     });
 
-    // Create tab from built-in template (empty bass/guitar) - new endpoint
+    // Create Empty Tab
     app.post("/api/new-tab/template/:type", async (c) => {
         try {
             await checkLogin(c);
