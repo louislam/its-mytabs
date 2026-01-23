@@ -1,6 +1,6 @@
 # Build dist
 # Extremely slow on multi-arch builds
-FROM denoland/deno:debian-2.4.4 AS builder
+FROM denoland/deno:debian-2.6.6 AS builder
 WORKDIR /app
 
 RUN mkdir -p /app/data && chown -R deno:deno /app/data
@@ -14,7 +14,7 @@ RUN deno install && \
     deno task build
 
 # Main image
-FROM denoland/deno:debian-2.4.4 AS release
+FROM denoland/deno:debian-2.6.6 AS release
 WORKDIR /app
 
 EXPOSE 47777
