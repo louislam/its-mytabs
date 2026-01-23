@@ -1,7 +1,7 @@
 import { checkAudioFormat, checkFilename, flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSaveRequest, YoutubeSchema } from "./zod.ts";
+import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, SyncRequest, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
@@ -11,7 +11,7 @@ const updateQueues = new Map<string, Promise<void>>();
 /**
  * Get the config.json path for a tab
  */
-function getConfigJSONPath(id: string): string {
+export function getConfigJSONPath(id: string): string {
     checkFilename(id);
     return path.join(tabDir, id, "config.json");
 }
@@ -186,6 +186,10 @@ export async function getTab(id: string): Promise<TabInfo> {
     throw new Error("Tab not found");
 }
 
+/**
+ * Should only be used by getAllTabs() to auto-create missing config.json
+ * @param id
+ */
 export async function getOrCreateTab(id: string): Promise<TabInfo | null> {
     const dirPath = path.join(tabDir, id);
 
@@ -310,6 +314,9 @@ export async function deleteTab(id: string) {
 }
 
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
+    checkAudioFormat(originalFilename);
+    checkFilename(originalFilename);
+
     // To avoid issues with special characters in filenames in different OS
     let filename = sanitize(originalFilename);
     const tabDirPath = path.join(tabDir, tab.id.toString());
@@ -365,7 +372,7 @@ export async function updateConfigJSON(id: string, callback: (config: ConfigJSON
     return newQueue;
 }
 
-export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeSaveRequest) {
+export async function updateAudio(tab: TabInfo, filename: string, data: SyncRequest) {
     checkAudioFormat(filename);
     checkFilename(filename);
 
@@ -399,7 +406,7 @@ export async function addYoutube(id: string, videoID: string) {
     });
 }
 
-export async function updateYoutube(id: string, videoID: string, data: YoutubeSaveRequest) {
+export async function updateYoutube(id: string, videoID: string, data: SyncRequest) {
     await updateConfigJSON(id, async (config) => {
         const existingIndex = config.youtube.findIndex((y: Youtube) => y.videoID === videoID);
         const youtubeData = YoutubeSchema.parse({ videoID, ...data });

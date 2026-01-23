@@ -59,7 +59,7 @@ export const SyncRequestSchema = z.object({
     simpleSync,
     advancedSync,
 });
-export type YoutubeSaveRequest = z.infer<typeof SyncRequestSchema>;
+export type SyncRequest = z.infer<typeof SyncRequestSchema>;
 
 export const AudioDataSchema = z.object({
     filename: z.string().min(1),
