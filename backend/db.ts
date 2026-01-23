@@ -26,6 +26,11 @@ export function isInitDB() {
 }
 
 export function hasUser() {
+    // For demo mode, always return true
+    if (isDemoMode) {
+        return true;
+    }
+
     const row = db.prepare("SELECT COUNT(*) as count FROM user").get();
     if (!row) {
         throw new Error("User table not found");
