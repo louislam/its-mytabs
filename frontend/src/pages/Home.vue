@@ -63,7 +63,6 @@ export default defineComponent({
         },
 
         groupedTabs() {
-
             const groups = {};
 
             for (const tab of this.filteredTabList) {
@@ -179,7 +178,7 @@ export default defineComponent({
             </span>
         </div>
 
-        <template v-if="this.setting.groupByArtist === 'true' && groupedTabs">
+        <template v-if='this.setting.groupByArtist === "true" && groupedTabs'>
             <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
                 <h4>{{ group.displayName }}</h4>
 
