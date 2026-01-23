@@ -19,6 +19,7 @@
         "frontend-dev": "cd frontend && deno run dev",
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
         "install-frontend-deps": "cd frontend && deno install",
+        "test": "deno test --allow-all",
 
         // Build
         "build-binary": "deno task build-frontend && deno run --allow-all extra/build-binary.ts",
@@ -46,6 +47,9 @@
 
     // Lint
     "lint": {
+        "exclude": [
+            "frontend/"
+        ],
         "rules": {
             "tags": ["recommended"],
             "exclude": [

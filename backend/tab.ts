@@ -158,7 +158,7 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
 
     await writeConfigJSON(id.toString(), info);
 
-    return id;
+    return id.toString();
 }
 
 export async function writeTabInfo(tab: TabInfo) {
