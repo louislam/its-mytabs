@@ -1,6 +1,6 @@
 // "deno task test" to run this test
 
-import { assertEquals, assertExists, assertRejects, assertThrows } from "jsr:@std/assert@^1.0.17";
+import { assertEquals, assertExists, assertRejects } from "jsr:@std/assert@^1.0.17";
 import * as fs from "@std/fs";
 
 // Set up temporary directory for tests
@@ -8,7 +8,7 @@ const tempDir = await Deno.makeTempDir();
 Deno.env.set("DATA_DIR", tempDir);
 
 // Now import after setting env
-const { tabExists, getConfigJSON, createTab, getTab, deleteTab } = await import("./tab.ts");
+const { tabExists, getConfigJSON, createTab, getTab, deleteTab, updateConfigJSON } = await import("./tab.ts");
 const { db, kv } = await import("./db.ts");
 
 Deno.test("tabExists - non-existent tab", async () => {
@@ -64,6 +64,28 @@ Deno.test("getConfigJSON - existing tab", async () => {
     assertEquals(config!.tab.title, "Config Test");
     assertEquals(config!.audio.length, 0);
     assertEquals(config!.youtube.length, 0);
+});
+
+Deno.test("updateConfigJSON - queuing", async () => {
+    const tabData = new Uint8Array([13, 14, 15]);
+    const id = await createTab(tabData, "gp", "Queue Test", "Queue Artist", "queue.gp");
+
+    // Start multiple updates without awaiting
+    const promises = [];
+    for (let i = 0; i < 10; i++) {
+        promises.push(updateConfigJSON(id, async (config) => {
+            // Simulate async work
+            await new Promise(resolve => setTimeout(resolve, 10));
+            config.tab.title += i.toString();
+        }));
+    }
+
+    // Wait for all to complete
+    await Promise.all(promises);
+
+    // Check that updates were applied sequentially
+    const tab = await getTab(id);
+    assertEquals(tab.title, "Queue Test0123456789");
 });
 
 Deno.test("deleteTab", async () => {

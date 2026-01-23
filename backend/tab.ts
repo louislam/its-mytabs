@@ -6,6 +6,8 @@ import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 
+const updateQueues = new Map<string, Promise<void>>();
+
 /**
  * Get the config.json path for a tab
  */
@@ -98,6 +100,7 @@ export async function getConfigJSON(id: string, excludeAudio = false): Promise<C
 
 /**
  * Write the full config.json file
+ * Directly overwrites existing file, you should use updateConfigJSON for safe updates
  */
 async function writeConfigJSON(id: string, config: ConfigJSON): Promise<void> {
     const configPath = getConfigJSONPath(id);
@@ -162,12 +165,9 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
 }
 
 export async function writeTabInfo(tab: TabInfo) {
-    const config = await getConfigJSON(tab.id, true);
-    if (!config) {
-        throw new Error("Tab not found");
-    }
-    config.tab = tab;
-    await writeConfigJSON(tab.id, config);
+    await updateConfigJSON(tab.id, async (config) => {
+        config.tab = tab;
+    });
 }
 
 export async function getTab(id: string): Promise<TabInfo> {
@@ -346,11 +346,23 @@ export async function removeAudio(tab: TabInfo, filename: string) {
     await Deno.remove(filePath);
 
     // Remove metadata from config.json if exists
-    const config = await getConfigJSON(tab.id);
-    if (config) {
+    await updateConfigJSON(tab.id, async (config) => {
         config.audio = config.audio.filter((a: AudioData) => a.filename !== filename);
-        await writeConfigJSON(tab.id, config);
-    }
+    });
+}
+
+export async function updateConfigJSON(id: string, callback: (config: ConfigJSON) => Promise<void>) {
+    const queue = updateQueues.get(id) || Promise.resolve();
+    const newQueue = queue.then(async () => {
+        const config = await getConfigJSON(id, true);
+        if (!config) {
+            throw new Error("Tab not found");
+        }
+        await callback(config);
+        await writeConfigJSON(id, config);
+    });
+    updateQueues.set(id, newQueue);
+    return newQueue;
 }
 
 export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeSaveRequest) {
@@ -363,64 +375,45 @@ export async function updateAudio(tab: TabInfo, filename: string, data: YoutubeS
         throw new Error("Audio file not found");
     }
 
-    const config = await getConfigJSON(tab.id, true);
-    if (!config) {
-        throw new Error("Tab not found");
-    }
+    await updateConfigJSON(tab.id, async (config) => {
+        // Find existing audio entry or create new one
+        const existingIndex = config.audio.findIndex((a: AudioData) => a.filename === filename);
+        const audioData = AudioDataSchema.parse({ filename, ...data });
 
-    // Find existing audio entry or create new one
-    const existingIndex = config.audio.findIndex((a: AudioData) => a.filename === filename);
-    const audioData = AudioDataSchema.parse({ filename, ...data });
-
-    if (existingIndex >= 0) {
-        config.audio[existingIndex] = audioData;
-    } else {
-        config.audio.push(audioData);
-    }
-
-    await writeConfigJSON(tab.id, config);
+        if (existingIndex >= 0) {
+            config.audio[existingIndex] = audioData;
+        } else {
+            config.audio.push(audioData);
+        }
+    });
 }
 
 export async function addYoutube(id: string, videoID: string) {
-    const config = await getConfigJSON(id, true);
-    if (!config) {
-        throw new Error("Tab not found");
-    }
+    await updateConfigJSON(id, async (config) => {
+        // Check if already exists
+        if (config.youtube.some((y: Youtube) => y.videoID === videoID)) {
+            throw new Error("YouTube video already exists");
+        }
 
-    // Check if already exists
-    if (config.youtube.some((y: Youtube) => y.videoID === videoID)) {
-        throw new Error("YouTube video already exists");
-    }
-
-    config.youtube.push(YoutubeSchema.parse({ videoID }));
-
-    await writeConfigJSON(id, config);
+        config.youtube.push(YoutubeSchema.parse({ videoID }));
+    });
 }
 
 export async function updateYoutube(id: string, videoID: string, data: YoutubeSaveRequest) {
-    const info = await getConfigJSON(id, true);
-    if (!info) {
-        throw new Error("Tab not found");
-    }
+    await updateConfigJSON(id, async (config) => {
+        const existingIndex = config.youtube.findIndex((y: Youtube) => y.videoID === videoID);
+        const youtubeData = YoutubeSchema.parse({ videoID, ...data });
 
-    const existingIndex = info.youtube.findIndex((y: Youtube) => y.videoID === videoID);
-    const youtubeData = YoutubeSchema.parse({ videoID, ...data });
-
-    if (existingIndex >= 0) {
-        info.youtube[existingIndex] = youtubeData;
-    } else {
-        info.youtube.push(youtubeData);
-    }
-
-    await writeConfigJSON(id, info);
+        if (existingIndex >= 0) {
+            config.youtube[existingIndex] = youtubeData;
+        } else {
+            config.youtube.push(youtubeData);
+        }
+    });
 }
 
 export async function removeYoutube(id: string, videoID: string) {
-    const info = await getConfigJSON(id, true);
-    if (!info) {
-        throw new Error("Tab not found");
-    }
-
-    info.youtube = info.youtube.filter((y: Youtube) => y.videoID !== videoID);
-    await writeConfigJSON(id, info);
+    await updateConfigJSON(id, async (config) => {
+        config.youtube = config.youtube.filter((y: Youtube) => y.videoID !== videoID);
+    });
 }
