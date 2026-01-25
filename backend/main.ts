@@ -626,7 +626,7 @@ export async function main() {
             const id = c.req.param("id");
             const tab = await getTab(id);
 
-            if (Deno.build.os !== "windows") {
+            if (!Deno.build.standalone || Deno.build.os !== "windows") {
                 throw new Error("Open folder is only supported on Windows");
             }
             const fullPath = getTabFullFilePath(tab);
@@ -645,7 +645,7 @@ export async function main() {
             const id = c.req.param("id");
             const tab = await getTab(id);
 
-            if (Deno.build.os !== "windows") {
+            if (!Deno.build.standalone || Deno.build.os !== "windows") {
                 throw new Error("Open external is only supported on Windows");
             }
 
