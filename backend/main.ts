@@ -266,6 +266,7 @@ export async function main() {
 
             return c.json({
                 ok: true,
+                platform: Deno.build.os,
                 tab: config.tab,
                 youtubeList: config.youtube,
                 audioList: config.audio,
@@ -613,6 +614,45 @@ export async function main() {
                 ok: true,
                 token,
             });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Open folder and Open external (Windows only)
+    app.post("/api/tab/:id/open-folder", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const tab = await getTab(id);
+
+            if (!Deno.build.standalone || Deno.build.os !== "windows") {
+                throw new Error("Open folder is only supported on Windows");
+            }
+            const fullPath = getTabFullFilePath(tab);
+            const folder = path.dirname(fullPath);
+            const child = new Deno.Command("explorer.exe", { args: [folder], stdout: "null", stderr: "null" }).spawn();
+            await child.status;
+            return c.json({ ok: true });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    app.post("/api/tab/:id/open-external", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const tab = await getTab(id);
+
+            if (!Deno.build.standalone || Deno.build.os !== "windows") {
+                throw new Error("Open external is only supported on Windows");
+            }
+
+            const fullPath = getTabFullFilePath(tab);
+            const child = new Deno.Command("cmd", { args: ["/c", "start", "", fullPath], stdout: "null", stderr: "null" }).spawn();
+            await child.status;
+            return c.json({ ok: true });
         } catch (e) {
             return generalError(c, e);
         }
