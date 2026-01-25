@@ -1,5 +1,5 @@
 <div align="center" width="100%">
-    <img src="./frontend/public/icon.svg" width="128" alt="It's MyTabs" />
+    <img src="./frontend/public/icon.png" width="128" alt="It's MyTabs" />
 </div>
 
 # It's MyTabs
