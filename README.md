@@ -1,3 +1,7 @@
+<div align="center" width="100%">
+    <img src="./frontend/public/icon.svg" width="128" alt="It's MyTabs" />
+</div>
+
 # It's MyTabs
 
 Open source, web based, self hostable guitar/bass tab viewer and player, similar to Songsterr.
