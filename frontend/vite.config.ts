@@ -3,6 +3,8 @@ import vue from "@vitejs/plugin-vue";
 import { alphaTab } from "@coderline/alphatab/vite";
 import viteCompression from "vite-plugin-compression";
 import { visualizer } from "rollup-plugin-visualizer";
+
+// @ts-ignore
 import * as jsonc from "jsr:@std/jsonc";
 
 const viteCompressionFilter = /\.(js|mjs|json|css|html|svg)$/i;

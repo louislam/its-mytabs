@@ -19,40 +19,25 @@ export default {
         '
         to="/"
     >
-        <div>It's</div>
-        <div>MyTabs</div>
+        <img src="/icon.png" alt="It's MyTabs" />
     </router-link>
 </template>
 
 <style scoped lang="scss">
 .navbar-brand {
     $width: 100px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
     width: $width;
     height: $width;
-    font-weight: bold;
-    font-size: 20px;
-
-    // gradient primary color
-    $startColor: #7e7edf;
-    $endColor: #3131c6;
-    background: linear-gradient(75deg, $startColor, $endColor);
-    transition: all ease-in-out 0.3s;
-
-    div {
-        line-height: 22px;
+    transition: opacity 0.2s ease-in-out;
+    
+    img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
-
+    
     &:hover {
-        opacity: 0.8;
-    }
-
-    &.inline {
-        display: inline-flex;
+        opacity: 0.9;
     }
 }
 </style>
