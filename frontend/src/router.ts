@@ -46,6 +46,7 @@ const routes: RouteRecordRaw[] = [
                         name: "tab",
                         path: "/tab/:id",
                         component: Tab,
+                        meta: { hideFooter: true },
                     },
                     {
                         name: "settings",
