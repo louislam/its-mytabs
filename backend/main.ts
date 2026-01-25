@@ -19,7 +19,8 @@ import {
     getAllTabs,
     getConfigJSON,
     getTab,
-    getTabFilePath, getTabFolderPath,
+    getTabFilePath,
+    getTabFolderPath,
     getTabFullFilePath,
     removeAudio,
     removeYoutube,
@@ -265,7 +266,7 @@ export async function main() {
 
             config = await fixMissingTab(config);
 
-            const filePath = getTabFullFilePath(config.tab);
+            const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(config.tab) : "";
 
             return c.json({
                 ok: true,
@@ -273,9 +274,7 @@ export async function main() {
                 tab: config.tab,
                 youtubeList: config.youtube,
                 audioList: config.audio,
-
-                // Don't expose the full path if not logged in
-                filePath: (await isLoggedIn(c)) ? filePath : "",
+                filePath,
             });
         } catch (e) {
             return generalError(c, e);
@@ -614,7 +613,7 @@ export async function main() {
 
             const token = crypto.randomUUID();
 
-            await kv.set(["temp_token", token], tab.id, { expireIn: 10 });
+            await kv.set(["temp_token", token], tab.id, { expireIn: 20 });
             return c.json({
                 ok: true,
                 token,
