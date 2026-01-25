@@ -25,6 +25,7 @@ export default defineComponent({
             tabFiles: [],
             audioFiles: [],
             isLoading: true,
+            isUploading: false,
         };
     },
     async mounted() {
@@ -178,29 +179,30 @@ export default defineComponent({
         },
 
         async uploadTab() {
-            try {
-                if (this.tabFiles.length === 0) {
-                    throw new Error("Please select a file to upload");
-                }
+            this.isUploading = true;
+             try {
+                 if (this.tabFiles.length === 0) {
+                     throw new Error("Please select a file to upload");
+                 }
 
-                const file = this.tabFiles[0].file;
+                 const file = this.tabFiles[0].file;
 
-                // Try to parse the file with AlphaTab to ensure it's valid
-                const data = await file.arrayBuffer();
+                 // Try to parse the file with AlphaTab to ensure it's valid
+                 const data = await file.arrayBuffer();
 
-                const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(
-                    new Uint8Array(data),
-                    new alphaTab.Settings(),
-                );
+                 const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(
+                     new Uint8Array(data),
+                     new alphaTab.Settings(),
+                 );
 
-                const formData = new FormData();
-                formData.append("file", file);
+                 const formData = new FormData();
+                 formData.append("file", file);
 
-                const response = await fetch(baseURL + `/api/tab/${this.tabID}/replace`, {
-                    method: "POST",
-                    credentials: "include",
-                    body: formData,
-                });
+                 const response = await fetch(baseURL + `/api/tab/${this.tabID}/replace`, {
+                     method: "POST",
+                     credentials: "include",
+                     body: formData,
+                 });
 
                 await checkFetch(response);
                 notify({
@@ -213,39 +215,44 @@ export default defineComponent({
                     text: error.message,
                     type: "error",
                 });
-            }
-        },
+            } finally {
+                this.isUploading = false;
+             }
+         },
 
-        async uploadAudio() {
-            try {
-                if (this.audioFiles.length === 0) {
-                    throw new Error("Please select a file to upload");
-                }
+         async uploadAudio() {
+            this.isUploading = true;
+             try {
+                 if (this.audioFiles.length === 0) {
+                     throw new Error("Please select a file to upload");
+                 }
 
-                const file = this.audioFiles[0].file;
-                const formData = new FormData();
-                formData.append("file", file);
+                 const file = this.audioFiles[0].file;
+                 const formData = new FormData();
+                 formData.append("file", file);
 
-                const response = await fetch(baseURL + `/api/tab/${this.tabID}/audio`, {
-                    method: "POST",
-                    credentials: "include",
-                    body: formData,
-                });
+                 const response = await fetch(baseURL + `/api/tab/${this.tabID}/audio`, {
+                     method: "POST",
+                     credentials: "include",
+                     body: formData,
+                 });
 
-                await checkFetch(response);
-                notify({
-                    text: "Upload audio successfully",
-                    type: "success",
-                });
-                this.$refs.audioDropzone.clearFiles();
-                await this.load();
-            } catch (error) {
-                notify({
-                    text: error.message,
-                    type: "error",
-                });
-            }
-        },
+                 await checkFetch(response);
+                 notify({
+                     text: "Upload audio successfully",
+                     type: "success",
+                 });
+                 this.$refs.audioDropzone.clearFiles();
+                 await this.load();
+             } catch (error) {
+                 notify({
+                     text: error.message,
+                     type: "error",
+                 });
+             } finally {
+                this.isUploading = false;
+             }
+         },
 
         async saveAudio(audio) {
             let res;
@@ -470,12 +477,18 @@ export default defineComponent({
                     </template>
                 </Vue3Dropzone>
 
-                <button @click="uploadAudio" class="btn btn-primary w-100 mt-4">Upload</button>
-            </div>
-        </div>
+                <button
+                    @click="uploadAudio"
+                    class="btn btn-primary w-100 mt-4"
+                    :disabled="isUploading"
+                >
+                    {{ isUploading ? "Uploading..." : "Upload" }}
+                </button>
+             </div>
+         </div>
 
-        <!-- Tab File Page -->
-        <div v-else-if='this.page === "tab-file"' class="mb-5">
+         <!-- Tab File Page -->
+         <div v-else-if='this.page === "tab-file"' class="mb-5">
             <h2 class="mt-4 mb-4">Method 1: Direct Edit</h2>
             <p>
                 If you can access the file system, you can edit/replace the tab directly, the path is:<br />
@@ -495,10 +508,16 @@ export default defineComponent({
                 <template #description>Supports {{ supportedFormatCommaString }}</template>
             </Vue3Dropzone>
 
-            <button @click="uploadTab" class="btn btn-primary w-100 mt-4">Upload</button>
-        </div>
-    </div>
-</template>
+            <button
+                @click="uploadTab"
+                class="btn btn-primary w-100 mt-4"
+                :disabled="isUploading"
+            >
+                {{ isUploading ? "Uploading..." : "Upload" }}
+            </button>
+         </div>
+     </div>
+ </template>
 
 <style scoped lang="scss">
 .menu {
