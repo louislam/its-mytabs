@@ -6,7 +6,7 @@ import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
 
-const updateQueues = new Map<string, Promise<void>>();
+const updateQueues = new Map<string, Promise<ConfigJSON>>();
 
 /**
  * Get the config.json path for a tab
@@ -231,6 +231,30 @@ export async function getOrCreateTab(id: string): Promise<TabInfo | null> {
     return tab;
 }
 
+/**
+ * It may have a chance that user renamed/deleted the tab file manually.
+ * Point to another valid tab file if found.
+ * @param config
+ */
+export async function fixMissingTab(config: ConfigJSON): Promise<ConfigJSON> {
+    // If the tab file is not missing , do nothing
+    const filePath = getTabFullFilePath(config.tab);
+    if (await fs.exists(filePath)) {
+        return config;
+    }
+
+    const tabFile = await findTabFile(getTabFolderFullPath(config.tab));
+    if (!tabFile) {
+        // No valid tab file, cannot fix, do nothing too
+        return config;
+    }
+
+    // Update tab info
+    return await updateConfigJSON(config.tab.id, async (cfg) => {
+        cfg.tab.filename = tabFile;
+    });
+}
+
 // Replace Tab
 export async function replaceTab(tab: TabInfo, tabFileData: Uint8Array, ext: string, originalFilename: string) {
     // Rename old file to filename.ext.timestamp
@@ -302,7 +326,15 @@ export function getTabFilePath(tab: TabInfo) {
 }
 
 export function getTabFullFilePath(tab: TabInfo) {
-    return path.join(Deno.cwd(), getTabFilePath(tab));
+    return path.resolve(getTabFilePath(tab));
+}
+
+export function getTabFolderPath(tab: TabInfo) {
+    return path.join(tabDir, tab.id.toString());
+}
+
+export function getTabFolderFullPath(tab: TabInfo) {
+    return path.resolve(getTabFolderPath(tab));
 }
 
 export async function deleteTab(id: string) {
@@ -370,6 +402,7 @@ export async function updateConfigJSON(id: string, callback: (config: ConfigJSON
         }
         await callback(config);
         await writeConfigJSON(id, config);
+        return config;
     });
     updateQueues.set(id, newQueue);
     return newQueue;

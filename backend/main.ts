@@ -15,10 +15,12 @@ import {
     checkTabExists,
     createTab,
     deleteTab,
+    fixMissingTab,
     getAllTabs,
     getConfigJSON,
     getTab,
     getTabFilePath,
+    getTabFolderPath,
     getTabFullFilePath,
     removeAudio,
     removeYoutube,
@@ -253,7 +255,7 @@ export async function main() {
         try {
             const id = c.req.param("id");
 
-            const config = await getConfigJSON(id);
+            let config = await getConfigJSON(id);
             if (!config) {
                 throw new Error("Config.json not found");
             }
@@ -261,6 +263,8 @@ export async function main() {
             if (!config.tab.public) {
                 await checkLogin(c);
             }
+
+            config = await fixMissingTab(config);
 
             const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(config.tab) : "";
 
@@ -609,7 +613,7 @@ export async function main() {
 
             const token = crypto.randomUUID();
 
-            await kv.set(["temp_token", token], tab.id, { expireIn: 10 });
+            await kv.set(["temp_token", token], tab.id, { expireIn: 20 });
             return c.json({
                 ok: true,
                 token,
@@ -629,8 +633,7 @@ export async function main() {
             if (!Deno.build.standalone || Deno.build.os !== "windows") {
                 throw new Error("Open folder is only supported on Windows");
             }
-            const fullPath = getTabFullFilePath(tab);
-            const folder = path.dirname(fullPath);
+            const folder = getTabFolderPath(tab);
             const child = new Deno.Command("explorer.exe", { args: [folder], stdout: "null", stderr: "null" }).spawn();
             await child.status;
             return c.json({ ok: true });

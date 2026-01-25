@@ -84,7 +84,7 @@ Deno.test("public tab endpoints accessible (HTTP)", async () => {
     // GET tab info should be accessible without auth
     const res1 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: "GET" });
     const j1 = await res1.json();
-    assertEquals(res1.status, 200);
+    assertEquals(res1.status, 200, JSON.stringify(j1));
     assertEquals(j1.ok, true);
 
     // Add audio and request it without auth
