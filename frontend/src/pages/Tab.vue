@@ -736,6 +736,10 @@ export default defineComponent({
                 }
                 this.api.timePosition = time;
             });
+            
+            this.socket.on("no-audio", () => {
+                this.currentAudio = "none";
+            });
         },
 
         async audioYoutube(videoID) {
