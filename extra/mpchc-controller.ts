@@ -57,16 +57,17 @@ function createInterval(ms: number) {
     interval = setInterval(async () => {
         try {
             const state = await getMPCHCStatus();
-            //console.log(state);
 
             // If state changed, send to server
             if (currentState.state !== state.state) {
+                // Set Tab Player to "No Audio", because MPC-HC handles audio locally
+                socket.emit("no-audio");
+                console.log("Sent no-audio to server");
+
                 if (state.state === "Playing") {
                     socket.emit("play");
-                    //createInterval(200);
                 } else {
                     socket.emit("pause");
-                    //createInterval(2000);
                 }
                 socket.emit("seek", state.position);
             }

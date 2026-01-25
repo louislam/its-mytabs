@@ -22,8 +22,6 @@ export function socketIO(httpServer: ServerType) {
 
     io.on("connection", async (socket) => {
         const clientType = socket.handshake.query.clientType;
-        console.log(`socket ${socket.id} connected, client type:`, clientType);
-
         let session;
 
         // Get Auth Session
@@ -51,7 +49,6 @@ export function socketIO(httpServer: ServerType) {
         if (session) {
             if (clientType === "tabPlayer") {
                 tabPlayerList[socket.id] = socket;
-                console.log("Tab Player connected. Total:", Object.keys(tabPlayerList).length);
             } else if (clientType === "controller") {
                 controllerList[socket.id] = socket;
                 console.log("Controller connected. Total:", Object.keys(controllerList).length);
@@ -78,10 +75,16 @@ export function socketIO(httpServer: ServerType) {
                 }
             });
 
+            // Set to No Audio
+            socket.on("no-audio", () => {
+                for (const id in tabPlayerList) {
+                    tabPlayerList[id].emit("no-audio");
+                }
+            });
+
             socket.on("disconnect", (reason) => {
                 if (clientType === "tabPlayer") {
                     delete tabPlayerList[socket.id];
-                    console.log("Tab Player disconnected. Total:", Object.keys(tabPlayerList).length);
                 } else if (clientType === "controller") {
                     delete controllerList[socket.id];
                     console.log("Controller disconnected. Total:", Object.keys(controllerList).length);
