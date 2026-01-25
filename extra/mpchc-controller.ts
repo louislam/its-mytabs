@@ -60,7 +60,6 @@ function createInterval(ms: number) {
 
             // If state changed, send to server
             if (currentState.state !== state.state) {
-
                 // Set Tab Player to "No Audio", because MPC-HC handles audio locally
                 socket.emit("no-audio");
                 console.log("Sent no-audio to server");
