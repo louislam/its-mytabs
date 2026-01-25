@@ -29,13 +29,13 @@ export default {
     width: $width;
     height: $width;
     transition: opacity 0.2s ease-in-out;
-    
+
     img {
         width: 100%;
         height: 100%;
         object-fit: contain;
     }
-    
+
     &:hover {
         opacity: 0.9;
     }
