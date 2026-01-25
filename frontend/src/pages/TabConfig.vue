@@ -5,11 +5,12 @@ import { notify } from "@kyvg/vue3-notification";
 import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
 import { supportedAudioFormatCommaString, supportedFormatCommaString } from "../../../backend/common.js";
 import SyncOptions from "../components/SyncOptions.vue";
+import { FontAwesomeIcon } from "../icon.ts";
 
 const alphaTab = await import("@coderline/alphatab");
 
 export default defineComponent({
-    components: { SyncOptions, Vue3Dropzone },
+    components: { SyncOptions, Vue3Dropzone, FontAwesomeIcon },
     data() {
         return {
             tabID: -1,
@@ -26,6 +27,7 @@ export default defineComponent({
             audioFiles: [],
             isLoading: true,
             isUploading: false,
+            platform: "",
         };
     },
     async mounted() {
@@ -53,6 +55,7 @@ export default defineComponent({
                 this.youtubeList = data.youtubeList;
                 this.audioList = data.audioList;
                 this.filePath = data.filePath;
+                this.platform = data.platform;
             } finally {
                 this.isLoading = false;
             }
@@ -322,6 +325,32 @@ export default defineComponent({
         getAudioURL(tabID, filename) {
             return baseURL + `/api/tab/${tabID}/audio/${encodeURIComponent(filename)}`;
         },
+
+        async openFolder() {
+            try {
+                const res = await fetch(baseURL + `/api/tab/${this.tabID}/open-folder`, {
+                    method: "POST",
+                    credentials: "include",
+                });
+                await checkFetch(res);
+                notify({ text: "Opened folder in file manager", type: "success" });
+            } catch (e) {
+                notify({ text: e.message || e, type: "error" });
+            }
+        },
+
+        async openExternal() {
+            try {
+                const res = await fetch(baseURL + `/api/tab/${this.tabID}/open-external`, {
+                    method: "POST",
+                    credentials: "include",
+                });
+                await checkFetch(res);
+                notify({ text: "Opened with external application", type: "success" });
+            } catch (e) {
+                notify({ text: e.message || e, type: "error" });
+            }
+        },
     },
 });
 </script>
@@ -330,7 +359,19 @@ export default defineComponent({
     <div class="my-container container" v-if="!isLoading">
         <div class="mt-4 mb-4">
             <router-link :to="`/tab/${tab.id}`" class="btn btn-primary">
-                Back to Tab</router-link>
+                <font-awesome-icon :icon='["fas", "arrow-left"]' />
+                Back to Tab
+            </router-link>
+
+            <button class="btn btn-secondary ms-2" @click.prevent="openFolder" v-if='platform === "windows"'>
+                <font-awesome-icon :icon='["fas", "folder"]' />
+                Open Folder
+            </button>
+
+            <button class="btn btn-secondary ms-2" @click.prevent="openExternal" v-if='platform === "windows"'>
+                <font-awesome-icon :icon='["fas", "file"]' />
+                Edit with External Tool...
+            </button>
 
             <div class="mt-3">
                 Editing: {{ tab.artist }} - {{ tab.title }}
