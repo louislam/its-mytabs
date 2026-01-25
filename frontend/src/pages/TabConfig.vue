@@ -25,6 +25,7 @@ export default defineComponent({
             tabFiles: [],
             audioFiles: [],
             isLoading: true,
+            isUploading: false,
         };
     },
     async mounted() {
@@ -178,6 +179,7 @@ export default defineComponent({
         },
 
         async uploadTab() {
+            this.isUploading = true;
             try {
                 if (this.tabFiles.length === 0) {
                     throw new Error("Please select a file to upload");
@@ -213,10 +215,13 @@ export default defineComponent({
                     text: error.message,
                     type: "error",
                 });
+            } finally {
+                this.isUploading = false;
             }
         },
 
         async uploadAudio() {
+            this.isUploading = true;
             try {
                 if (this.audioFiles.length === 0) {
                     throw new Error("Please select a file to upload");
@@ -244,6 +249,8 @@ export default defineComponent({
                     text: error.message,
                     type: "error",
                 });
+            } finally {
+                this.isUploading = false;
             }
         },
 
@@ -470,7 +477,13 @@ export default defineComponent({
                     </template>
                 </Vue3Dropzone>
 
-                <button @click="uploadAudio" class="btn btn-primary w-100 mt-4">Upload</button>
+                <button
+                    @click="uploadAudio"
+                    class="btn btn-primary w-100 mt-4"
+                    :disabled="isUploading"
+                >
+                    {{ isUploading ? "Uploading..." : "Upload" }}
+                </button>
             </div>
         </div>
 
@@ -495,7 +508,13 @@ export default defineComponent({
                 <template #description>Supports {{ supportedFormatCommaString }}</template>
             </Vue3Dropzone>
 
-            <button @click="uploadTab" class="btn btn-primary w-100 mt-4">Upload</button>
+            <button
+                @click="uploadTab"
+                class="btn btn-primary w-100 mt-4"
+                :disabled="isUploading"
+            >
+                {{ isUploading ? "Uploading..." : "Upload" }}
+            </button>
         </div>
     </div>
 </template>
