@@ -326,7 +326,15 @@ export function getTabFilePath(tab: TabInfo) {
 }
 
 export function getTabFullFilePath(tab: TabInfo) {
-    return path.join(Deno.cwd(), getTabFilePath(tab));
+    return path.resolve(getTabFilePath(tab));
+}
+
+export function getTabFolderPath(tab: TabInfo) {
+    return path.join(tabDir, tab.id.toString());
+}
+
+export function getTabFolderFullPath(tab: TabInfo) {
+    return path.resolve(getTabFolderPath(tab));
 }
 
 export function getTabFolderPath(tab: TabInfo) {
