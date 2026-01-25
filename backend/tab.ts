@@ -337,14 +337,6 @@ export function getTabFolderFullPath(tab: TabInfo) {
     return path.resolve(getTabFolderPath(tab));
 }
 
-export function getTabFolderPath(tab: TabInfo) {
-    return path.join(tabDir, tab.id.toString());
-}
-
-export function getTabFolderFullPath(tab: TabInfo) {
-    return path.join(Deno.cwd(), getTabFolderPath(tab));
-}
-
 export async function deleteTab(id: string) {
     // Check if tab exists
     await checkTabExists(id);
