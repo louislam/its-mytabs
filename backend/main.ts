@@ -46,7 +46,6 @@ export async function main() {
         console.log("Database initialized.");
     }
 
-    console.log("Migrating....");
     await migrate();
 
     const frontendDir = getFrontendDir();

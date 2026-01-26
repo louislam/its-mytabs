@@ -82,15 +82,18 @@ export async function addDemoTab() {
 }
 
 export async function migrate() {
-    console.log("Starting migration from KV to config.json...");
-
     let migratedCount = 0;
     let skippedCount = 0;
+    let hasRecord = false;
 
-    // Iterate over all tab entries in KV
     const tabIter = kv.list({ prefix: ["tab"] });
 
     for await (const entry of tabIter) {
+        if (!hasRecord) {
+            hasRecord = true;
+            console.log("Starting migration from KV to config.json...");
+        }
+
         try {
             const key = entry.key;
             // Key format: ["tab", id] where id is a number
@@ -171,6 +174,10 @@ export async function migrate() {
         } catch (e) {
             console.error(`Failed to migrate tab entry:`, entry.key, e);
         }
+    }
+
+    if (!hasRecord) {
+        return;
     }
 
     console.log(`Migration complete: ${migratedCount} migrated, ${skippedCount} skipped`);
