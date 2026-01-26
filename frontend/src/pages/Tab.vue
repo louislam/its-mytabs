@@ -323,6 +323,32 @@ export default defineComponent({
             await this.load(trackID);
 
             window.addEventListener("keydown", this.keyEvents);
+            
+            // Close open lists when clicking outside
+            this._onDocumentClick = (e) => {
+                try {
+                    // Track list
+                    if (this.showTrackList) {
+                        const sel = this.$refs.trackSelector;
+                        const list = this.$refs.trackList;
+                        if (!sel.contains(e.target) && !list.contains(e.target)) {
+                            this.showTrackList = false;
+                        }
+                    }
+
+                    // Audio list
+                    if (this.showAudioList) {
+                        const sel = this.$refs.audioSelector;
+                        const list = this.$refs.audioList;
+                        if (!sel.contains(e.target) && !list.contains(e.target)) {
+                            this.showAudioList = false;
+                        }
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            };
+            window.addEventListener("click", this._onDocumentClick);
         } catch (e) {
             notify({
                 type: "error",
@@ -339,6 +365,11 @@ export default defineComponent({
         console.log("Before unmount");
         this.destroyContainer();
         window.removeEventListener("keydown", this.keyEvents);
+        
+        if (this._onDocumentClick) {
+            window.removeEventListener("click", this._onDocumentClick);
+            this._onDocumentClick = undefined;
+        }
 
         this.socket.disconnect();
     },
@@ -1239,14 +1270,14 @@ export default defineComponent({
 
         <div class="toolbar">
             <div class="scroll">
-                <div class="track-selector selector">
+                <div class="track-selector selector" ref="trackSelector">
                     <div class="button" @click='showList("track")'>
                         <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
                         <span v-else>Loading...</span>
                     </div>
                 </div>
 
-                <div class="audio-selector selector">
+                <div class="audio-selector selector" ref="audioSelector">
                     <div class="button" @click='showList("audio")'>
                         Audio
                     </div>
@@ -1291,7 +1322,7 @@ export default defineComponent({
                 </div>
             </div>
 
-            <div class="track-list list" v-if="showTrackList">
+            <div class="track-list list" v-if="showTrackList" ref="trackList">
                 <div class="p-2 text-end list-header">
                     <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
                 </div>
@@ -1306,7 +1337,7 @@ export default defineComponent({
                 </div>
             </div>
 
-            <div class="audio-list list" v-if="showAudioList">
+            <div class="audio-list list" v-if="showAudioList" ref="audioList">
                 <div class="p-2 text-end list-header">
                     <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
                 </div>
