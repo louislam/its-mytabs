@@ -17,6 +17,7 @@ const hideFooter = computed(() => route.meta?.hideFooter);
         <footer v-if="!hideFooter" class="my-5">
             It's MyTabs
             <span class="version">{{ version }}</span>
+            <a href="https://github.com/louislam/its-mytabs" target="_blank">GitHub</a>
         </footer>
 
         <notifications position="bottom right" />
