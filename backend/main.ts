@@ -270,7 +270,7 @@ export async function main() {
 
             return c.json({
                 ok: true,
-                platform: Deno.build.os,
+                showOpenButtons: Deno.build.standalone && Deno.build.os === "windows",
                 tab: config.tab,
                 youtubeList: config.youtube,
                 audioList: config.audio,
