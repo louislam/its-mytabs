@@ -1,5 +1,11 @@
 {
     "lock": false,
+
+    "exclude": [
+        "public/font",
+        "public/soundfont"
+    ],
+
     "fmt": {
         "indentWidth": 4,
         "semiColons": true,

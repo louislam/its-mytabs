@@ -35,7 +35,8 @@
     "lock": false,
 
     "exclude": [
-        "frontend"
+        "frontend",
+        "extra"
     ],
 
     // Run `deno fmt` to format your code
@@ -43,19 +44,11 @@
         "indentWidth": 4,
         "semiColons": true,
         "singleQuote": false,
-        "lineWidth": 200,
-        "exclude": [
-            "frontend/public/font/",
-            "frontend/public/soundfont/"
-        ]
+        "lineWidth": 200
     },
 
     // Lint
     "lint": {
-        "exclude": [
-            "frontend/",
-            "extra/"
-        ],
         "rules": {
             "tags": ["recommended"],
             "exclude": [

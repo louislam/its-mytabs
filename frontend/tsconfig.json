@@ -4,6 +4,6 @@
         "moduleResolution": "nodenext",
         "allowImportingTsExtensions": true,
         "resolveJsonModule": true,
-        "allowSyntheticDefaultImports": true,
+        "allowSyntheticDefaultImports": true
     }
 }
