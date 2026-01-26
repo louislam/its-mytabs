@@ -1,3 +1,9 @@
 {
-    "lock": false
+    "lock": false,
+    "fmt": {
+        "indentWidth": 4,
+        "semiColons": true,
+        "singleQuote": false,
+        "lineWidth": 200
+    }
 }

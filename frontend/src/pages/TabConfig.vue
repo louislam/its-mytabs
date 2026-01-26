@@ -27,7 +27,7 @@ export default defineComponent({
             audioFiles: [],
             isLoading: true,
             isUploading: false,
-            platform: "",
+            showOpenButtons: false,
         };
     },
     async mounted() {
@@ -55,7 +55,7 @@ export default defineComponent({
                 this.youtubeList = data.youtubeList;
                 this.audioList = data.audioList;
                 this.filePath = data.filePath;
-                this.platform = data.platform;
+                this.showOpenButtons = data.showOpenButtons;
             } finally {
                 this.isLoading = false;
             }
@@ -363,12 +363,12 @@ export default defineComponent({
                 Back to Tab
             </router-link>
 
-            <button class="btn btn-secondary ms-2" @click.prevent="openFolder" v-if='platform === "windows"'>
+            <button class="btn btn-secondary ms-2" @click.prevent="openFolder" v-if='showOpenButtons'>
                 <font-awesome-icon :icon='["fas", "folder"]' />
                 Open Folder
             </button>
 
-            <button class="btn btn-secondary ms-2" @click.prevent="openExternal" v-if='platform === "windows"'>
+            <button class="btn btn-secondary ms-2" @click.prevent="openExternal" v-if='showOpenButtons'>
                 <font-awesome-icon :icon='["fas", "file"]' />
                 Edit with External Tool...
             </button>

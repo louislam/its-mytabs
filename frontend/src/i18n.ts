@@ -21,7 +21,8 @@ const rtlLangs = ["fa", "ar-SY", "ur", "ar"];
 export const currentLocale = () =>
     localStorage.locale ||
     languageList[navigator.language] && navigator.language ||
-    languageList[navigator.language.substring(0, 2)] && navigator.language.substring(0, 2) ||
+    languageList[navigator.language.substring(0, 2)] &&
+        navigator.language.substring(0, 2) ||
     "en";
 
 export const localeDirection = () => {
