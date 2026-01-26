@@ -55,7 +55,7 @@ export default defineComponent({
                 this.youtubeList = data.youtubeList;
                 this.audioList = data.audioList;
                 this.filePath = data.filePath;
-                this.showOpenButtons = !!data.showOpenButtons;
+                this.showOpenButtons = data.showOpenButtons;
             } finally {
                 this.isLoading = false;
             }
