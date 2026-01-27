@@ -67,7 +67,6 @@ export default defineComponent({
             },
             setting: {},
             simpleSyncSecond: -1,
-            ScrollMode,
         };
     },
     computed: {
@@ -246,14 +245,6 @@ export default defineComponent({
             });
         },
 
-        scrollMode(newVal) {
-            if (!this.api) {
-                return;
-            }
-            this.api.settings.player.scrollMode = newVal;
-            this.setConfig("scrollMode", newVal);
-        },
-
         // Switch Audio Source
         async currentAudio() {
             console.log("Switching audio to:", this.currentAudio);
@@ -416,10 +407,6 @@ export default defineComponent({
 
         metronome() {
             this.enableMetronome = !this.enableMetronome;
-        },
-
-        scroll() {
-            this.scrollMode === ScrollMode.Continuous ? this.scrollMode = ScrollMode.Off : this.scrollMode = ScrollMode.Continuous;
         },
 
         loop() {
@@ -588,7 +575,7 @@ export default defineComponent({
                     this.speed = this.getConfig("speed", 100);
 
                     // Scroll Mode
-                    this.scrollMode = this.getConfig("scrollMode", ScrollMode.Continuous);
+                    this.scrollMode = this.setting.scrollMode;
 
                     this.tracks = [];
 
@@ -1328,11 +1315,6 @@ export default defineComponent({
                 <button class="btn btn-secondary" @click="metronome()" :class='{ active: enableMetronome, disabled: currentAudio !== "synth" }'>
                     <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
                     Metronome
-                </button>
-
-                <button class="btn btn-secondary" @click="scroll()" :class="{ active: scrollMode === ScrollMode.Continuous }">
-                    <font-awesome-icon :icon='["fas", "check"]' v-if="scrollMode === ScrollMode.Continuous" />
-                    Scroll
                 </button>
 
                 <div class="select-percentage">

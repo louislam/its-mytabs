@@ -2,8 +2,14 @@
 import { defineComponent } from "vue";
 import { SettingSchema } from "../zod.ts";
 import { getSetting } from "../app.js";
+import { ScrollMode } from "@coderline/alphatab";
 
 export default defineComponent({
+    computed: {
+        ScrollMode() {
+            return ScrollMode;
+        },
+    },
     data() {
         return {
             setting: {
@@ -13,6 +19,7 @@ export default defineComponent({
                 scoreStyle: "",
                 groupByArtist: false,
                 showKeySignature: false,
+                scrollMode: "",
             },
         };
     },
@@ -54,12 +61,12 @@ export default defineComponent({
             </select>
         </div>
 
-        <!-- Group by artist -->
+        <!-- Scroll Mode -->
         <div class="mb-3">
-            <label for="groupByArtist" class="form-label">Group tabs by Artist</label>
-            <select id="groupByArtist" class="form-select" v-model="setting.groupByArtist">
-                <option :value="false">No</option>
-                <option :value="true">Yes</option>
+            <label for="scrollMode" class="form-label">Scroll Mode</label>
+            <select id="scrollMode" class="form-select" v-model="setting.scrollMode">
+                <option :value="ScrollMode.Continuous">Auto Scroll</option>
+                <option :value="ScrollMode.Off">Off</option>
             </select>
         </div>
 
@@ -96,6 +103,17 @@ export default defineComponent({
         </div>
 
         <p class="text-secondary">Tips: If you want to check if the sync points is correct, "Cursor (Instant)" is a good indicator.</p>
+
+        <h2 class="mt-5 mb-4">Tab List</h2>
+
+        <!-- Group by artist -->
+        <div class="mb-3">
+            <label for="groupByArtist" class="form-label">Group tabs by Artist</label>
+            <select id="groupByArtist" class="form-select" v-model="setting.groupByArtist">
+                <option :value="false">No</option>
+                <option :value="true">Yes</option>
+            </select>
+        </div>
     </div>
 </template>
 

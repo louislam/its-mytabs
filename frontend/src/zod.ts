@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { ScrollMode } from "@coderline/alphatab";
 
 export const SettingSchema = z.object({
     scoreStyle: z.enum(["tab", "score-tab", "score", "auto"]).default("tab"),
@@ -7,6 +8,7 @@ export const SettingSchema = z.object({
     cursor: z.enum(["animated", "instant", "bar", "invisible"]).default(
         "animated",
     ),
+    scrollMode: z.enum(ScrollMode).default(ScrollMode.Continuous),
     groupByArtist: z.boolean().default(false),
     showKeySignature: z.boolean().default(false),
 });
