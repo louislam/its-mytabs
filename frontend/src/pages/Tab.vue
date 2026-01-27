@@ -562,6 +562,11 @@ export default defineComponent({
                     }
                     this.api.renderTracks([this.api.score.tracks[trackID]]);
 
+                    // Always show tempo automation on the master bar
+                    if (api.score.masterBars.length > 0 && api.score.masterBars[0].tempoAutomations.length > 0) {
+                        api.score.masterBars[0].tempoAutomations[0].isVisible = true;
+                    }
+
                     // Set Audio source
                     this.currentAudio = this.getConfig("audio", "synth");
 
