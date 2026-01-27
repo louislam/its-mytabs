@@ -833,16 +833,19 @@ export default defineComponent({
                 audioPlayer.addEventListener("seeked", onTimeUpdate);
                 audioPlayer.addEventListener("play", () => {
                     window.clearInterval(updateTimer);
+                    this.playing = true;
                     this.api?.play();
                     updateTimer = window.setInterval(onTimeUpdate, 50);
                 });
 
                 // state updates
                 audioPlayer.addEventListener("pause", () => {
+                    this.playing = false;
                     this.api.pause();
                     window.clearInterval(updateTimer.current);
-                });
+                }); 
                 audioPlayer.addEventListener("ended", () => {
+                    this.playing = false;
                     this.api.pause();
                     window.clearInterval(updateTimer.current);
                 });
