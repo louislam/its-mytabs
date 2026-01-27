@@ -1,10 +1,11 @@
-<script>
+<script lang="ts">
 import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
+import { KeySignatureMinor } from "../util.ts";
 
 const alphaTab = await import("@coderline/alphatab");
 const { ScrollMode, StaveProfile } = alphaTab;
@@ -644,9 +645,19 @@ export default defineComponent({
         // Get the key signature
         getKeySignature(trackID) {
             const firstBar = api.score.tracks[trackID].staves[0].bars[0];
-            let key = alphaTab.model.KeySignature[firstBar.keySignature];
+
+            // "Major" or "Minor"
+            const type = alphaTab.model.KeySignatureType[firstBar.keySignatureType];
+
+            let key: string = "";
+            if (firstBar.keySignatureType == alphaTab.model.KeySignatureType.Major) {
+                key = alphaTab.model.KeySignature[firstBar.keySignature];
+            } else {
+                key = KeySignatureMinor[firstBar.keySignature];
+            }
+
             key = key.replace("Sharp", "#");
-            const type = alphaTab.model.KeySignatureType[firstBar.keySignatureType]; // "Major" or "Minor"
+
             return `${key} (${type})`;
         },
 

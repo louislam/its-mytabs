@@ -1,0 +1,17 @@
+export enum KeySignatureMinor {
+    Abm = -7,
+    Ebm = -6,
+    Bbm = -5,
+    Fm = -4,
+    Cm = -3,
+    Gm = -2,
+    Dm = -1,
+    Am = 0,
+    Em = 1,
+    Bm = 2,
+    FSharpm = 3,
+    CSharpm = 4,
+    GSharpm = 5,
+    DSharpm = 6,
+    ASharpm = 7,
+}
