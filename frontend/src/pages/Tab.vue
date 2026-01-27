@@ -1,11 +1,11 @@
-<script lang="ts">
+<script>
 import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
-import { KeySignatureMinor } from "../util.ts";
+import { getKeySignature } from "../util.ts";
 
 const alphaTab = await import("@coderline/alphatab");
 const { ScrollMode, StaveProfile } = alphaTab;
@@ -557,7 +557,8 @@ export default defineComponent({
                     }
 
                     // Get key signature
-                    this.keySignature = this.getKeySignature(trackID);
+                    const firstBar = this.api.score.tracks[trackID].staves[0].bars[0];
+                    this.keySignature = getKeySignature(firstBar);
 
                     // Set Audio source
                     this.currentAudio = this.getConfig("audio", "synth");
@@ -640,25 +641,6 @@ export default defineComponent({
             const syncPoints = convertAlphaTexSyncPoint(syncPointsText);
             this.api.score.applyFlatSyncPoints(syncPoints);
             console.log("Applying advanced sync points:", syncPoints);
-        },
-
-        // Get the key signature
-        getKeySignature(trackID) {
-            const firstBar = api.score.tracks[trackID].staves[0].bars[0];
-
-            // "Major" or "Minor"
-            const type = alphaTab.model.KeySignatureType[firstBar.keySignatureType];
-
-            let key: string = "";
-            if (firstBar.keySignatureType == alphaTab.model.KeySignatureType.Major) {
-                key = alphaTab.model.KeySignature[firstBar.keySignature];
-            } else {
-                key = KeySignatureMinor[firstBar.keySignature];
-            }
-
-            key = key.replace("Sharp", "#");
-
-            return `${key} (${type})`;
         },
 
         // Style the score with custom colors
