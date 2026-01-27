@@ -216,7 +216,7 @@ Deno.test("replaceTab", async () => {
         entries2.push(entry.name);
     }
     const renamedOld2 = entries2.find((name) => name.startsWith("tab.gp.") && name !== renamedOld && name !== "tab.gp");
-    assertExists(renamedOld2);
+    assertExists(renamedOld2, JSON.stringify(entries2));
     const renamedData2 = await Deno.readFile(path.join(tabDirPath, renamedOld2));
     assertEquals(renamedData2, newData1);
 
