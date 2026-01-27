@@ -12,6 +12,7 @@ export default defineComponent({
                 cursor: "",
                 scoreStyle: "",
                 groupByArtist: false,
+                showKeySignature: false,
             },
         };
     },
@@ -59,6 +60,15 @@ export default defineComponent({
             <select id="groupByArtist" class="form-select" v-model="setting.groupByArtist">
                 <option :value="false">No</option>
                 <option :value="true">Yes</option>
+            </select>
+        </div>
+
+        <!-- Show Key Signature -->
+        <div class="mb-3">
+            <label for="showKeySignature" class="form-label">Show Key Signature</label>
+            <select id="showKeySignature" class="form-select" v-model="setting.showKeySignature">
+                <option :value="true">Yes</option>
+                <option :value="false">No</option>
             </select>
         </div>
 

@@ -363,12 +363,12 @@ export default defineComponent({
                 Back to Tab
             </router-link>
 
-            <button class="btn btn-secondary ms-2" @click.prevent="openFolder" v-if='showOpenButtons'>
+            <button class="btn btn-secondary ms-2" @click.prevent="openFolder" v-if="showOpenButtons">
                 <font-awesome-icon :icon='["fas", "folder"]' />
                 Open Folder
             </button>
 
-            <button class="btn btn-secondary ms-2" @click.prevent="openExternal" v-if='showOpenButtons'>
+            <button class="btn btn-secondary ms-2" @click.prevent="openExternal" v-if="showOpenButtons">
                 <font-awesome-icon :icon='["fas", "file"]' />
                 Edit with External Tool...
             </button>

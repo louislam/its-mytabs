@@ -31,7 +31,7 @@ footer {
     text-align: center;
     font-size: 0.9rem;
     color: $color2-dark;
-    
+
     a {
         color: $color2-dark;
     }

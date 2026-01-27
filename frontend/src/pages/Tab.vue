@@ -57,6 +57,7 @@ export default defineComponent({
             audioList: [],
             audio: {},
             scrollMode: ScrollMode.Continuous,
+            keySignature: "",
 
             keyEvents: (e) => {
                 if (e.code === "Space") {
@@ -323,7 +324,7 @@ export default defineComponent({
             await this.load(trackID);
 
             window.addEventListener("keydown", this.keyEvents);
-            
+
             // Close open lists when clicking outside
             this._onDocumentClick = (e) => {
                 try {
@@ -365,7 +366,7 @@ export default defineComponent({
         console.log("Before unmount");
         this.destroyContainer();
         window.removeEventListener("keydown", this.keyEvents);
-        
+
         if (this._onDocumentClick) {
             window.removeEventListener("click", this._onDocumentClick);
             this._onDocumentClick = undefined;
@@ -567,6 +568,9 @@ export default defineComponent({
                         api.score.masterBars[0].tempoAutomations[0].isVisible = true;
                     }
 
+                    // Get key signature
+                    this.keySignature = this.getKeySignature(trackID);
+
                     // Set Audio source
                     this.currentAudio = this.getConfig("audio", "synth");
 
@@ -648,6 +652,15 @@ export default defineComponent({
             const syncPoints = convertAlphaTexSyncPoint(syncPointsText);
             this.api.score.applyFlatSyncPoints(syncPoints);
             console.log("Applying advanced sync points:", syncPoints);
+        },
+
+        // Get the key signature
+        getKeySignature(trackID) {
+            const firstBar = api.score.tracks[trackID].staves[0].bars[0];
+            let key = alphaTab.model.KeySignature[firstBar.keySignature];
+            key = key.replace("Sharp", "#");
+            const type = alphaTab.model.KeySignatureType[firstBar.keySignatureType]; // "Major" or "Minor"
+            return `${key} (${type})`;
         },
 
         // Style the score with custom colors
@@ -848,7 +861,7 @@ export default defineComponent({
                     this.playing = false;
                     this.api.pause();
                     window.clearInterval(updateTimer.current);
-                }); 
+                });
                 audioPlayer.addEventListener("ended", () => {
                     this.playing = false;
                     this.api.pause();
@@ -1271,6 +1284,9 @@ export default defineComponent({
     <div class="main" :class='{ "light": this.setting.scoreColor === "light" }'>
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
+        <div class="key-signature badge bg-secondary" v-if="keySignature && setting.showKeySignature">
+            {{ keySignature }}
+        </div>
         <div ref="bassTabContainer" v-pre></div>
 
         <!-- Just add a margin, don't let youtube player overlay the tab -->
@@ -1657,5 +1673,10 @@ $padding: 20px;
             width: 100px;
         }
     }
+}
+
+.key-signature {
+    position: absolute;
+    margin-left: 30px;
 }
 </style>
