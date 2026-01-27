@@ -21,6 +21,7 @@
         "install-frontend-deps": "cd frontend && deno install",
         "test": "deno test --allow-all",
         "fmt": "deno fmt && deno lint --fix && cd frontend && deno fmt",
+        "check": "deno fmt --check && deno lint && deno check && cd frontend && deno fmt --check",
 
         // Build
         "build-binary": "deno task build-frontend && deno run --allow-all extra/build-binary.ts",
