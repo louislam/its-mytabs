@@ -8,5 +8,6 @@ export const SettingSchema = z.object({
         "animated",
     ),
     groupByArtist: z.boolean().default(false),
+    showKeySignature: z.boolean().default(false),
 });
 export type Setting = z.infer<typeof SettingSchema>;
