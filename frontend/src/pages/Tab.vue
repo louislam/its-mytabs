@@ -32,6 +32,7 @@ export default defineComponent({
     youtubePlayer: null,
 
     components: { FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
+    emits: ["setFixedHeader"],
     data() {
         return {
             isLoggedIn: false,
@@ -490,6 +491,7 @@ export default defineComponent({
 
                 if (this.setting.scoreStyle === "horizontal-tab") {
                     layoutMode = alphaTab.LayoutMode.Horizontal;
+                    this.$emit("setFixedHeader", true);
                 }
 
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {

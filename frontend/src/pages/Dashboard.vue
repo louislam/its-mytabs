@@ -24,10 +24,18 @@ export default defineComponent({
         this.isLoggedIn = await isLoggedIn();
         this.ready = true;
     },
+    watch: {
+        $route() {
+            this.fixedNavbar = false;
+        },
+    },
     methods: {
         async signOut() {
             const res = await authClient.signOut();
             this.$router.push("/login");
+        },
+        onSetFixedHeader(val) {
+            this.fixedNavbar = val;
         },
     },
 });
@@ -76,7 +84,9 @@ export default defineComponent({
             </div>
         </div>
 
-        <router-view />
+        <router-view v-slot="{ Component }">
+            <component :is="Component" @setFixedHeader="onSetFixedHeader" />
+        </router-view>
     </div>
 </template>
 
