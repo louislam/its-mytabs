@@ -73,7 +73,7 @@ export default defineComponent({
     },
     computed: {
         animatedCursor() {
-            return this.setting.cursor === "animated";
+            return this.setting.cursor === "animated" || this.setting.scrollMode === ScrollMode.Smooth;
         },
 
         syncMethod() {
