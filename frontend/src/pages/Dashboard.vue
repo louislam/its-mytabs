@@ -33,7 +33,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="page-content">
+    <div class="fixed-navbar">
         <div class="my-navbar">
             <Logo />
 
@@ -78,18 +78,23 @@ export default defineComponent({
 
 $navHeight: 100px;
 
+.fixed-navbar {
+    .my-navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        width: 100vw;
+    }
+}
+
 .my-navbar {
     height: $navHeight;
     border-bottom: 1px solid #3c3b40;
     display: flex;
     justify-content: center;
     align-items: center;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    width: 100vw;
 
     [data-bs-theme="light"] & {
         border-bottom-color: #dadada;
@@ -130,7 +135,7 @@ $navHeight: 100px;
     }
 }
 
-.page-content {
+.fixed-navbar {
     padding-top: $navHeight + 20px;
 }
 
@@ -155,7 +160,7 @@ $navHeight: 100px;
         }
     }
 
-    .page-content {
+    .fixed-navbar {
         padding-top: $navHeightMobile + 20px;
     }
 }

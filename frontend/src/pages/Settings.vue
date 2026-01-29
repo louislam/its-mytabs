@@ -64,8 +64,11 @@ export default defineComponent({
 
         <!-- Scroll Mode -->
         <div class="mb-3">
-            <label for="scrollMode" class="form-label">Scroll Mode</label>
-            <select id="scrollMode" class="form-select" v-model="setting.scrollMode">
+            <label for="scrollMode" class="form-label">
+                Scroll
+                <span v-if='setting.scoreStyle === "horizontal-tab"'> (Force Smooth Scroll for Horizontal Tab)</span>
+            </label>
+            <select id="scrollMode" class="form-select" v-model="setting.scrollMode" :disabled='setting.scoreStyle === "horizontal-tab"'>
                 <option :value="ScrollMode.Continuous">Scroll</option>
                 <option :value="ScrollMode.Smooth">Smooth Scroll</option>
                 <option :value="ScrollMode.Off">Off</option>
