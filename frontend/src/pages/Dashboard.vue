@@ -17,6 +17,7 @@ export default defineComponent({
         return {
             isLoggedIn: false,
             ready: false,
+            fixedNavbar: false,
         };
     },
     async mounted() {
@@ -33,7 +34,13 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="fixed-navbar">
+    <div
+        :class='
+            {
+                "fixed-navbar": fixedNavbar,
+            }
+        '
+    >
         <div class="my-navbar">
             <Logo />
 
@@ -86,6 +93,8 @@ $navHeight: 100px;
         right: 0;
         z-index: 1000;
         width: 100vw;
+        margin-bottom: 0;
+        background-color: #212529;
     }
 }
 
@@ -95,6 +104,7 @@ $navHeight: 100px;
     display: flex;
     justify-content: center;
     align-items: center;
+    margin-bottom: 20px;
 
     [data-bs-theme="light"] & {
         border-bottom-color: #dadada;
