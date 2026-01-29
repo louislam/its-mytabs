@@ -33,7 +33,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div>
+    <div class="page-content">
         <div class="my-navbar">
             <Logo />
 
@@ -76,12 +76,20 @@ export default defineComponent({
 <style lang="scss" scoped>
 @import "../styles/vars.scss";
 
+$navHeight: 100px;
+
 .my-navbar {
-    margin-bottom: 20px;
+    height: $navHeight;
     border-bottom: 1px solid #3c3b40;
     display: flex;
     justify-content: center;
     align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    width: 100vw;
 
     [data-bs-theme="light"] & {
         border-bottom-color: #dadada;
@@ -122,11 +130,19 @@ export default defineComponent({
     }
 }
 
+.page-content {
+    padding-top: $navHeight + 20px;
+}
+
 .mobile {
+    $navHeightMobile: 75px;
+
     .my-navbar {
+        height: $navHeightMobile;
+
         .navbar-brand {
-            width: 75px;
-            height: 75px;
+            width: $navHeightMobile;
+            height: $navHeightMobile;
             font-size: 15px;
         }
 
@@ -137,6 +153,10 @@ export default defineComponent({
                 column-gap: 10px;
             }
         }
+    }
+
+    .page-content {
+        padding-top: $navHeightMobile + 20px;
     }
 }
 </style>
