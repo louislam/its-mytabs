@@ -62,9 +62,20 @@ export default defineComponent({
             keySignature: "",
 
             keyEvents: (e) => {
+                const element = document.activeElement;
+                if (element && (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable)) {
+                    return;
+                }
+
                 if (e.code === "Space") {
                     e.preventDefault();
                     this.playPause();
+                } else if (e.code === "ArrowLeft") {
+                    e.preventDefault();
+                    this.moveToBar(-1);
+                } else if (e.code === "ArrowRight") {
+                    e.preventDefault();
+                    this.moveToBar(1);
                 }
             },
             setting: {},
@@ -1268,6 +1279,39 @@ export default defineComponent({
                 await checkFetch(res);
             } catch (e) {
                 generalError(e);
+            }
+        },
+
+        /**
+         * Move the cursor to the previous/next bar.
+         * @param steps Number of bars to move. Negative for previous bars.
+         */
+        moveToBar(steps) {
+            try {
+                if (!this.api || !this.api.score || !this.api.score.masterBars || this.api.score.masterBars.length === 0) {
+                    return;
+                }
+
+                const masterBars = this.api.score.masterBars;
+                const currentTick = Number(this.api.tickPosition ?? 0);
+                let index = 0;
+                for (let i = 0; i < masterBars.length; i++) {
+                    const masterBarStart = masterBars[i].start ?? 0;
+                    if (masterBarStart <= currentTick) {
+                        index = i;
+                    } else {
+                        break;
+                    }
+                }
+
+                let target = index + steps;
+                if (target < 0) target = 0;
+                if (target >= masterBars.length) target = masterBars.length - 1;
+
+                const targetTick = masterBars[target].start ?? 0;
+                this.api.tickPosition = targetTick;
+            } catch (err) {
+                console.error("moveToBar error:", err);
             }
         },
     },
