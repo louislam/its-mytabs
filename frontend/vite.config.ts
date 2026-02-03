@@ -26,9 +26,7 @@ export default defineConfig({
     },
     plugins: [
         vue(),
-        alphaTab({
-            alphaTabSourceDir: "node_modules/@coderline/alphatab/dist",
-        }),
+        alphaTab(),
         viteCompression({
             algorithm: "gzip",
             filter: viteCompressionFilter,

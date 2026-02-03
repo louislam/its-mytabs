@@ -16,7 +16,7 @@
 
         // Dev
         "dev": "deno task build-frontend && deno run -A npm:concurrently -k -r \"deno run -A npm:wait-on tcp:47777 && deno task frontend-dev\" \"deno task backend-dev\"",
-        "frontend-dev": "cd frontend && deno run dev",
+        "frontend-dev": "cd frontend && deno run dev-frontend",
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
         "install-frontend-deps": "cd frontend && deno install",
         "test": "deno test --allow-all",
