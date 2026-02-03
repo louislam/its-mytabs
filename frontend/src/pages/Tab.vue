@@ -8,6 +8,10 @@ import { isLoggedIn } from "../auth-client.js";
 import { getKeySignature } from "../util.ts";
 
 const alphaTab = await import("@coderline/alphatab");
+
+// For debugging only
+alphaTab.Environment.printEnvironmentInfo();
+
 const { ScrollMode, StaveProfile } = alphaTab;
 
 const speedActionBuffer = new ActionBuffer(1000);
