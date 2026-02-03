@@ -17,23 +17,38 @@ export default defineComponent({
         return {
             isLoggedIn: false,
             ready: false,
+            fixedNavbar: false,
         };
     },
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
         this.ready = true;
     },
+    watch: {
+        $route() {
+            this.fixedNavbar = false;
+        },
+    },
     methods: {
         async signOut() {
             const res = await authClient.signOut();
             this.$router.push("/login");
+        },
+        onSetFixedHeader(val) {
+            this.fixedNavbar = val;
         },
     },
 });
 </script>
 
 <template>
-    <div>
+    <div
+        :class='
+            {
+                "fixed-navbar": fixedNavbar,
+            }
+        '
+    >
         <div class="my-navbar">
             <Logo />
 
@@ -69,19 +84,37 @@ export default defineComponent({
             </div>
         </div>
 
-        <router-view />
+        <router-view v-slot="{ Component }">
+            <component :is="Component" @setFixedHeader="onSetFixedHeader" />
+        </router-view>
     </div>
 </template>
 
 <style lang="scss" scoped>
 @import "../styles/vars.scss";
 
+$navHeight: 100px;
+
+.fixed-navbar {
+    .my-navbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        width: 100vw;
+        margin-bottom: 0;
+        background-color: #212529;
+    }
+}
+
 .my-navbar {
-    margin-bottom: 20px;
+    height: $navHeight;
     border-bottom: 1px solid #3c3b40;
     display: flex;
     justify-content: center;
     align-items: center;
+    margin-bottom: 20px;
 
     [data-bs-theme="light"] & {
         border-bottom-color: #dadada;
@@ -122,11 +155,19 @@ export default defineComponent({
     }
 }
 
+.fixed-navbar {
+    padding-top: $navHeight + 20px;
+}
+
 .mobile {
+    $navHeightMobile: 75px;
+
     .my-navbar {
+        height: $navHeightMobile;
+
         .navbar-brand {
-            width: 75px;
-            height: 75px;
+            width: $navHeightMobile;
+            height: $navHeightMobile;
             font-size: 15px;
         }
 
@@ -137,6 +178,10 @@ export default defineComponent({
                 column-gap: 10px;
             }
         }
+    }
+
+    .fixed-navbar {
+        padding-top: $navHeightMobile + 20px;
     }
 }
 </style>

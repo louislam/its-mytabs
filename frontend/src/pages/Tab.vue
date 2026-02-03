@@ -32,6 +32,7 @@ export default defineComponent({
     youtubePlayer: null,
 
     components: { FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
+    emits: ["setFixedHeader"],
     data() {
         return {
             isLoggedIn: false,
@@ -72,7 +73,7 @@ export default defineComponent({
     },
     computed: {
         animatedCursor() {
-            return this.setting.cursor === "animated";
+            return this.setting.cursor === "animated" || this.setting.scrollMode === ScrollMode.Smooth;
         },
 
         syncMethod() {
@@ -486,6 +487,13 @@ export default defineComponent({
                     };
                 }
 
+                let layoutMode = undefined;
+
+                if (this.setting.scoreStyle === "horizontal-tab") {
+                    layoutMode = alphaTab.LayoutMode.Horizontal;
+                    this.$emit("setFixedHeader", true);
+                }
+
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
                         rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
@@ -523,6 +531,7 @@ export default defineComponent({
                     display: {
                         staveProfile: this.getStaveProfile(),
                         resources: displayResources,
+                        layoutMode,
                     },
                 });
 
@@ -577,7 +586,12 @@ export default defineComponent({
                     this.speed = this.getConfig("speed", 100);
 
                     // Scroll Mode
-                    this.scrollMode = this.setting.scrollMode;
+                    // Force Smooth from horizontal tab
+                    if (this.setting.scoreStyle === "horizontal-tab") {
+                        this.scrollMode = ScrollMode.Smooth;
+                    } else {
+                        this.scrollMode = this.setting.scrollMode;
+                    }
 
                     this.tracks = [];
 
@@ -714,7 +728,7 @@ export default defineComponent({
             for (const track of score.tracks) {
                 for (const staff of track.staves) {
                     // Override visibility flags based on user's Style setting
-                    if (this.setting.scoreStyle === "tab") {
+                    if (this.setting.scoreStyle === "tab" || this.setting.scoreStyle === "horizontal-tab") {
                         staff.showTablature = true;
                         staff.showStandardNotation = false;
                     } else if (this.setting.scoreStyle === "score") {
@@ -1081,7 +1095,7 @@ export default defineComponent({
         },
 
         getStaveProfile() {
-            if (this.setting.scoreStyle === "tab") {
+            if (this.setting.scoreStyle === "tab" || this.setting.scoreStyle === "horizontal-tab") {
                 return StaveProfile.Tab;
             } else if (this.setting.scoreStyle === "score") {
                 return StaveProfile.Score;

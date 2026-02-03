@@ -49,6 +49,7 @@ export default defineComponent({
                 <option value="tab">Tab</option>
                 <option value="score">Score</option>
                 <option value="score-tab">Tab + Score</option>
+                <option value="horizontal-tab">Horizontal Tab</option>
             </select>
         </div>
 
@@ -63,10 +64,14 @@ export default defineComponent({
 
         <!-- Scroll Mode -->
         <div class="mb-3">
-            <label for="scrollMode" class="form-label">Scroll Mode</label>
-            <select id="scrollMode" class="form-select" v-model="setting.scrollMode">
-                <option :value="ScrollMode.Continuous">Auto Scroll</option>
+            <label for="scrollMode" class="form-label">
+                Scroll
+                <span v-if='setting.scoreStyle === "horizontal-tab"'> (Force Smooth Scroll for Horizontal Tab)</span>
+            </label>
+            <select id="scrollMode" class="form-select" v-model="setting.scrollMode" :disabled='setting.scoreStyle === "horizontal-tab"'>
+                <option :value="ScrollMode.Continuous">Scroll</option>
                 <option :value="ScrollMode.Off">Off</option>
+                <option :value="ScrollMode.Smooth">Smooth Scroll</option>
             </select>
         </div>
 
