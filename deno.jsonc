@@ -26,7 +26,7 @@
         // Build
         "build-binary": "deno task build-frontend && deno run --allow-all extra/build-binary.ts",
         "build-docker": "deno task build-frontend && deno run --allow-all --env-file extra/build-docker.ts",
-        "build-docker-nightly": "deno task build-frontend && docker build -t louislam/its-mytabs:nightly -f Dockerfile . --push",
+        "build-docker-nightly": "deno task build-frontend && docker build -t louislam/its-mytabs:nightly-dev-alphatab181 -f Dockerfile . --push",
         "build-frontend": "cd frontend && deno run build",
         "start-with-build": "deno task build-frontend && deno task start",
 
