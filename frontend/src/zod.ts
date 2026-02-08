@@ -11,5 +11,6 @@ export const SettingSchema = z.object({
     scrollMode: z.enum(ScrollMode).default(ScrollMode.Continuous),
     groupByArtist: z.boolean().default(false),
     showKeySignature: z.boolean().default(false),
+    scale: z.number().min(0.1).default(1),
 });
 export type Setting = z.infer<typeof SettingSchema>;

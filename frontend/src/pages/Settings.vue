@@ -20,6 +20,7 @@ export default defineComponent({
                 groupByArtist: false,
                 showKeySignature: false,
                 scrollMode: "",
+                scale: 1,
             },
         };
     },
@@ -59,6 +60,22 @@ export default defineComponent({
             <select id="scoreColor" class="form-select" v-model="setting.scoreColor">
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
+            </select>
+        </div>
+
+        <!-- Tab/Score Display Scale -->
+        <div class="mb-3">
+            <label for="scale" class="form-label">Tab/Score Display Scale</label>
+            <select id="scale" class="form-select" v-model.number="setting.scale">
+                <option :value="0.8">80%</option>
+                <option :value="1">100%</option>
+                <option :value="1.1">110%</option>
+                <option :value="1.2">120%</option>
+                <option :value="1.3">130%</option>
+                <option :value="1.4">140%</option>
+                <option :value="1.5">150%</option>
+                <option :value="2">200%</option>
+                <option :value="3">300%</option>
             </select>
         </div>
 

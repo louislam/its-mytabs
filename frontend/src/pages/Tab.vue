@@ -565,6 +565,7 @@ export default defineComponent({
                         staveProfile: this.getStaveProfile(),
                         resources: displayResources,
                         layoutMode,
+                        scale: this.setting.scale,
                     },
                 });
 
