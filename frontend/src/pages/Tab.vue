@@ -589,6 +589,23 @@ export default defineComponent({
                     }
                 }
 
+                // DEBUG
+                this.api.customCursorHandler = {
+                    onAttach() {},
+                    onDetach() {},
+                    placeBeatCursor(beatCursor, beatBounds) {
+                        const barBounds = beatBounds.barBounds.masterBarBounds.visualBounds;
+                        beatCursor.setBounds(beatBounds.onNotesX, barBounds.y, 1, barBounds.h);
+                    },
+                    placeBarCursor(barCursor, beatBounds) {
+                        const barBounds = beatBounds.barBounds.masterBarBounds.visualBounds;
+                        barCursor.setBounds(barBounds.x, barBounds.y, barBounds.w, barBounds.h);
+                    },
+                    transitionBeatCursor(beatCursor, beatBounds) {
+                        this.placeBeatCursor(beatCursor, beatBounds);
+                    },
+                };
+
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
                     console.log("Score loaded");
