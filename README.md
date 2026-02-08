@@ -118,6 +118,17 @@ MYTABS_PORT=47777
 MYTABS_LAUNCH_BROWSER=true
 ```
 
+## Keyboard Shortcuts
+
+Tab Player Keyboard Shortcuts:
+
+| Key         | Description                                            | Since Version |
+| ----------- | ------------------------------------------------------ | ------------- |
+| Space       | Toggle Play / Pause                                    | Initial       |
+| Arrow Left  | Move cursor to the previous bar                        | 1.5.0         |
+| Arrow Right | Move cursor to the next bar                            | 1.5.0         |
+| Arrow Up    | Restart - Play from the start of the highlighted range | 1.5.0         |
+
 ## Motivation
 
 A few months ago, I saw a music game called Rocksmith 2014 Remastered on sale on Steam. I bought it, grabbed my brother's abandoned bass, and started playing.

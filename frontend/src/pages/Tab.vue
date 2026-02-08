@@ -64,6 +64,7 @@ export default defineComponent({
             audio: {},
             scrollMode: ScrollMode.Continuous,
             keySignature: "",
+            playbackRange: null,
 
             keyEvents: (e) => {
                 const element = document.activeElement;
@@ -80,6 +81,9 @@ export default defineComponent({
                 } else if (e.code === "ArrowRight") {
                     e.preventDefault();
                     this.moveToBar(1);
+                } else if (e.code === "ArrowUp") {
+                    e.preventDefault();
+                    this.playFromHighlightedRange();
                 }
             },
             setting: {},
@@ -452,6 +456,24 @@ export default defineComponent({
             this.playing = false;
         },
 
+        /**
+         * Play from the beginning of highlighted range
+         * Do nothing if no bar is highlighted
+         */
+        playFromHighlightedRange() {
+            if (!this.api || !this.ready) {
+                return;
+            }
+
+            const playbackRange = this.api.playbackRange;
+            if (!playbackRange) {
+                return;
+            }
+
+            this.api.tickPosition = playbackRange.startTick;
+            this.playing = true;
+        },
+
         getFileURL(tempToken) {
             return baseURL + `/api/tab/${this.tabID}/file?tempToken=${tempToken}`;
         },
@@ -552,6 +574,11 @@ export default defineComponent({
 
                 // Exposing api to window for debugging
                 window.api = this.api;
+
+                // Used for showing/hiding the "Restart" button
+                this.api.playbackRangeChanged.on(() => {
+                    this.playbackRange = this.api.playbackRange;
+                });
 
                 // iOS 16.4+: Enable audio playback even when silent switch is ON
                 if ("audioSession" in navigator) {
@@ -656,6 +683,7 @@ export default defineComponent({
             this.youtube = {};
             this.simpleSyncSecond = -1;
             this.muteTrackList = {};
+            this.playbackRange = null;
         },
 
         simpleSync(offset) {
@@ -1348,6 +1376,11 @@ export default defineComponent({
                         Audio
                     </div>
                 </div>
+
+                <button class="btn btn-warning" @click="playFromHighlightedRange()" v-if="playbackRange">
+                    <font-awesome-icon :icon='["fas", "play"]' />
+                    Restart
+                </button>
 
                 <button class="btn btn-primary" @click="playPause" :class="{ active: playing }">
                     <span v-if="!playing">
