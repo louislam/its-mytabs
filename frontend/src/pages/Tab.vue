@@ -80,6 +80,9 @@ export default defineComponent({
                 } else if (e.code === "ArrowUp") {
                     e.preventDefault();
                     this.playFromHighlightedRange();
+                } else if (e.code === "KeyS") {
+                    e.preventDefault();
+                    this.playFromFirstBarContainingNotes(-2);
                 }
             },
             setting: {},
@@ -467,7 +470,58 @@ export default defineComponent({
             }
 
             this.api.tickPosition = playbackRange.startTick;
-            this.playing = true;
+            this.play();
+        },
+
+        /**
+         * Play from the first bar containing notes in the current track
+         * If offset is provided, play from the first bar containing notes after the offset bar
+         */
+        playFromFirstBarContainingNotes(offset = 0) {
+            if (!this.api || !this.ready) {
+                return;
+            }
+
+            // Find the first bar containing notes in the current track
+            const track = this.api.score.tracks[this.selectedTrack];
+
+            let targetBar = null;
+
+            // Check the first staff only
+            for (let i = 0; i < track.staves[0].bars.length; i++) {
+                const bar = track.staves[0].bars[i];
+
+                // See if bar contains any notes by scanning voices -> beats -> notes
+                let hasNotes = false;
+                if (bar && bar.voices) {
+                    for (const voice of bar.voices) {
+                        if (!voice || !voice.beats) continue;
+                        for (const beat of voice.beats) {
+                            if (beat && beat.notes && beat.notes.length > 0) {
+                                hasNotes = true;
+                                break;
+                            }
+                        }
+                        if (hasNotes) break;
+                    }
+                }
+
+                // Apply offset
+                if (hasNotes) {
+                    const bars = track.staves[0].bars;
+                    // clamp target index between 0 and last bar index
+                    const targetIndex = Math.max(0, Math.min(i + offset, bars.length - 1));
+                    targetBar = bars[targetIndex];
+                    break;
+                }
+            }
+
+            if (targetBar) {
+                const firstBeat = targetBar.voices[0].beats[0];
+                api.tickPosition = firstBeat.absoluteDisplayStart;
+            }
+
+            this.play();
         },
 
         getFileURL(tempToken) {
