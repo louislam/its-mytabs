@@ -1519,7 +1519,7 @@ $youtube-height: 200px;
     bottom: 0;
     left: 0;
     width: 100%;
-    z-index: 1;
+    z-index: 1000;
 
     .light & {
         background-color: rgba(33, 37, 41, 0.8);
