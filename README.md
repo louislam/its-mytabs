@@ -128,6 +128,7 @@ Tab Player Keyboard Shortcuts:
 | Arrow Left  | Move cursor to the previous bar                        | 1.5.0         |
 | Arrow Right | Move cursor to the next bar                            | 1.5.0         |
 | Arrow Up    | Restart - Play from the start of the highlighted range | 1.5.0         |
+| S           | Play from the first bar containing notes (-2 offset)   | 1.5.0         |
 
 ## Motivation
 
