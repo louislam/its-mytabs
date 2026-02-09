@@ -946,14 +946,30 @@ export default defineComponent({
 
                 // state updates
                 audioPlayer.addEventListener("pause", () => {
+                    // If the audio ended, the "pause" event will also be triggered
+                    // Ignore this, because we have "ended" event to handle it
+                    if (audioPlayer.ended) {
+                        return;
+                    }
+
+                    console.log("[audioPlayer] paused");
                     this.playing = false;
                     this.api.pause();
                     window.clearInterval(updateTimer.current);
                 });
                 audioPlayer.addEventListener("ended", () => {
-                    this.playing = false;
-                    this.api.pause();
-                    window.clearInterval(updateTimer.current);
+                    console.log("[audioPlayer] ended");
+
+                    // If isLooping is true, seek to the beginning and play again
+                    // Else just pause
+                    if (this.isLooping) {
+                        audioPlayer.currentTime = 0;
+                        audioPlayer.play();
+                    } else {
+                        this.playing = false;
+                        this.api.pause();
+                        window.clearInterval(updateTimer.current);
+                    }
                 });
                 audioPlayer.addEventListener("volumechange", () => {
                     this.api.masterVolume = audioPlayer.volume;
