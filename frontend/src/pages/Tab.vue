@@ -955,7 +955,7 @@ export default defineComponent({
                     console.log("[audioPlayer] paused");
                     this.playing = false;
                     this.api.pause();
-                    window.clearInterval(updateTimer.current);
+                    window.clearInterval(updateTimer);
                 });
                 audioPlayer.addEventListener("ended", () => {
                     console.log("[audioPlayer] ended");
@@ -968,7 +968,7 @@ export default defineComponent({
                     } else {
                         this.playing = false;
                         this.api.pause();
-                        window.clearInterval(updateTimer.current);
+                        window.clearInterval(updateTimer);
                     }
                 });
                 audioPlayer.addEventListener("volumechange", () => {
