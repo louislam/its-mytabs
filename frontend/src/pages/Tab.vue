@@ -8,6 +8,10 @@ import { isLoggedIn } from "../auth-client.js";
 import { getKeySignature } from "../util.ts";
 
 const alphaTab = await import("@coderline/alphatab");
+
+// For debugging only
+alphaTab.Environment.printEnvironmentInfo();
+
 const { ScrollMode, StaveProfile } = alphaTab;
 
 const speedActionBuffer = new ActionBuffer(1000);
@@ -639,6 +643,23 @@ export default defineComponent({
                         console.error("Failed to set navigator.audioSession.type to 'playback':", error);
                     }
                 }
+
+                // DEBUG
+                this.api.customCursorHandler = {
+                    onAttach() {},
+                    onDetach() {},
+                    placeBeatCursor(beatCursor, beatBounds) {
+                        const barBounds = beatBounds.barBounds.masterBarBounds.visualBounds;
+                        beatCursor.setBounds(beatBounds.onNotesX, barBounds.y, 1, barBounds.h);
+                    },
+                    placeBarCursor(barCursor, beatBounds) {
+                        const barBounds = beatBounds.barBounds.masterBarBounds.visualBounds;
+                        barCursor.setBounds(barBounds.x, barBounds.y, barBounds.w, barBounds.h);
+                    },
+                    transitionBeatCursor(beatCursor, beatBounds) {
+                        this.placeBeatCursor(beatCursor, beatBounds);
+                    },
+                };
 
                 // Score Loaded
                 this.api.scoreLoaded.on(async (score) => {
