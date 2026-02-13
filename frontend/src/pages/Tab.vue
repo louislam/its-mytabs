@@ -63,10 +63,9 @@ export default defineComponent({
             playbackRange: null,
 
             keyEvents: (e) => {
-                const element = document.activeElement;
-                if (element && (element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable)) {
-                    return;
-                }
+                // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
+                // It will type a space in the input instead of playing the music
+                // element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable
 
                 if (e.code === "Space") {
                     e.preventDefault();
@@ -79,7 +78,12 @@ export default defineComponent({
                     this.moveToBar(1);
                 } else if (e.code === "ArrowUp") {
                     e.preventDefault();
-                    this.playFromHighlightedRange();
+                    const result = this.playFromHighlightedRange();
+
+                    // Also act as the key S if not highlighted
+                    if (!result) {
+                        this.playFromFirstBarContainingNotes(-2);
+                    }
                 } else if (e.code === "KeyS") {
                     e.preventDefault();
                     this.playFromFirstBarContainingNotes(-2);
@@ -466,11 +470,12 @@ export default defineComponent({
 
             const playbackRange = this.api.playbackRange;
             if (!playbackRange) {
-                return;
+                return false;
             }
 
             this.api.tickPosition = playbackRange.startTick;
             this.play();
+            return true;
         },
 
         /**
