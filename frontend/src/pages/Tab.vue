@@ -91,6 +91,7 @@ export default defineComponent({
             },
             setting: {},
             simpleSyncSecond: -1,
+            toolbarAutoHide: false,
         };
     },
     computed: {
@@ -314,6 +315,7 @@ export default defineComponent({
     async mounted() {
         this.isLoggedIn = await isLoggedIn();
         this.setting = getSetting();
+        this.toolbarHidden = this.setting.toolbarAutoHide;
         this.tabID = this.$route.params.id;
         const urlParams = new URLSearchParams(window.location.search);
 
@@ -1434,7 +1436,7 @@ export default defineComponent({
         <!-- Just add a margin, don't let youtube player overlay the tab -->
         <div :class='{ "yt-margin": currentAudio.startsWith(`youtube-`) }'></div>
 
-        <div class="toolbar">
+        <div class="toolbar" :class='{ "auto-hide": setting.toolbarAutoHide }'>
             <div class="scroll">
                 <div class="track-selector selector" ref="trackSelector">
                     <div class="button" @click='showList("track")'>
@@ -1599,6 +1601,15 @@ $youtube-height: 200px;
 
     .light & {
         background-color: rgba(33, 37, 41, 0.8);
+    }
+
+    &.auto-hide {
+        transition: transform 0.3s;
+        transform: translateY(calc(100% - 5px));
+
+        &:hover {
+            transform: translateY(0);
+        }
     }
 
     // Allow horizontal scroll
