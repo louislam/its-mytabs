@@ -4,6 +4,11 @@
 
 # It's MyTabs
 
+<a target="_blank" href="https://github.com/louislam/uptime-kuma"><img src="https://img.shields.io/github/stars/louislam/its-mytabs?style=flat" /></a> 
+<a target="_blank" href="https://hub.docker.com/r/louislam/uptime-kuma"><img src="https://img.shields.io/docker/pulls/louislam/its-mytabs" /></a> 
+<a target="_blank" href="https://hub.docker.com/r/louislam/uptime-kuma"><img src="https://img.shields.io/docker/v/louislam/its-mytabs/latest?label=docker%20image%20ver." /></a> 
+<a target="_blank" href="https://github.com/louislam/uptime-kuma"><img src="https://img.shields.io/github/last-commit/louislam/its-mytabs" /></a> 
+
 Open source, web based, self hostable guitar/bass tab viewer and player, similar to Songsterr.
 
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/d7859f4a-8ae0-41e2-bdeb-93b900cc0220" />
