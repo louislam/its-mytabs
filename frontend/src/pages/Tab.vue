@@ -1255,7 +1255,8 @@ export default defineComponent({
          * @returns {Promise<void>}
          */
         async changeTrack(trackID) {
-            await this.load(trackID);
+            this.selectedTrack = trackID;
+            this.api.renderTracks([this.api.score.tracks[trackID]]);
             this.closeAllList();
         },
 
