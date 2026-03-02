@@ -91,7 +91,7 @@ export default defineComponent({
          * Reset local/client settings to default values
          */
         async resetToDefault() {
-            const ok = window.confirm("Are you sure want to reset you local settigns? This will not affect the settings stored on the server.");
+            const ok = window.confirm("Are you sure you want to reset your local settings? This will not affect the settings stored on the server.");
             if (!ok) {
                 return;
             }
