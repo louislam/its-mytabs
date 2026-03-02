@@ -652,7 +652,6 @@ export default defineComponent({
                     console.log("Score loaded");
 
                     this.applyColors(score);
-                    this.overrideHiddenStaves(score);
 
                     // Track
                     if (trackID < 0 || trackID >= score.tracks.length) {
@@ -704,14 +703,19 @@ export default defineComponent({
                         });
                     });
 
+                    this.selectedTrack = trackID;
+
                     // Force score+tab if the current track program = 0 (probably drums)
-                    if (score.tracks[trackID].playbackInfo.program === 0) {
+                    if (this.isDrum()) {
                         this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
                         this.api.updateSettings();
+                    } else {
+                        // This will break drum score
+                        this.overrideHiddenStaves(score);
                     }
 
                     this.enableBackingTrack = this.hasBackingTrack();
-                    this.selectedTrack = trackID;
+
                     this.ready = true;
                     resolve(trackID);
                 });
@@ -821,6 +825,7 @@ export default defineComponent({
 
         /**
          * Override hidden staves based on Style settings to fix Guitar Pro hidden tabs.
+         * ⚠️ This will break drum score
          * - Style "tab": showTablature = true, showStandardNotation = false
          * - Style "score": showTablature = false, showStandardNotation = true
          * - Style "score-tab": both = true
@@ -1248,13 +1253,36 @@ export default defineComponent({
         },
 
         /**
+         * Check if the current track is a drum track (program 0).
+         * this.selectedTrack must be set before calling this function.
+         * @returns {boolean}
+         */
+        isDrum() {
+            if (!this.api || !this.api.score || !this.api.score.tracks) {
+                return false;
+            }
+            const track = this.api.score.tracks[this.selectedTrack];
+            return track.playbackInfo.program === 0;
+        },
+
+        /**
          * Change the displayed track.
          * @param trackID
          * @returns {Promise<void>}
          */
         async changeTrack(trackID) {
+            const fromDrum = this.isDrum();
             this.selectedTrack = trackID;
-            this.api.renderTracks([this.api.score.tracks[trackID]]);
+            const isDrum = this.isDrum();
+
+            // If switching from/to drum track, need to re-render the whole score
+            // Due to the bug that Drum is not able to render in Tab View
+            if (fromDrum || isDrum) {
+                await this.load(trackID);
+            } else {
+                this.api.renderTracks([this.api.score.tracks[trackID]]);
+            }
+
             this.closeAllList();
         },
 
