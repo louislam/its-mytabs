@@ -76,14 +76,24 @@ export function disableSignUp() {
 }
 
 export async function checkLogin(c: Context) {
-    if (!await isLoggedIn(c)) {
-        throw new Error("Not logged in");
-    }
+    await getCurrentSession(c);
 }
 
 export async function isLoggedIn(c: Context) {
     const session = await auth.api.getSession(c.req.raw);
     return !!session;
+}
+
+/**
+ * Get current session, throw error if not logged in
+ * @param c
+ */
+export async function getCurrentSession(c: Context) {
+    const session = await auth.api.getSession(c.req.raw);
+    if (!session) {
+        throw new Error("Not logged in");
+    }
+    return session;
 }
 
 async function generateRandomSecret() {

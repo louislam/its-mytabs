@@ -1,7 +1,7 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import { SettingSchema } from "../zod.ts";
-import { getSetting } from "../app.js";
+import { baseURL, checkFetch, generalError, getSetting, successMessage } from "../app.js";
 import { ScrollMode } from "@coderline/alphatab";
 
 export default defineComponent({
@@ -23,10 +23,88 @@ export default defineComponent({
                 scale: 1,
                 toolbarAutoHide: false,
             },
+            isProcessing: false,
         };
     },
     mounted() {
         this.setting = getSetting();
+    },
+    methods: {
+        /**
+         * Load the setting from the server
+         */
+        async loadFromServer() {
+            const ok = window.confirm("This will overwrite your local settings. Are you sure?");
+            if (!ok) {
+                return;
+            }
+
+            try {
+                this.isProcessing = true;
+                const res = await fetch(baseURL + `/api/settings`, {
+                    credentials: "include",
+                });
+                await checkFetch(res);
+                const data = await res.json();
+                const serverSetting = data.setting || {};
+                const parsed = SettingSchema.parse(serverSetting);
+                this.setting = parsed;
+                localStorage.setItem("userSetting", JSON.stringify(parsed));
+                successMessage("Settings loaded from server");
+            } catch (e) {
+                generalError(e);
+            } finally {
+                this.isProcessing = false;
+            }
+        },
+
+        /**
+         * Save the current setting to the server.
+         */
+        async saveToServer() {
+            const ok = window.confirm("This will overwrite the settings stored on the server. Are you sure?");
+            if (!ok) {
+                return;
+            }
+
+            try {
+                this.isProcessing = true;
+                const parsedSetting = SettingSchema.parse(this.setting);
+                const res = await fetch(baseURL + `/api/settings`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(parsedSetting),
+                });
+                await checkFetch(res);
+                successMessage("Settings saved to server");
+            } catch (e) {
+                generalError(e);
+            } finally {
+                this.isProcessing = false;
+            }
+        },
+
+        /**
+         * Reset local/client settings to default values
+         */
+        async resetToDefault() {
+            const ok = window.confirm("Are you sure you want to reset your local settings? This will not affect the settings stored on the server.");
+            if (!ok) {
+                return;
+            }
+
+            try {
+                const defaults = SettingSchema.parse({});
+                this.setting = defaults;
+                localStorage.setItem("userSetting", JSON.stringify(defaults));
+                successMessage("Reset to default settings successfully");
+            } catch (e) {
+                generalError(e);
+            }
+        },
     },
     watch: {
         setting: {
@@ -42,7 +120,9 @@ export default defineComponent({
 
 <template>
     <div class="container my-container">
-        <h1 class="mb-5">Settings</h1>
+        <h1 class="mb-3">Settings</h1>
+
+        <h2 class="mt-4 mb-4">Tab Player</h2>
 
         <!--     scoreStyle: z.enum(["tab", "score-tab", "score"]).default("tab"), -->
         <div class="mb-3">
@@ -145,6 +225,18 @@ export default defineComponent({
                 <option :value="false">No</option>
                 <option :value="true">Yes</option>
             </select>
+        </div>
+
+        <h2 class="mt-5 mb-4">Others</h2>
+
+        <div class="mb-3">
+            <label class="form-label">Load/Save Settings to Server</label>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="loadFromServer">Load from Server</button>
+                <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="saveToServer">Save to Server</button>
+                <button class="btn btn-danger" :disabled="isProcessing" @click.prevent="resetToDefault">Reset Local</button>
+            </div>
         </div>
     </div>
 </template>
