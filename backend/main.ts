@@ -1,7 +1,7 @@
 import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
-import { auth, checkLogin, isFinishSetup, isLoggedIn } from "./auth.ts";
+import { auth, checkLogin, getCurrentSession, isFinishSetup, isLoggedIn } from "./auth.ts";
 import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
@@ -617,6 +617,34 @@ export async function main() {
                 ok: true,
                 token,
             });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    app.get("/api/settings", async (c) => {
+        try {
+            const session = await getCurrentSession(c);
+            const entry = await kv.get(["user_setting", session.user.id]);
+            const setting = entry.value;
+            if (!setting) {
+                throw new Error("Settings not found on server");
+            }
+            return c.json({
+                ok: true,
+                setting,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    app.post("/api/settings", async (c) => {
+        try {
+            const session = await getCurrentSession(c);
+            const body = await c.req.json();
+            await kv.set(["user_setting", session.user.id], body);
+            return c.json({ ok: true });
         } catch (e) {
             return generalError(c, e);
         }
