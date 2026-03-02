@@ -1248,14 +1248,13 @@ export default defineComponent({
         },
 
         /**
-         * As Docs suggested, I should use api.renderTrack() to change track
-         * But for some reason, some slide notes are not rendered correctly
-         * So I just reload the whole AlphaTab instance instead.
+         * Change the displayed track.
          * @param trackID
          * @returns {Promise<void>}
          */
         async changeTrack(trackID) {
-            await this.load(trackID);
+            this.selectedTrack = trackID;
+            this.api.renderTracks([this.api.score.tracks[trackID]]);
             this.closeAllList();
         },
 
