@@ -86,6 +86,25 @@ export default defineComponent({
                 this.isProcessing = false;
             }
         },
+
+        /**
+         * Reset local/client settings to default values
+         */
+        async resetToDefault() {
+            const ok = window.confirm("Are you sure want to reset you local settigns? This will not affect the settings stored on the server.");
+            if (!ok) {
+                return;
+            }
+
+            try {
+                const defaults = SettingSchema.parse({});
+                this.setting = defaults;
+                localStorage.setItem("userSetting", JSON.stringify(defaults));
+                successMessage("Reset to default settings successfully");
+            } catch (e) {
+                generalError(e);
+            }
+        },
     },
     watch: {
         setting: {
@@ -216,6 +235,7 @@ export default defineComponent({
             <div class="d-flex gap-2">
                 <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="loadFromServer">Load</button>
                 <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="saveToServer">Save</button>
+                <button class="btn btn-danger" :disabled="isProcessing" @click.prevent="resetToDefault">Reset</button>
             </div>
         </div>
     </div>
