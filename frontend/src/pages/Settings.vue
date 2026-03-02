@@ -233,9 +233,9 @@ export default defineComponent({
             <label class="form-label">Load/Save Settings to Server</label>
 
             <div class="d-flex gap-2">
-                <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="loadFromServer">Load</button>
-                <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="saveToServer">Save</button>
-                <button class="btn btn-danger" :disabled="isProcessing" @click.prevent="resetToDefault">Reset</button>
+                <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="loadFromServer">Load from Server</button>
+                <button class="btn btn-secondary" :disabled="isProcessing" @click.prevent="saveToServer">Save to Server</button>
+                <button class="btn btn-danger" :disabled="isProcessing" @click.prevent="resetToDefault">Reset Local</button>
             </div>
         </div>
     </div>
