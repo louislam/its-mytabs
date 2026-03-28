@@ -1281,6 +1281,7 @@ export default defineComponent({
                 await this.load(trackID);
             } else {
                 this.api.renderTracks([this.api.score.tracks[trackID]]);
+                this.setConfig("trackID", trackID);
             }
 
             this.closeAllList();
