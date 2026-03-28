@@ -87,11 +87,9 @@ export default defineComponent({
                 class="form-control"
                 rows="10"
                 v-model="advancedSyncInternal"
-                :placeholder='
-                    "Example:\n" +
-                        "\\sync 0 0 36\n" +
-                        "\\sync 16 0 35425"
-                '
+                :placeholder='"Example:\n" +
+                "\\sync 0 0 36\n" +
+                "\\sync 16 0 35425"'
             >
                             </textarea>
         </div>

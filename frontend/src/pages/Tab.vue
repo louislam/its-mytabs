@@ -1557,10 +1557,8 @@ export default defineComponent({
                 <!-- No Audio -->
                 <div
                     class="audio item"
-                    @click='
-                        currentAudio = "none";
-                        closeAllList();
-                    '
+                    @click='currentAudio = "none";
+                    closeAllList()'
                     :class='{ active: currentAudio === "none" }'
                 >
                     <div class="name">No Audio (Mute)</div>
