@@ -21,6 +21,7 @@ export const TabInfoSchema = z.object({
     createdAt: z.iso.datetime().default(() => new Date().toISOString()),
     public: isPublic.default(false),
     fav: isFav.default(false),
+    tags: z.array(z.string()).default([]),
 });
 export type TabInfo = z.infer<typeof TabInfoSchema>;
 
@@ -28,6 +29,7 @@ export const UpdateTabInfoSchema = z.object({
     title,
     artist,
     public: isPublic,
+    tags: z.array(z.string()).default([]),
 });
 export type UpdateTabInfo = z.infer<typeof UpdateTabInfoSchema>;
 
@@ -76,3 +78,23 @@ export const ConfigJSONSchema = z.object({
     youtube: z.array(YoutubeSchema).default([]),
 });
 export type ConfigJSON = z.infer<typeof ConfigJSONSchema>;
+
+// Playlist schemas
+export const PlaylistSchema = z.object({
+    id: z.string(),
+    name: z.string().min(1),
+    tabIds: z.array(z.string()).default([]),
+    createdAt: z.iso.datetime().default(() => new Date().toISOString()),
+});
+export type Playlist = z.infer<typeof PlaylistSchema>;
+
+export const CreatePlaylistSchema = z.object({
+    name: z.string().min(1),
+});
+export type CreatePlaylist = z.infer<typeof CreatePlaylistSchema>;
+
+export const UpdatePlaylistSchema = z.object({
+    name: z.string().min(1).optional(),
+    tabIds: z.array(z.string()).optional(),
+});
+export type UpdatePlaylist = z.infer<typeof UpdatePlaylistSchema>;

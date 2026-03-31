@@ -1,5 +1,5 @@
 import { io } from "socket.io-client";
-import { midiProgramCodeList } from "../../backend/common.ts";
+import { getShortInstrumentName, isGuitarOrBass, midiProgramCodeList } from "../../backend/common.ts";
 import { notify } from "@kyvg/vue3-notification";
 import { SettingSchema } from "./zod.ts";
 
@@ -33,6 +33,8 @@ export const baseURL = getBaseURL();
 export function getInstrumentName(midiProgram: number) {
     return midiProgramCodeList[midiProgram] || "Unknown";
 }
+
+export { getShortInstrumentName, isGuitarOrBass };
 
 export async function checkFetch(res: Response): Promise<void> {
     let data;

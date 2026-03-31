@@ -5,6 +5,7 @@ export const supportedFormatList = [
     "gp4",
     "gp5",
     "musicxml",
+    "mxl",
     "capx",
 ];
 
@@ -156,6 +157,36 @@ export const midiProgramCodeList = {
     125: "Helicopter",
     126: "Applause",
     127: "Gunshot",
+};
+
+export function getShortInstrumentName(program: number): string {
+    if (program === 0) return "Drums";
+    if (program >= 1 && program <= 7) return "Keys";
+    if (program >= 8 && program <= 15) return "Perc";
+    if (program >= 16 && program <= 23) return "Organ";
+    if (program >= 24 && program <= 31) return "Gtr";
+    if (program >= 32 && program <= 39) return "Bass";
+    if (program >= 40 && program <= 55) return "Str";
+    if (program >= 56 && program <= 63) return "Brass";
+    if (program >= 64 && program <= 67) return "Sax";
+    if (program >= 68 && program <= 79) return midiShortNames[program] || "Wind";
+    if (program >= 80 && program <= 103) return "Synth";
+    return "Inst";
+}
+
+const midiShortNames: Record<number, string> = {
+    68: "Oboe",
+    69: "E.Horn",
+    70: "Bsn",
+    71: "Clar",
+    72: "Picc",
+    73: "Flute",
+    74: "Rec",
+    75: "Pan Fl",
+    76: "Bottle",
+    77: "Shaku",
+    78: "Whistle",
+    79: "Ocar",
 };
 
 export function isGuitarOrBass(program: number) {

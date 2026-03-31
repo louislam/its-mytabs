@@ -246,6 +246,7 @@ Deno.test("updateTab", async () => {
         title: "Updated Title",
         artist: "Updated Artist",
         public: true,
+        tags: ["rock", "practice"],
     });
 
     // Check updated

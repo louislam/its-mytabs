@@ -313,6 +313,7 @@ export async function updateTab(tab: TabInfo, data: UpdateTabInfo) {
     tab.title = data.title;
     tab.artist = data.artist;
     tab.public = data.public;
+    tab.tags = data.tags;
     await writeTabInfo(tab);
 }
 

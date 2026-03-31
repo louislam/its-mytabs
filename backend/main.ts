@@ -2,7 +2,7 @@ import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, getCurrentSession, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { CreatePlaylistSchema, SignUpSchema, SyncRequestSchema, UpdatePlaylistSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
@@ -35,6 +35,7 @@ import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
+import { addTabToPlaylist, createPlaylist, deletePlaylist, getAllPlaylists, getPlaylist, removeTabFromPlaylist, updatePlaylist } from "./playlist.ts";
 import * as cheerio from "cheerio";
 
 let httpServer: ServerType;
@@ -644,6 +645,107 @@ export async function main() {
             const session = await getCurrentSession(c);
             const body = await c.req.json();
             await kv.set(["user_setting", session.user.id], body);
+            return c.json({ ok: true });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // --- Playlist routes ---
+
+    // List all playlists
+    app.get("/api/playlists", async (c) => {
+        try {
+            await checkLogin(c);
+            const playlists = await getAllPlaylists();
+            return c.json({ ok: true, playlists });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Create playlist
+    app.post("/api/playlist", async (c) => {
+        try {
+            await checkLogin(c);
+            const body = CreatePlaylistSchema.parse(await c.req.json());
+            const playlist = await createPlaylist(body);
+            return c.json({ ok: true, playlist });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Get playlist
+    app.get("/api/playlist/:id", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const playlist = await getPlaylist(id);
+
+            // Resolve tab info for each tab in the playlist
+            const tabs = [];
+            for (const tabId of playlist.tabIds) {
+                try {
+                    const tab = await getTab(tabId);
+                    tabs.push(tab);
+                } catch {
+                    // Tab may have been deleted — skip it
+                }
+            }
+
+            return c.json({ ok: true, playlist, tabs });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Update playlist (name and/or tab order)
+    app.put("/api/playlist/:id", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const body = UpdatePlaylistSchema.parse(await c.req.json());
+            const playlist = await updatePlaylist(id, body);
+            return c.json({ ok: true, playlist });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Delete playlist
+    app.delete("/api/playlist/:id", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            await deletePlaylist(id);
+            return c.json({ ok: true });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Add tab to playlist
+    app.post("/api/playlist/:id/tab/:tabId", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const tabId = c.req.param("tabId");
+            await checkTabExists(tabId);
+            await addTabToPlaylist(id, tabId);
+            return c.json({ ok: true });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Remove tab from playlist
+    app.delete("/api/playlist/:id/tab/:tabId", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const tabId = c.req.param("tabId");
+            await removeTabFromPlaylist(id, tabId);
             return c.json({ ok: true });
         } catch (e) {
             return generalError(c, e);

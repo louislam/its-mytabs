@@ -15,6 +15,7 @@ export default defineComponent({
         return {
             tabID: -1,
             tab: {},
+            tagsInput: "",
             page: "",
             youtubeURL: "",
             youtubeList: [],
@@ -52,6 +53,7 @@ export default defineComponent({
                 await checkFetch(res);
                 const data = await res.json();
                 this.tab = data.tab;
+                this.tagsInput = (data.tab.tags || []).join(", ");
                 this.youtubeList = data.youtubeList;
                 this.audioList = data.audioList;
                 this.filePath = data.filePath;
@@ -63,6 +65,9 @@ export default defineComponent({
 
         async submitInfo() {
             try {
+                // Parse tags from comma-separated input
+                this.tab.tags = this.tagsInput.split(",").map((t) => t.trim()).filter((t) => t.length > 0);
+
                 const tabID = this.$route.params.id;
                 const res = await fetch(baseURL + `/api/tab/${tabID}`, {
                     method: "POST",
@@ -74,6 +79,7 @@ export default defineComponent({
                         title: this.tab.title,
                         artist: this.tab.artist,
                         public: this.tab.public,
+                        tags: this.tab.tags || [],
                     }),
                 });
 
@@ -409,6 +415,13 @@ export default defineComponent({
                         <option :value="false">Private</option>
                         <option :value="true">Public</option>
                     </select>
+                </div>
+
+                <!-- Tags -->
+                <div class="mb-3">
+                    <label for="tabTags" class="form-label">Tags</label>
+                    <input type="text" class="form-control" id="tabTags" v-model="tagsInput" placeholder="e.g. rock, jazz, practice">
+                    <div class="form-text">Comma-separated tags for organizing your tabs</div>
                 </div>
 
                 <!-- Save -->

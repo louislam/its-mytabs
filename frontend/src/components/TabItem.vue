@@ -13,9 +13,17 @@ export default defineComponent({
             type: Boolean,
             default: true,
         },
+        selectable: {
+            type: Boolean,
+            default: false,
+        },
+        selected: {
+            type: Boolean,
+            default: false,
+        },
     },
 
-    emits: ["delete", "favToggled"],
+    emits: ["delete", "favToggled", "toggleSelected"],
 
     methods: {
         handleEdit() {
@@ -60,8 +68,17 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="tab-item p-3 rounded">
+    <div class="tab-item p-3 rounded" :class='{ "selected": selected }'>
+        <input
+            v-if="selectable"
+            type="checkbox"
+            class="form-check-input select-checkbox"
+            :checked="selected"
+            @change='$emit("toggleSelected")'
+        />
+
         <button
+            v-if="!selectable"
             class="fav-btn"
             @click="toggleFav"
             :class='{ "fav-active": tab.fav }'
@@ -74,6 +91,9 @@ export default defineComponent({
         <router-link class="info" :to="`/tab/${tab.id}`">
             <div class="title">{{ tab.title }}</div>
             <div class="artist" v-if="showArtist">{{ tab.artist }}</div>
+            <div class="tags" v-if="tab.tags && tab.tags.length > 0">
+                <span v-for="tag in tab.tags" :key="tag" class="badge bg-secondary me-1">{{ tag }}</span>
+            </div>
         </router-link>
 
         <button class="btn btn-secondary me-2" @click="handleEdit">
@@ -93,8 +113,28 @@ export default defineComponent({
     display: flex;
     transition: background-color 0.1s;
 
+    &.selected {
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
     &:hover {
         background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .select-checkbox {
+        align-self: center;
+        margin-right: 12px;
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        cursor: pointer;
+    }
+
+    .tags {
+        margin-top: 4px;
+        .badge {
+            font-size: 11px;
+        }
     }
 
     .fav-btn {

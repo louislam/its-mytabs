@@ -10,6 +10,7 @@ import Settings from "./pages/Settings.vue";
 import TabNew from "./pages/TabNew.vue";
 
 const Tab = () => import("./pages/Tab.vue");
+const Playlist = () => import("./pages/Playlist.vue");
 
 const routes: RouteRecordRaw[] = [
     {
@@ -47,6 +48,11 @@ const routes: RouteRecordRaw[] = [
                         path: "/tab/:id",
                         component: Tab,
                         meta: { hideFooter: true },
+                    },
+                    {
+                        name: "playlist",
+                        path: "/playlist/:id",
+                        component: Playlist,
                     },
                     {
                         name: "settings",

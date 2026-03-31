@@ -1,5 +1,5 @@
 <script>
-import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
+import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getShortInstrumentName, getSetting, isGuitarOrBass, releaseWakeLock, requestWakeLock } from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
@@ -51,7 +51,7 @@ export default defineComponent({
             isLooping: false,
             speed: 100,
             ready: false,
-            selectedTrack: 0,
+            selectedTracks: [0],
             soloTrackID: -1,
             muteTrackList: {},
             currentAudio: "synth",
@@ -61,6 +61,11 @@ export default defineComponent({
             scrollMode: ScrollMode.Continuous,
             keySignature: "",
             playbackRange: null,
+            playlistId: null,
+            playlistData: null,
+            playlistTabs: [],
+            autoAdvanceTimer: null,
+            autoAdvanceCountdown: 0,
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -320,12 +325,30 @@ export default defineComponent({
         const urlParams = new URLSearchParams(window.location.search);
 
         try {
-            // Override trackID if provided in URL
+            // Override trackIDs if provided in URL (supports comma-separated: ?track=0,2,3)
             const trackParam = urlParams.get("track");
             if (trackParam) {
-                const id = parseInt(trackParam);
-                if (!isNaN(id)) {
-                    this.setConfig("trackID", id);
+                const ids = trackParam.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n));
+                if (ids.length > 0) {
+                    this.setConfig("trackIDs", ids.slice(0, 4));
+                }
+            }
+
+            // Load playlist context if provided in URL
+            const playlistParam = urlParams.get("playlist");
+            if (playlistParam) {
+                this.playlistId = playlistParam;
+                try {
+                    const plRes = await fetch(baseURL + `/api/playlist/${playlistParam}`, {
+                        credentials: "include",
+                    });
+                    const plData = await plRes.json();
+                    if (plData.ok) {
+                        this.playlistData = plData.playlist;
+                        this.playlistTabs = plData.tabs;
+                    }
+                } catch {
+                    // Playlist loading failed, continue without it
                 }
             }
 
@@ -335,10 +358,15 @@ export default defineComponent({
                 this.setConfig("audio", audioParam);
             }
 
-            const trackID = this.getConfig("trackID", 0);
+            // Load stored trackIDs with backward compat (old "trackID" was a single number)
+            let trackIDs = this.getConfig("trackIDs", null);
+            if (!trackIDs) {
+                const legacyID = this.getConfig("trackID", 0);
+                trackIDs = [legacyID];
+            }
 
             // Load the AlphaTab
-            await this.load(trackID);
+            await this.load(trackIDs);
 
             window.addEventListener("keydown", this.keyEvents);
 
@@ -381,6 +409,7 @@ export default defineComponent({
     },
     beforeUnmount() {
         console.log("Before unmount");
+        this.cancelAutoAdvance();
         this.destroyContainer();
         window.removeEventListener("keydown", this.keyEvents);
 
@@ -392,7 +421,12 @@ export default defineComponent({
         this.socket.disconnect();
     },
     methods: {
-        async load(trackID) {
+        async load(trackIDs) {
+            // Normalize: accept a single number for backward compat
+            if (typeof trackIDs === "number") {
+                trackIDs = [trackIDs];
+            }
+
             if (this.api) {
                 this.destroyContainer();
             }
@@ -421,10 +455,10 @@ export default defineComponent({
 
             const tempToken = await this.getTempToken();
 
-            // Requested trackID may be invalid, so we need to get the actual trackID used
-            trackID = await this.initContainer(tempToken, trackID);
+            // Requested trackIDs may be invalid, so we get the actual validated list back
+            trackIDs = await this.initContainer(tempToken, trackIDs);
 
-            this.setConfig("trackID", trackID);
+            this.setConfig("trackIDs", trackIDs);
         },
 
         countIn() {
@@ -489,8 +523,8 @@ export default defineComponent({
                 return;
             }
 
-            // Find the first bar containing notes in the current track
-            const track = this.api.score.tracks[this.selectedTrack];
+            // Find the first bar containing notes in the primary track
+            const track = this.api.score.tracks[this.selectedTracks[0]];
 
             let targetBar = null;
 
@@ -551,10 +585,15 @@ export default defineComponent({
 
         /**
          * @param tempToken
-         * @param trackID
-         * @returns {Promise<number>} The actual trackID used
+         * @param trackIDs - array of track indices to display
+         * @returns {Promise<number[]>} The actual trackIDs used
          */
-        initContainer(tempToken, trackID) {
+        initContainer(tempToken, trackIDs) {
+            // Normalize input
+            if (typeof trackIDs === "number") {
+                trackIDs = [trackIDs];
+            }
+
             return new Promise((resolve, reject) => {
                 if (this.api) {
                     this.destroyContainer();
@@ -653,19 +692,32 @@ export default defineComponent({
 
                     this.applyColors(score);
 
-                    // Track
-                    if (trackID < 0 || trackID >= score.tracks.length) {
-                        trackID = 0;
+                    // Fix track names: override file metadata with correct instrument names
+                    for (const track of score.tracks) {
+                        track.name = getInstrumentName(track.playbackInfo.program);
+                        track.shortName = getShortInstrumentName(track.playbackInfo.program);
                     }
-                    this.api.renderTracks([this.api.score.tracks[trackID]]);
+
+                    // Validate and clamp trackIDs
+                    trackIDs = trackIDs
+                        .filter((id) => id >= 0 && id < score.tracks.length)
+                        .slice(0, 4);
+                    if (trackIDs.length === 0) {
+                        trackIDs = [0];
+                    }
+
+                    // Render selected tracks
+                    const trackObjects = trackIDs.map((id) => this.api.score.tracks[id]);
+                    this.api.renderTracks(trackObjects);
 
                     // Always show tempo automation on the master bar
                     if (api.score.masterBars.length > 0 && api.score.masterBars[0].tempoAutomations.length > 0) {
                         api.score.masterBars[0].tempoAutomations[0].isVisible = true;
                     }
 
-                    // Get key signature
-                    const firstBar = this.api.score.tracks[trackID].staves[0].bars[0];
+                    // Get key signature from primary (first) track
+                    const primaryTrackID = trackIDs[0];
+                    const firstBar = this.api.score.tracks[primaryTrackID].staves[0].bars[0];
                     this.keySignature = getKeySignature(firstBar);
 
                     // Set Audio source
@@ -703,26 +755,43 @@ export default defineComponent({
                         });
                     });
 
-                    this.selectedTrack = trackID;
+                    this.selectedTracks = trackIDs;
 
-                    // Force score+tab if the current track program = 0 (probably drums)
+                    // Force score+tab if the primary track is drums
                     if (this.isDrum()) {
                         this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
                         this.api.updateSettings();
                     } else {
-                        // This will break drum score
+                        // Check if any rendered track has tablature data
+                        const renderedTracks = trackIDs.map((id) => score.tracks[id]);
+                        const anyHasTab = renderedTracks.some((t) =>
+                            t.staves.some((s) => s.stringTuning && s.stringTuning.tunings && s.stringTuning.tunings.length > 0)
+                        );
+
+                        if (!anyHasTab) {
+                            // No tracks have tab data (e.g. MusicXML) — force score globally
+                            this.api.settings.display.staveProfile = StaveProfile.Score;
+                            this.api.updateSettings();
+                        }
+
+                        // Apply per-staff overrides for all modes including auto
                         this.overrideHiddenStaves(score);
                     }
 
                     this.enableBackingTrack = this.hasBackingTrack();
 
                     this.ready = true;
-                    resolve(trackID);
+                    resolve(trackIDs);
                 });
 
                 this.api.playerFinished.on(() => {
                     if (!this.isLooping) {
                         this.playing = false;
+
+                        // Auto-advance to next tab in playlist
+                        if (this.playlistData) {
+                            this.startAutoAdvance();
+                        }
                     }
                 });
             });
@@ -824,17 +893,31 @@ export default defineComponent({
         },
 
         /**
-         * Override hidden staves based on Style settings to fix Guitar Pro hidden tabs.
-         * ⚠️ This will break drum score
-         * - Style "tab": showTablature = true, showStandardNotation = false
-         * - Style "score": showTablature = false, showStandardNotation = true
-         * - Style "score-tab": both = true
+         * Override hidden staves based on Style settings and track capabilities.
+         * Only modifies tracks that have string tuning data (guitar/bass from GP files).
+         * Tracks without tab data (MusicXML wind instruments etc.) are left untouched
+         * so AlphaTab's parser defaults handle them correctly.
+         * ⚠️ Drums are handled separately before this is called.
          */
         overrideHiddenStaves(score) {
             for (const track of score.tracks) {
                 for (const staff of track.staves) {
-                    // Override visibility flags based on user's Style setting
-                    if (this.setting.scoreStyle === "tab" || this.setting.scoreStyle === "horizontal-tab") {
+                    const hasTab = staff.stringTuning && staff.stringTuning.tunings && staff.stringTuning.tunings.length > 0;
+
+                    if (this.setting.scoreStyle === "auto") {
+                        // Auto: show tab for stringed instruments, score for everything else
+                        if (hasTab) {
+                            staff.showTablature = true;
+                            staff.showStandardNotation = false;
+                        } else {
+                            staff.showTablature = false;
+                            staff.showStandardNotation = true;
+                        }
+                    } else if (!hasTab) {
+                        // Non-tab tracks always get score regardless of setting
+                        staff.showTablature = false;
+                        staff.showStandardNotation = true;
+                    } else if (this.setting.scoreStyle === "tab" || this.setting.scoreStyle === "horizontal-tab") {
                         staff.showTablature = true;
                         staff.showStandardNotation = false;
                     } else if (this.setting.scoreStyle === "score") {
@@ -1253,38 +1336,93 @@ export default defineComponent({
         },
 
         /**
-         * Check if the current track is a drum track (program 0).
-         * this.selectedTrack must be set before calling this function.
+         * Check if the primary (first selected) track is a drum track (program 0).
+         * this.selectedTracks must be set before calling this function.
          * @returns {boolean}
          */
         isDrum() {
             if (!this.api || !this.api.score || !this.api.score.tracks) {
                 return false;
             }
-            const track = this.api.score.tracks[this.selectedTrack];
+            const track = this.api.score.tracks[this.selectedTracks[0]];
             return track.playbackInfo.program === 0;
         },
 
         /**
-         * Change the displayed track.
+         * Toggle a track's visibility in the multi-track display.
+         * If toggling ON and already at max (4), does nothing.
+         * Cannot toggle OFF the last remaining track.
          * @param trackID
          * @returns {Promise<void>}
          */
-        async changeTrack(trackID) {
-            const fromDrum = this.isDrum();
-            this.selectedTrack = trackID;
-            const isDrum = this.isDrum();
+        async toggleTrackDisplay(trackID) {
+            const idx = this.selectedTracks.indexOf(trackID);
 
-            // If switching from/to drum track, need to re-render the whole score
-            // Due to the bug that Drum is not able to render in Tab View
-            if (fromDrum || isDrum) {
-                await this.load(trackID);
+            if (idx >= 0) {
+                // Track is currently shown — remove it (unless it's the last one)
+                if (this.selectedTracks.length <= 1) {
+                    return;
+                }
+                this.selectedTracks.splice(idx, 1);
             } else {
-                this.api.renderTracks([this.api.score.tracks[trackID]]);
-                this.setConfig("trackID", trackID);
+                // Track is not shown — add it (if under max)
+                if (this.selectedTracks.length >= 4) {
+                    return;
+                }
+                this.selectedTracks.push(trackID);
             }
 
-            this.closeAllList();
+            // Check if any selected track is a drum — requires full reload
+            const hasDrum = this.selectedTracks.some((id) => {
+                const t = this.api.score.tracks[id];
+                return t && t.playbackInfo.program === 0;
+            });
+
+            if (hasDrum) {
+                await this.load(this.selectedTracks);
+            } else {
+                const trackObjects = this.selectedTracks.map((id) => this.api.score.tracks[id]);
+                this.api.renderTracks(trackObjects);
+                this.setConfig("trackIDs", this.selectedTracks);
+            }
+        },
+
+        /**
+         * Set a track as the primary (first) track for cursor/navigation.
+         * If the track is not currently displayed, it will be added.
+         * @param trackID
+         * @returns {Promise<void>}
+         */
+        async setPrimaryTrack(trackID) {
+            const idx = this.selectedTracks.indexOf(trackID);
+
+            if (idx === 0) {
+                // Already primary, do nothing
+                return;
+            }
+
+            if (idx > 0) {
+                // Move to front
+                this.selectedTracks.splice(idx, 1);
+            } else if (this.selectedTracks.length >= 4) {
+                // At max, replace last
+                this.selectedTracks.pop();
+            }
+            this.selectedTracks.unshift(trackID);
+
+            // Check drum status
+            const hasDrum = this.selectedTracks.some((id) => {
+                const t = this.api.score.tracks[id];
+                return t && t.playbackInfo.program === 0;
+            });
+
+            if (hasDrum) {
+                await this.load(this.selectedTracks);
+            } else {
+                const trackObjects = this.selectedTracks.map((id) => this.api.score.tracks[id]);
+                this.api.renderTracks(trackObjects);
+                this.setConfig("trackIDs", this.selectedTracks);
+            }
         },
 
         showList(type) {
@@ -1358,6 +1496,51 @@ export default defineComponent({
 
         hasBackingTrack() {
             return !!this.api.score.backingTrack;
+        },
+
+        // Playlist navigation
+        playlistCurrentIndex() {
+            if (!this.playlistData) return -1;
+            return this.playlistData.tabIds.indexOf(this.tabID);
+        },
+
+        playlistPrevTab() {
+            const idx = this.playlistCurrentIndex();
+            if (idx <= 0) return null;
+            return this.playlistData.tabIds[idx - 1];
+        },
+
+        playlistNextTab() {
+            const idx = this.playlistCurrentIndex();
+            if (idx < 0 || idx >= this.playlistData.tabIds.length - 1) return null;
+            return this.playlistData.tabIds[idx + 1];
+        },
+
+        goToPlaylistTab(tabId) {
+            this.cancelAutoAdvance();
+            this.$router.push(`/tab/${tabId}?playlist=${this.playlistId}`);
+        },
+
+        startAutoAdvance() {
+            const nextId = this.playlistNextTab();
+            if (!nextId || !this.setting.playlistAutoAdvance) return;
+
+            this.autoAdvanceCountdown = 3;
+            this.autoAdvanceTimer = setInterval(() => {
+                this.autoAdvanceCountdown--;
+                if (this.autoAdvanceCountdown <= 0) {
+                    this.cancelAutoAdvance();
+                    this.goToPlaylistTab(nextId);
+                }
+            }, 1000);
+        },
+
+        cancelAutoAdvance() {
+            if (this.autoAdvanceTimer) {
+                clearInterval(this.autoAdvanceTimer);
+                this.autoAdvanceTimer = null;
+                this.autoAdvanceCountdown = 0;
+            }
         },
 
         setConfig(key, value) {
@@ -1454,6 +1637,12 @@ export default defineComponent({
 
 <template>
     <div class="main" :class='{ "light": this.setting.scoreColor === "light" }'>
+        <div class="playlist-badge text-center mb-1" v-if="playlistData">
+            <span class="badge bg-info">
+                <font-awesome-icon :icon='["fas", "list"]' />
+                {{ playlistData.name }}
+            </span>
+        </div>
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
         <div class="key-signature badge bg-secondary" v-if="keySignature && setting.showKeySignature">
@@ -1468,7 +1657,10 @@ export default defineComponent({
             <div class="scroll">
                 <div class="track-selector selector" ref="trackSelector">
                     <div class="button" @click='showList("track")'>
-                        <span v-if="tracks.length > 0">{{ tracks[selectedTrack].name }}</span>
+                        <span v-if="tracks.length > 0">
+                            {{ tracks[selectedTracks[0]].name }}
+                            <span v-if="selectedTracks.length > 1" class="track-count-badge">+{{ selectedTracks.length - 1 }}</span>
+                        </span>
                         <span v-else>Loading...</span>
                     </div>
                 </div>
@@ -1511,6 +1703,24 @@ export default defineComponent({
                     Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
                 </div>
 
+                <!-- Playlist nav -->
+                <template v-if="playlistData">
+                    <button class="btn btn-secondary" @click="goToPlaylistTab(playlistPrevTab())" :disabled="!playlistPrevTab()">
+                        <font-awesome-icon :icon='["fas", "backward-step"]' />
+                        Prev
+                    </button>
+                    <button class="btn btn-secondary" @click="goToPlaylistTab(playlistNextTab())" :disabled="!playlistNextTab()">
+                        Next
+                        <font-awesome-icon :icon='["fas", "forward-step"]' />
+                    </button>
+                </template>
+
+                <!-- Auto-advance countdown -->
+                <div class="auto-advance-notice" v-if="autoAdvanceCountdown > 0">
+                    Next in {{ autoAdvanceCountdown }}s
+                    <button class="btn btn-sm btn-outline-light ms-1" @click="cancelAutoAdvance">Cancel</button>
+                </div>
+
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
                         Edit
@@ -1523,8 +1733,12 @@ export default defineComponent({
                     <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showTrackList = false" />
                 </div>
 
-                <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTrack === track.id }">
-                    <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
+                <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTracks.includes(track.id), primary: selectedTracks[0] === track.id }">
+                    <div class="name" @click="setPrimaryTrack(track.id)">{{ track.name }}</div>
+                    <div class="list-button show-toggle" @click="toggleTrackDisplay(track.id)" :class="{ active: selectedTracks.includes(track.id) }">
+                        <span v-if="selectedTracks.includes(track.id)">Shown</span>
+                        <span v-else>Show</span>
+                    </div>
                     <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
                     <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
                     <div class="list-button select-percentage">
@@ -1783,13 +1997,43 @@ $padding: 20px;
     }
 }
 
+.auto-advance-notice {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    color: #ffc107;
+    font-weight: bold;
+    padding: 0 8px;
+}
+
+.track-count-badge {
+    display: inline-block;
+    background-color: $primary;
+    color: white;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 12px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
 .track-list {
     .track {
+        &.primary {
+            border-left: 3px solid $primary;
+        }
+
         .list-button {
             background-color: lighten($color, 10%);
             border-right: 1px solid darken($color, 5%);
             padding: $padding;
             height: 100%;
+            min-height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
 
             &:hover {
                 background-color: lighten($primary, 5%);
@@ -1798,6 +2042,11 @@ $padding: 20px;
             &.active {
                 background-color: lighten($primary, 8%);
             }
+        }
+
+        .show-toggle {
+            font-weight: bold;
+            min-width: 70px;
         }
     }
 }

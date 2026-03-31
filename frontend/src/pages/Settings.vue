@@ -128,6 +128,7 @@ export default defineComponent({
         <div class="mb-3">
             <label for="scoreStyle" class="form-label">Style</label>
             <select id="scoreStyle" class="form-select" v-model="setting.scoreStyle">
+                <option value="auto">Auto (tab if available, score otherwise)</option>
                 <option value="tab">Tab</option>
                 <option value="score">Score</option>
                 <option value="score-tab">Tab + Score</option>
@@ -218,10 +219,32 @@ export default defineComponent({
 
         <h2 class="mt-5 mb-4">Tab List</h2>
 
+        <!-- Sort by -->
+        <div class="mb-3">
+            <label for="tabSortBy" class="form-label">Sort tabs by</label>
+            <select id="tabSortBy" class="form-select" v-model="setting.tabSortBy">
+                <option value="dateNewest">Date Added (Newest)</option>
+                <option value="dateOldest">Date Added (Oldest)</option>
+                <option value="title">Title (A-Z)</option>
+                <option value="artist">Artist (A-Z)</option>
+            </select>
+        </div>
+
         <!-- Group by artist -->
         <div class="mb-3">
             <label for="groupByArtist" class="form-label">Group tabs by Artist</label>
             <select id="groupByArtist" class="form-select" v-model="setting.groupByArtist">
+                <option :value="false">No</option>
+                <option :value="true">Yes</option>
+            </select>
+        </div>
+
+        <h2 class="mt-5 mb-4">Playlist</h2>
+
+        <!-- Playlist auto-advance -->
+        <div class="mb-3">
+            <label for="playlistAutoAdvance" class="form-label">Auto-advance to next tab in playlist</label>
+            <select id="playlistAutoAdvance" class="form-select" v-model="setting.playlistAutoAdvance">
                 <option :value="false">No</option>
                 <option :value="true">Yes</option>
             </select>
