@@ -20,6 +20,7 @@ import PlaybackControls from "../components/PlaybackControls.vue";
 import ImportDialog from "../components/ImportDialog.vue";
 import ChordSheet from "../components/ChordSheet.vue";
 import PerformanceOverlay from "../components/PerformanceOverlay.vue";
+import SetlistSidebar from "../components/SetlistSidebar.vue";
 
 const emit = defineEmits(["setFixedHeader"]);
 
@@ -280,6 +281,13 @@ function edit() {
     router.push(`/tab/${tabID.value}/edit/info`);
 }
 
+// Setlist Sidebar
+const showSetlist = ref(false);
+
+function navigateToTab(tabId) {
+  router.push(`/tab/${tabId}`);
+}
+
 // Import Dialog
 const showImportDialog = ref(false);
 const chordSheetData = ref(null);
@@ -465,6 +473,8 @@ onBeforeUnmount(() => {
 
                 <button class="btn btn-secondary" @click="enterPerformanceMode()">Performance</button>
 
+                <button class="btn btn-secondary" @click="showSetlist = !showSetlist">Setlist</button>
+
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
                         Edit
@@ -563,6 +573,15 @@ onBeforeUnmount(() => {
         :title="chordSheetData.title"
         :artist="chordSheetData.artist"
         @close="closeChordSheet"
+    />
+
+    <SetlistSidebar
+        v-if="showSetlist"
+        :current-tab-id="String(alphaTabState.tabID.value)"
+        :current-tab-title="tab.title"
+        :current-tab-artist="tab.artist"
+        @navigate-to-tab="navigateToTab"
+        @close="showSetlist = false"
     />
 </template>
 
