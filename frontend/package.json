@@ -9,6 +9,7 @@
     },
     "dependencies": {
         "better-auth": "~1.4.17",
+        "chordsheetjs": "^14.2.1",
         "pinia": "~3.0.1",
         "private-ip": "~3.0.2",
         "rollup-plugin-visualizer": "^6.0.3",
