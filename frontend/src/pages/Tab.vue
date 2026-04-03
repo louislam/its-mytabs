@@ -15,9 +15,11 @@ import { useAudioSync } from "../composables/useAudioSync.ts";
 import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts.ts";
 import { useTrackSelection } from "../composables/useTrackSelection.ts";
 import { useWakeLock } from "../composables/useWakeLock.ts";
+import { usePerformanceMode } from "../composables/usePerformanceMode.ts";
 import PlaybackControls from "../components/PlaybackControls.vue";
 import ImportDialog from "../components/ImportDialog.vue";
 import ChordSheet from "../components/ChordSheet.vue";
+import PerformanceOverlay from "../components/PerformanceOverlay.vue";
 
 const emit = defineEmits(["setFixedHeader"]);
 
@@ -157,6 +159,34 @@ useKeyboardShortcuts({
     playFromHighlightedRange,
     playFromFirstBarContainingNotes,
 });
+
+const { performanceMode, enter: enterPerformanceMode, exit: exitPerformanceMode } = usePerformanceMode();
+
+// Track tick position for performance overlay progress bar
+const currentTick = ref(0);
+const endTick = ref(0);
+
+let tickInterval = null;
+
+function startTickTracking() {
+    if (tickInterval) return;
+    tickInterval = setInterval(() => {
+        if (!api.value) return;
+        currentTick.value = api.value.tickPosition ?? 0;
+        const masterBars = api.value.score?.masterBars;
+        if (masterBars && masterBars.length > 0) {
+            const last = masterBars[masterBars.length - 1];
+            endTick.value = (last.start ?? 0) + (last.calculateDuration?.() ?? 0);
+        }
+    }, 250);
+}
+
+function stopTickTracking() {
+    if (tickInterval) {
+        clearInterval(tickInterval);
+        tickInterval = null;
+    }
+}
 
 // Wire up score loaded callback
 onScoreLoaded((trackID) => {
@@ -368,11 +398,14 @@ onMounted(async () => {
 
     await initSocketIO();
 
+    startTickTracking();
+
     console.log("Mounted");
 });
 
 onBeforeUnmount(() => {
     console.log("Before unmount");
+    stopTickTracking();
     fullDestroy();
 
     if (_onDocumentClick) {
@@ -387,7 +420,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="main" :class='{ "light": setting.scoreColor === "light" }'>
+    <div class="main" :class='{ "light": setting.scoreColor === "light", "performance-mode": performanceMode }'>
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
         <div class="key-signature badge bg-secondary" v-if="keySignature && setting.showKeySignature">
@@ -398,7 +431,7 @@ onBeforeUnmount(() => {
         <!-- Just add a margin, don't let youtube player overlay the tab -->
         <div :class='{ "yt-margin": currentAudio.startsWith(`youtube-`) }'></div>
 
-        <div class="toolbar" :class='{ "auto-hide": setting.toolbarAutoHide }'>
+        <div class="toolbar" :class='{ "auto-hide": setting.toolbarAutoHide }' v-show="!performanceMode">
             <div class="scroll">
                 <div class="track-selector selector" ref="trackSelector">
                     <div class="button" @click='showList("track")'>
@@ -429,6 +462,8 @@ onBeforeUnmount(() => {
                 />
 
                 <button class="btn btn-secondary" @click="showImportDialog = true">Import</button>
+
+                <button class="btn btn-secondary" @click="enterPerformanceMode()">Performance</button>
 
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
@@ -506,6 +541,15 @@ onBeforeUnmount(() => {
         </div>
     </div>
 
+    <PerformanceOverlay
+        v-if="performanceMode"
+        :is-playing="playing"
+        :current-tick="currentTick"
+        :end-tick="endTick"
+        @toggle-play="playPause()"
+        @exit="exitPerformanceMode()"
+    />
+
     <ImportDialog
         v-if="showImportDialog"
         @import-tab="handleImportTab"
@@ -542,6 +586,13 @@ $youtube-height: 200px;
         h1, h2 {
             color: #333;
         }
+    }
+
+    &.performance-mode {
+        width: 100%;
+        margin: 0;
+        height: 100dvh;
+        overflow: hidden;
     }
 }
 
