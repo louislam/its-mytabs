@@ -3,6 +3,7 @@ import vue from "@vitejs/plugin-vue";
 import { alphaTab } from "@coderline/alphatab-vite";
 import viteCompression from "vite-plugin-compression";
 import { visualizer } from "rollup-plugin-visualizer";
+import { VitePWA } from "vite-plugin-pwa";
 
 // @ts-ignore
 import * as jsonc from "jsr:@std/jsonc";
@@ -39,6 +40,39 @@ export default defineConfig({
         }),*/
         visualizer({
             filename: "../data/stats.html",
+        }),
+        VitePWA({
+            registerType: "autoUpdate",
+            manifest: false, // We use our own manifest.json in public/
+            workbox: {
+                globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+                runtimeCaching: [
+                    {
+                        urlPattern: /\/api\/tab\/.*\/file/,
+                        handler: "CacheFirst",
+                        options: {
+                            cacheName: "tab-files",
+                            expiration: { maxEntries: 100 },
+                        },
+                    },
+                    {
+                        urlPattern: /\.sf2$/,
+                        handler: "CacheFirst",
+                        options: {
+                            cacheName: "soundfonts",
+                            expiration: { maxEntries: 5 },
+                        },
+                    },
+                    {
+                        urlPattern: /\/api\//,
+                        handler: "NetworkFirst",
+                        options: {
+                            cacheName: "api-cache",
+                            expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
+                        },
+                    },
+                ],
+            },
         }),
     ],
 
