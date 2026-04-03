@@ -16,6 +16,8 @@ import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts.ts";
 import { useTrackSelection } from "../composables/useTrackSelection.ts";
 import { useWakeLock } from "../composables/useWakeLock.ts";
 import PlaybackControls from "../components/PlaybackControls.vue";
+import ImportDialog from "../components/ImportDialog.vue";
+import ChordSheet from "../components/ChordSheet.vue";
 
 const emit = defineEmits(["setFixedHeader"]);
 
@@ -248,6 +250,30 @@ function edit() {
     router.push(`/tab/${tabID.value}/edit/info`);
 }
 
+// Import Dialog
+const showImportDialog = ref(false);
+const chordSheetData = ref(null);
+
+function handleImportTab(alphaTex) {
+    showImportDialog.value = false;
+    if (api.value) {
+        api.value.tex(alphaTex);
+    }
+}
+
+function handleImportChords(parsed) {
+    showImportDialog.value = false;
+    chordSheetData.value = {
+        chordHtml: parsed.chordHtml,
+        title: parsed.title,
+        artist: parsed.artist,
+    };
+}
+
+function closeChordSheet() {
+    chordSheetData.value = null;
+}
+
 function resetAllState() {
     playing.value = false;
     currentAudio.value = "synth";
@@ -402,6 +428,8 @@ onBeforeUnmount(() => {
                     @toggle-metronome="metronome()"
                 />
 
+                <button class="btn btn-secondary" @click="showImportDialog = true">Import</button>
+
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
                         Edit
@@ -477,6 +505,21 @@ onBeforeUnmount(() => {
             </div>
         </div>
     </div>
+
+    <ImportDialog
+        v-if="showImportDialog"
+        @import-tab="handleImportTab"
+        @import-chords="handleImportChords"
+        @close="showImportDialog = false"
+    />
+
+    <ChordSheet
+        v-if="chordSheetData"
+        :chord-html="chordSheetData.chordHtml"
+        :title="chordSheetData.title"
+        :artist="chordSheetData.artist"
+        @close="closeChordSheet"
+    />
 </template>
 
 <style scoped lang="scss">
