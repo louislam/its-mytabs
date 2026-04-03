@@ -15,6 +15,7 @@ import { useAudioSync } from "../composables/useAudioSync.ts";
 import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts.ts";
 import { useTrackSelection } from "../composables/useTrackSelection.ts";
 import { useWakeLock } from "../composables/useWakeLock.ts";
+import PlaybackControls from "../components/PlaybackControls.vue";
 
 const emit = defineEmits(["setFixedHeader"]);
 
@@ -386,37 +387,20 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
-                <button class="btn btn-warning" @click="playFromHighlightedRange()" v-if="playbackRange">
-                    <font-awesome-icon :icon='["fas", "play"]' />
-                    Restart
-                </button>
-
-                <button class="btn btn-primary" @click="playPause" :class="{ active: playing }">
-                    <span v-if="!playing">
-                        <font-awesome-icon :icon='["fas", "play"]' />
-                        Play
-                    </span>
-                    <span v-else>
-                        <font-awesome-icon :icon='["fas", "pause"]' />
-                        Pause
-                    </span>
-                </button>
-                <button class="btn btn-secondary" @click="loop()" :class="{ active: isLooping }">
-                    <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
-                    Loop
-                </button>
-                <button class="btn btn-secondary" @click="countIn()" :class='{ active: enableCountIn, disabled: currentAudio !== "synth" }'>
-                    <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
-                    Count in
-                </button>
-                <button class="btn btn-secondary" @click="metronome()" :class='{ active: enableMetronome, disabled: currentAudio !== "synth" }'>
-                    <font-awesome-icon :icon='["fas", "check"]' v-if="enableMetronome" />
-                    Metronome
-                </button>
-
-                <div class="select-percentage">
-                    Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
-                </div>
+                <PlaybackControls
+                    :playing="playing"
+                    :isLooping="isLooping"
+                    :enableCountIn="enableCountIn"
+                    :enableMetronome="enableMetronome"
+                    v-model:speed="speed"
+                    :playbackRange="playbackRange"
+                    :currentAudio="currentAudio"
+                    @play-pause="playPause"
+                    @play-from-highlighted="playFromHighlightedRange()"
+                    @toggle-loop="loop()"
+                    @toggle-count-in="countIn()"
+                    @toggle-metronome="metronome()"
+                />
 
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
