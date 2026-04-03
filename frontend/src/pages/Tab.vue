@@ -1,1459 +1,366 @@
-<script>
-import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
-import { defineComponent } from "vue";
+<script setup>
+import { ref, onMounted, onBeforeUnmount, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
-import { isLoggedIn } from "../auth-client.js";
-import { getKeySignature } from "../util.ts";
+import { isLoggedIn as checkIsLoggedIn } from "../auth-client.js";
+import { getSetting, connectSocketIO } from "../app.js";
 
-const alphaTab = await import("@coderline/alphatab");
-const { ScrollMode, StaveProfile } = alphaTab;
+import { useAlphaTab } from "../composables/useAlphaTab.ts";
+import { usePlaybackControl } from "../composables/usePlaybackControl.ts";
+import { useScrollBehavior } from "../composables/useScrollBehavior.ts";
+import { useCursorMode } from "../composables/useCursorMode.ts";
+import { useAudioSync } from "../composables/useAudioSync.ts";
+import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts.ts";
+import { useTrackSelection } from "../composables/useTrackSelection.ts";
+import { useWakeLock } from "../composables/useWakeLock.ts";
 
-const speedActionBuffer = new ActionBuffer(1000);
-const syncOffsetYoutubeActionBuffer = new ActionBuffer(200);
-const syncOffsetAudioActionBuffer = new ActionBuffer(200);
+const emit = defineEmits(["setFixedHeader"]);
 
-export default defineComponent({
-    /**
-     * @type {SocketIOClient.Socket}
-     */
-    socket: null,
+const route = useRoute();
+const router = useRouter();
 
-    /**
-     * @type {alphaTab.AlphaTabApi}
-     */
-    api: null,
+// Template refs
+const bassTabContainer = ref(null);
+const trackSelector = ref(null);
+const trackList = ref(null);
+const audioSelector = ref(null);
+const audioListRef = ref(null);
+const youtubeRef = ref(null);
+const audioPlayer = ref(null);
 
-    audioHandler: null,
+// Local state
+const isLoggedIn = ref(false);
+const setting = ref({});
+const toolbarAutoHide = ref(false);
+const enableBackingTrack = ref(true);
 
-    alphaTabYoutubeHandler: null,
+// Config helpers (stay in Tab.vue - they use tabID)
+function setConfig(key, value) {
+    localStorage.setItem(`tab-${alphaTabState.tabID.value}-${key}`, JSON.stringify(value));
+}
 
-    youtubePlayer: null,
+function getConfig(key, defaultValue) {
+    const value = localStorage.getItem(`tab-${alphaTabState.tabID.value}-${key}`);
+    if (value === null) {
+        return defaultValue;
+    }
+    return JSON.parse(value);
+}
 
-    components: { FontAwesomeIcon, BDropdownDivider, BDropdownItem, BDropdown },
-    emits: ["setFixedHeader"],
-    data() {
-        return {
-            isLoggedIn: false,
-            title: "",
-            artist: "",
-            youtube: {},
-            tabID: -1,
-            tracks: [],
-            showTrackList: false,
-            showAudioList: false,
-            tab: {},
-            playing: false,
-            enableCountIn: false,
-            enableMetronome: false,
-            enableBackingTrack: true,
-            isLooping: false,
-            speed: 100,
-            ready: false,
-            selectedTrack: 0,
-            soloTrackID: -1,
-            muteTrackList: {},
-            currentAudio: "synth",
-            youtubeList: [],
-            audioList: [],
-            audio: {},
-            scrollMode: ScrollMode.Continuous,
-            keySignature: "",
-            playbackRange: null,
+// --- Composables ---
 
-            keyEvents: (e) => {
-                // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
-                // It will type a space in the input instead of playing the music
-                // element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable
+const { animatedCursor, applyCursorVisibility } = useCursorMode(setting);
 
-                if (e.code === "Space") {
-                    e.preventDefault();
-                    this.playPause();
-                } else if (e.code === "ArrowLeft") {
-                    e.preventDefault();
-                    this.moveToBar(-1);
-                } else if (e.code === "ArrowRight") {
-                    e.preventDefault();
-                    this.moveToBar(1);
-                } else if (e.code === "ArrowUp") {
-                    e.preventDefault();
-                    const result = this.playFromHighlightedRange();
+const alphaTabState = useAlphaTab(
+    setting,
+    animatedCursor,
+    getConfig,
+    (val) => emit("setFixedHeader", val),
+);
 
-                    // Also act as the key S if not highlighted
-                    if (!result) {
-                        this.playFromFirstBarContainingNotes(-2);
-                    }
-                } else if (e.code === "KeyS") {
-                    e.preventDefault();
-                    this.playFromFirstBarContainingNotes(-2);
-                }
-            },
-            setting: {},
-            simpleSyncSecond: -1,
-            toolbarAutoHide: false,
-        };
+const {
+    api, score, tracks, ready, tab, tabID, youtubeList, audioList,
+    keySignature, playbackRange, load, destroyContainer,
+    simpleSync, advancedSync, overrideHiddenStaves, onScoreLoaded, onPlayerFinished,
+    ScrollMode, StaveProfile,
+} = alphaTabState;
+
+const scrollMode = ref(ScrollMode.Continuous);
+
+const { applyScrollMode } = useScrollBehavior(scrollMode, api);
+
+const wakeLock = useWakeLock();
+
+function closeAllList() {
+    trackSelection.showTrackList.value = false;
+    audioSync.showAudioList.value = false;
+}
+
+function showList(type) {
+    if (type === "track") {
+        trackSelection.showTrackList.value = !trackSelection.showTrackList.value;
+        audioSync.showAudioList.value = false;
+    } else if (type === "audio") {
+        audioSync.showAudioList.value = !audioSync.showAudioList.value;
+        trackSelection.showTrackList.value = false;
+    }
+}
+
+const trackSelection = useTrackSelection(
+    api,
+    async (trackID) => {
+        await loadTab(trackID);
     },
-    computed: {
-        animatedCursor() {
-            return this.setting.cursor === "animated" || this.setting.scrollMode === ScrollMode.Smooth;
-        },
+    setConfig,
+    closeAllList,
+);
 
-        syncMethod() {
-            if (this.currentAudio.startsWith("youtube-")) {
-                return this.youtube.syncMethod;
-            } else if (this.currentAudio.startsWith("audio-")) {
-                return this.audio.syncMethod;
-            } else {
-                return undefined;
-            }
-        },
-    },
+const {
+    selectedTrack, soloTrackID, muteTrackList, showTrackList,
+    isDrum, hasBackingTrack, changeTrack, toggleSolo, toggleMute, toggleVolume,
+} = trackSelection;
 
-    watch: {
-        simpleSyncSecond(newVal, oldVal) {
-            if (!this.api) {
-                return;
-            }
-
-            let obj;
-
-            if (this.currentAudio.startsWith("youtube-")) {
-                if (!this.youtube) {
-                    return;
-                }
-                obj = this.youtube;
-            } else if (this.currentAudio.startsWith("audio-")) {
-                if (!this.audio) {
-                    return;
-                }
-                obj = this.audio;
-            }
-
-            this.pause();
-
-            obj.simpleSync = this.simpleSyncSecond * 1000;
-
-            // Bug? If change to EnabledExternalMedia, andthis.api.updateSettings(), this sync point can not be applied correctly.
-            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
-            this.api.updateSettings();
-
-            this.simpleSync(obj.simpleSync);
-
-            // Restore
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
-            this.api.updateSettings();
-
-            // Save
-            if (this.currentAudio.startsWith("youtube-")) {
-                this.api.player.output.handler = this.alphaTabYoutubeHandler;
-                syncOffsetYoutubeActionBuffer.run(() => {
-                    if (oldVal !== -1) {
-                        this.saveYoutube();
-                    }
-                });
-            } else {
-                this.api.player.output.handler = this.audioHandler;
-                syncOffsetAudioActionBuffer.run(() => {
-                    if (oldVal !== -1) {
-                        this.saveAudio();
-                    }
-                });
-            }
-        },
-
-        "youtube.simpleSync"() {
-            if (!this.api || !this.youtube) {
-                return;
-            }
-            this.simpleSyncSecond = parseFloat((this.youtube.simpleSync / 1000).toFixed(2));
-        },
-
-        "audio.simpleSync"() {
-            if (!this.api || !this.audio) {
-                return;
-            }
-            this.simpleSyncSecond = parseFloat((this.audio.simpleSync / 1000).toFixed(2));
-        },
-
-        playing() {
-            if (!this.api) {
-                return;
-            }
-
-            if (this.playing) {
-                this.api.settings.player.scrollMode = this.scrollMode;
-                this.api.updateSettings();
-                this.api.play();
-                requestWakeLock();
-            } else {
-                this.api.pause();
-                releaseWakeLock();
-            }
-
-            // Hide the cursor when playing
-            if (this.setting.cursor === "invisible" || this.setting.cursor === "bar") {
-                const cursor = document.querySelector(".at-cursor-beat");
-                if (cursor) {
-                    if (this.playing) {
-                        console.log("Hide cursor");
-                        cursor.classList.add("invisible");
-                    } else {
-                        console.log("Show cursor");
-                        cursor.classList.remove("invisible");
-                    }
-                }
-            }
-
-            // Show the bar cursor if enabled
-            if (this.setting.cursor === "bar") {
-                const barCursor = document.querySelector(".at-cursor-bar");
-                if (barCursor) {
-                    barCursor.classList.add("enable");
-                }
-            }
-        },
-
-        enableCountIn() {
-            if (!this.api) {
-                return;
-            }
-            if (this.enableCountIn) {
-                this.api.countInVolume = 1;
-            } else {
-                this.api.countInVolume = 0;
-            }
-            this.setConfig("enableCountIn", this.enableCountIn);
-        },
-
-        enableMetronome() {
-            if (!this.api) {
-                return;
-            }
-            if (this.enableMetronome) {
-                this.api.metronomeVolume = 1;
-            } else {
-                this.api.metronomeVolume = 0;
-            }
-            this.setConfig("enableMetronome", this.enableMetronome);
-        },
-
-        isLooping() {
-            if (!this.api) {
-                return;
-            }
-            this.api.isLooping = this.isLooping;
-            this.setConfig("isLooping", this.isLooping);
-        },
-
-        speed(newVal) {
-            if (!this.api) {
-                return;
-            }
-            console.log("Speed changed to:", newVal);
-
-            let speed = newVal;
-
-            if (typeof speed !== "number" || isNaN(speed)) {
-                speed = 100;
-            } else if (speed < 20) {
-                speed = 20;
-            } else if (speed > 1000) {
-                speed = 1000;
-            }
-
-            // Rate limit the speed change action
-            speedActionBuffer.run(() => {
-                this.api.playbackSpeed = parseFloat((speed / 100).toFixed(2));
-                this.setConfig("speed", speed);
-            });
-        },
-
-        // Switch Audio Source
-        async currentAudio() {
-            console.log("Switching audio to:", this.currentAudio);
-
-            if (!this.api) {
-                return;
-            }
-
-            this.api.player.masterVolume = 1;
-
-            if (this.currentAudio === "synth") {
-                await this.initSynth();
-            } else if (this.currentAudio === "backingTrack") {
-                this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledBackingTrack;
-                this.api.updateSettings();
-                this.pause();
-            } else if (this.currentAudio.startsWith("youtube-")) {
-                const videoID = this.currentAudio.substring(8);
-                await this.initYoutube(videoID);
-            } else if (this.currentAudio.startsWith("audio-")) {
-                const filename = this.currentAudio.substring(6);
-                await this.initAudio(filename);
-            } else if (this.currentAudio === "none") {
-                // Workaround: alphaTab.PlayerMode.Disabled is not working, so just mute the volume
-                this.api.player.masterVolume = 0;
-                this.pause();
-            } else {
-                // Unknown audio source, fallback to synth
-                await this.initSynth();
-                notify({
-                    type: "error",
-                    title: "Error",
-                    text: "Unknown audio source, fallback to synth.",
-                });
-                return;
-            }
-
-            this.setConfig("audio", this.currentAudio);
-        },
-    },
-
-    // Mounted
-    async mounted() {
-        this.isLoggedIn = await isLoggedIn();
-        this.setting = getSetting();
-        this.toolbarHidden = this.setting.toolbarAutoHide;
-        this.tabID = this.$route.params.id;
-        const urlParams = new URLSearchParams(window.location.search);
-
-        try {
-            // Override trackID if provided in URL
-            const trackParam = urlParams.get("track");
-            if (trackParam) {
-                const id = parseInt(trackParam);
-                if (!isNaN(id)) {
-                    this.setConfig("trackID", id);
-                }
-            }
-
-            // Override audio source if provided in URL
-            const audioParam = urlParams.get("audio");
-            if (audioParam) {
-                this.setConfig("audio", audioParam);
-            }
-
-            const trackID = this.getConfig("trackID", 0);
-
-            // Load the AlphaTab
-            await this.load(trackID);
-
-            window.addEventListener("keydown", this.keyEvents);
-
-            // Close open lists when clicking outside
-            this._onDocumentClick = (e) => {
-                try {
-                    // Track list
-                    if (this.showTrackList) {
-                        const sel = this.$refs.trackSelector;
-                        const list = this.$refs.trackList;
-                        if (!sel.contains(e.target) && !list.contains(e.target)) {
-                            this.showTrackList = false;
-                        }
-                    }
-
-                    // Audio list
-                    if (this.showAudioList) {
-                        const sel = this.$refs.audioSelector;
-                        const list = this.$refs.audioList;
-                        if (!sel.contains(e.target) && !list.contains(e.target)) {
-                            this.showAudioList = false;
-                        }
-                    }
-                } catch (err) {
-                    console.error(err);
-                }
-            };
-            window.addEventListener("click", this._onDocumentClick);
-        } catch (e) {
-            notify({
-                type: "error",
-                title: "Error",
-                text: e.message,
-            });
+const playback = usePlaybackControl(
+    api,
+    ready,
+    selectedTrack,
+    setConfig,
+    (isPlaying) => {
+        // Apply scroll mode when playing starts
+        if (isPlaying) {
+            applyScrollMode();
+            wakeLock.acquire();
+        } else {
+            wakeLock.release();
         }
 
-        await this.initSocketIO();
-
-        console.log("Mounted");
+        // Apply cursor visibility
+        applyCursorVisibility(isPlaying);
     },
-    beforeUnmount() {
-        console.log("Before unmount");
-        this.destroyContainer();
-        window.removeEventListener("keydown", this.keyEvents);
+);
 
-        if (this._onDocumentClick) {
-            window.removeEventListener("click", this._onDocumentClick);
-            this._onDocumentClick = undefined;
+const {
+    playing, enableCountIn, enableMetronome, isLooping, speed,
+    playPause, play, pause, countIn, metronome, loop,
+    playFromHighlightedRange, playFromFirstBarContainingNotes, moveToBar,
+} = playback;
+
+const audioSync = useAudioSync(
+    api,
+    tabID,
+    youtubeList,
+    audioList,
+    simpleSync,
+    advancedSync,
+    pause,
+    play,
+    playing,
+    isLooping,
+    closeAllList,
+    setConfig,
+);
+
+const {
+    currentAudio, youtube, audio, simpleSyncSecond, showAudioList,
+    syncMethod, audioYoutube, audioFile, audioSynth, audioBackingTrack,
+    setYoutubeRef, setAudioPlayerRef,
+} = audioSync;
+
+useKeyboardShortcuts({
+    playPause,
+    moveToBar,
+    playFromHighlightedRange,
+    playFromFirstBarContainingNotes,
+});
+
+// Wire up score loaded callback
+onScoreLoaded((trackID) => {
+    // Set Audio source
+    currentAudio.value = getConfig("audio", "synth");
+
+    // Metronome
+    enableMetronome.value = getConfig("enableMetronome", false);
+
+    // Count in
+    enableCountIn.value = getConfig("enableCountIn", false);
+
+    // Looping
+    isLooping.value = getConfig("isLooping", false);
+
+    // Speed
+    speed.value = 100;
+    speed.value = getConfig("speed", 100);
+
+    // Scroll Mode
+    if (setting.value.scoreStyle === "horizontal-tab") {
+        scrollMode.value = ScrollMode.Smooth;
+    } else {
+        scrollMode.value = setting.value.scrollMode;
+    }
+
+    selectedTrack.value = trackID;
+
+    // Force score+tab if the current track program = 0 (probably drums)
+    if (isDrum()) {
+        api.value.settings.display.staveProfile = StaveProfile.ScoreTab;
+        api.value.updateSettings();
+    } else {
+        // This will break drum score
+        overrideHiddenStaves(score.value);
+    }
+
+    enableBackingTrack.value = hasBackingTrack();
+});
+
+onPlayerFinished(() => {
+    if (!isLooping.value) {
+        playing.value = false;
+    }
+});
+
+// Socket
+let socket = null;
+
+async function initSocketIO() {
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+    socket = connectSocketIO();
+
+    socket.on("connect", () => {
+        console.log("Connected to server");
+    });
+
+    socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+    });
+
+    socket.on("play", () => {
+        play();
+    });
+
+    socket.on("pause", () => {
+        pause();
+    });
+
+    socket.on("seek", (time) => {
+        if (!api.value) {
+            return;
+        }
+        const diff = Math.abs(api.value.timePosition - time);
+        console.log(api.value.timePosition, time, diff);
+        if (diff < 100) {
+            return;
+        }
+        api.value.timePosition = time;
+    });
+
+    socket.on("no-audio", () => {
+        currentAudio.value = "none";
+    });
+}
+
+function edit() {
+    router.push(`/tab/${tabID.value}/edit/info`);
+}
+
+function resetAllState() {
+    playing.value = false;
+    currentAudio.value = "synth";
+    enableMetronome.value = false;
+    enableCountIn.value = false;
+    isLooping.value = false;
+    speed.value = 100;
+    scrollMode.value = ScrollMode.Continuous;
+    soloTrackID.value = -1;
+    youtube.value = {};
+    simpleSyncSecond.value = -1;
+    muteTrackList.value = {};
+}
+
+function fullDestroy() {
+    destroyContainer();
+    resetAllState();
+}
+
+async function loadTab(trackID) {
+    if (api.value) {
+        fullDestroy();
+    }
+    return await load(trackID, bassTabContainer.value, router);
+}
+
+let _onDocumentClick = undefined;
+
+onMounted(async () => {
+    isLoggedIn.value = await checkIsLoggedIn();
+    setting.value = getSetting();
+    toolbarAutoHide.value = setting.value.toolbarAutoHide;
+    tabID.value = route.params.id;
+
+    // Set refs for audio sync
+    setYoutubeRef(youtubeRef.value);
+    setAudioPlayerRef(audioPlayer.value);
+
+    const urlParams = new URLSearchParams(window.location.search);
+
+    try {
+        // Override trackID if provided in URL
+        const trackParam = urlParams.get("track");
+        if (trackParam) {
+            const id = parseInt(trackParam);
+            if (!isNaN(id)) {
+                setConfig("trackID", id);
+            }
         }
 
-        this.socket.disconnect();
-    },
-    methods: {
-        async load(trackID) {
-            if (this.api) {
-                this.destroyContainer();
-            }
+        // Override audio source if provided in URL
+        const audioParam = urlParams.get("audio");
+        if (audioParam) {
+            setConfig("audio", audioParam);
+        }
 
-            const res = await fetch(baseURL + `/api/tab/${this.tabID}`, {
-                credentials: "include",
-            });
+        const trackID = getConfig("trackID", 0);
 
+        // Load the AlphaTab
+        await loadTab(trackID);
+
+        // Close open lists when clicking outside
+        _onDocumentClick = (e) => {
             try {
-                await checkFetch(res);
-            } catch (e) {
-                if (e.message === "Not logged in") {
-                    this.$router.push("/login");
-                    return;
-                } else {
-                    throw e;
-                }
-            }
-
-            const data = await res.json();
-            if (data.tab) {
-                this.tab = data.tab;
-                this.youtubeList = data.youtubeList;
-                this.audioList = data.audioList;
-            }
-
-            const tempToken = await this.getTempToken();
-
-            // Requested trackID may be invalid, so we need to get the actual trackID used
-            trackID = await this.initContainer(tempToken, trackID);
-
-            this.setConfig("trackID", trackID);
-        },
-
-        countIn() {
-            this.enableCountIn = !this.enableCountIn;
-        },
-
-        metronome() {
-            this.enableMetronome = !this.enableMetronome;
-        },
-
-        loop() {
-            this.isLooping = !this.isLooping;
-        },
-
-        playPause() {
-            if (!this.api || !this.ready) {
-                return;
-            }
-
-            this.playing = !this.playing;
-        },
-
-        play() {
-            if (!this.api || !this.ready) {
-                return;
-            }
-            this.playing = true;
-        },
-
-        pause() {
-            if (!this.api || !this.ready) {
-                return;
-            }
-            this.playing = false;
-        },
-
-        /**
-         * Play from the beginning of highlighted range
-         * Do nothing if no bar is highlighted
-         */
-        playFromHighlightedRange() {
-            if (!this.api || !this.ready) {
-                return;
-            }
-
-            const playbackRange = this.api.playbackRange;
-            if (!playbackRange) {
-                return false;
-            }
-
-            this.api.tickPosition = playbackRange.startTick;
-            this.play();
-            return true;
-        },
-
-        /**
-         * Play from the first bar containing notes in the current track
-         * If offset is provided, play from the first bar containing notes after the offset bar
-         */
-        playFromFirstBarContainingNotes(offset = 0) {
-            if (!this.api || !this.ready) {
-                return;
-            }
-
-            // Find the first bar containing notes in the current track
-            const track = this.api.score.tracks[this.selectedTrack];
-
-            let targetBar = null;
-
-            // Check the first staff only
-            for (let i = 0; i < track.staves[0].bars.length; i++) {
-                const bar = track.staves[0].bars[i];
-
-                // See if bar contains any notes by scanning voices -> beats -> notes
-                let hasNotes = false;
-                if (bar && bar.voices) {
-                    for (const voice of bar.voices) {
-                        if (!voice || !voice.beats) continue;
-                        for (const beat of voice.beats) {
-                            if (beat && beat.notes && beat.notes.length > 0) {
-                                hasNotes = true;
-                                break;
-                            }
-                        }
-                        if (hasNotes) break;
+                if (showTrackList.value) {
+                    const sel = trackSelector.value;
+                    const list = trackList.value;
+                    if (!sel.contains(e.target) && !list.contains(e.target)) {
+                        showTrackList.value = false;
                     }
                 }
 
-                // Apply offset
-                if (hasNotes) {
-                    const bars = track.staves[0].bars;
-                    // clamp target index between 0 and last bar index
-                    const targetIndex = Math.max(0, Math.min(i + offset, bars.length - 1));
-                    targetBar = bars[targetIndex];
-                    break;
-                }
-            }
-
-            if (targetBar) {
-                const firstBeat = targetBar.voices[0].beats[0];
-                api.tickPosition = firstBeat.absoluteDisplayStart;
-            }
-
-            this.play();
-        },
-
-        getFileURL(tempToken) {
-            return baseURL + `/api/tab/${this.tabID}/file?tempToken=${tempToken}`;
-        },
-
-        async getTempToken() {
-            const fileURL = baseURL + `/api/tab/${this.tabID}/temp-token`;
-
-            // fetch the file as array buffer
-            const response = await fetch(fileURL, {
-                credentials: "include",
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to get get temp token");
-            }
-            return (await response.json()).token;
-        },
-
-        /**
-         * @param tempToken
-         * @param trackID
-         * @returns {Promise<number>} The actual trackID used
-         */
-        initContainer(tempToken, trackID) {
-            return new Promise((resolve, reject) => {
-                if (this.api) {
-                    this.destroyContainer();
-                }
-
-                if (!(this.$refs.bassTabContainer instanceof HTMLElement)) {
-                    reject(new Error("Container element not found"));
-                }
-
-                let displayResources = {
-                    tablatureFont: "bold 14px Arial",
-                    barNumberColor: "#6D6D6D",
-                };
-
-                if (this.setting.scoreColor === "dark") {
-                    displayResources = {
-                        ...displayResources,
-                        staffLineColor: "#6D6D6D",
-                        barSeparatorColor: "#6D6D6D",
-                        mainGlyphColor: "#A4A4A4",
-                        secondaryGlyphColor: "#A4A4A4",
-                        scoreInfoColor: "#A3A3A3",
-                        barNumberColor: "#6D6D6D",
-                    };
-                }
-
-                let layoutMode = undefined;
-
-                if (this.setting.scoreStyle === "horizontal-tab") {
-                    layoutMode = alphaTab.LayoutMode.Horizontal;
-                    this.$emit("setFixedHeader", true);
-                }
-
-                this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
-                    notation: {
-                        rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
-                        //rhythmHeight: 30,
-                        elements: {
-                            scoreTitle: false,
-                            scoreSubTitle: false,
-                            scoreArtist: false,
-                            scoreAlbum: false,
-                            scoreWords: false,
-                            scoreMusic: false,
-                            scoreWordsAndMusic: false,
-                            scoreCopyright: false,
-                        },
-                    },
-                    core: {
-                        file: this.getFileURL(tempToken),
-                        //tracks: [trackID],
-                        fontDirectory: "/font/",
-                        engine: "html5",
-                    },
-                    player: {
-                        enablePlayer: true,
-
-                        // Always enable, so we can navigate to any position
-                        enableCursor: true,
-                        enableAnimatedBeatCursor: this.animatedCursor,
-                        enableUserInteraction: true,
-                        soundFont: "/soundfont/sonivox.sf2",
-                        // Avoid initial scroll jump in scroll mode, which make it unable to see the title
-                        scrollMode: ScrollMode.Off,
-                        scrollOffsetY: -50,
-                        playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
-                    },
-                    display: {
-                        staveProfile: this.getStaveProfile(),
-                        resources: displayResources,
-                        layoutMode,
-                        scale: this.setting.scale,
-                    },
-                });
-
-                // Exposing api to window for debugging
-                window.api = this.api;
-
-                // Used for showing/hiding the "Restart" button
-                this.api.playbackRangeChanged.on(() => {
-                    this.playbackRange = this.api.playbackRange;
-                });
-
-                // iOS 16.4+: Enable audio playback even when silent switch is ON
-                if ("audioSession" in navigator) {
-                    try {
-                        navigator.audioSession.type = "playback";
-                    } catch (error) {
-                        console.error("Failed to set navigator.audioSession.type to 'playback':", error);
+                if (showAudioList.value) {
+                    const sel = audioSelector.value;
+                    const list = audioListRef.value;
+                    if (!sel.contains(e.target) && !list.contains(e.target)) {
+                        showAudioList.value = false;
                     }
                 }
-
-                // Score Loaded
-                this.api.scoreLoaded.on(async (score) => {
-                    console.log("Score loaded");
-
-                    this.applyColors(score);
-
-                    // Track
-                    if (trackID < 0 || trackID >= score.tracks.length) {
-                        trackID = 0;
-                    }
-                    this.api.renderTracks([this.api.score.tracks[trackID]]);
-
-                    // Always show tempo automation on the master bar
-                    if (api.score.masterBars.length > 0 && api.score.masterBars[0].tempoAutomations.length > 0) {
-                        api.score.masterBars[0].tempoAutomations[0].isVisible = true;
-                    }
-
-                    // Get key signature
-                    const firstBar = this.api.score.tracks[trackID].staves[0].bars[0];
-                    this.keySignature = getKeySignature(firstBar);
-
-                    // Set Audio source
-                    this.currentAudio = this.getConfig("audio", "synth");
-
-                    // Metronome
-                    this.enableMetronome = this.getConfig("enableMetronome", false);
-
-                    // Count in
-                    this.enableCountIn = this.getConfig("enableCountIn", false);
-
-                    // Looping
-                    this.isLooping = this.getConfig("isLooping", false);
-
-                    // Speed
-                    this.speed = 100;
-                    this.speed = this.getConfig("speed", 100);
-
-                    // Scroll Mode
-                    // Force Smooth from horizontal tab
-                    if (this.setting.scoreStyle === "horizontal-tab") {
-                        this.scrollMode = ScrollMode.Smooth;
-                    } else {
-                        this.scrollMode = this.setting.scrollMode;
-                    }
-
-                    this.tracks = [];
-
-                    // List all tracks
-                    score.tracks.forEach((track) => {
-                        this.tracks.push({
-                            id: track.index,
-                            name: getInstrumentName(track.playbackInfo.program),
-                            program: track.playbackInfo.program,
-                        });
-                    });
-
-                    this.selectedTrack = trackID;
-
-                    // Force score+tab if the current track program = 0 (probably drums)
-                    if (this.isDrum()) {
-                        this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
-                        this.api.updateSettings();
-                    } else {
-                        // This will break drum score
-                        this.overrideHiddenStaves(score);
-                    }
-
-                    this.enableBackingTrack = this.hasBackingTrack();
-
-                    this.ready = true;
-                    resolve(trackID);
-                });
-
-                this.api.playerFinished.on(() => {
-                    if (!this.isLooping) {
-                        this.playing = false;
-                    }
-                });
-            });
-        },
-
-        destroyContainer() {
-            this.api?.destroy();
-            this.api = undefined;
-
-            // Reset states
-            this.ready = false;
-            this.playing = false;
-            this.currentAudio = "synth";
-            this.enableMetronome = false;
-            this.enableCountIn = false;
-            this.isLooping = false;
-            this.speed = 100;
-            this.scrollMode = ScrollMode.Continuous;
-            this.soloTrackID = -1;
-            this.youtube = {};
-            this.simpleSyncSecond = -1;
-            this.muteTrackList = {};
-            this.playbackRange = null;
-        },
-
-        simpleSync(offset) {
-            // Apply sync points
-            const syncPoints = [
-                { "barIndex": 0, "barOccurence": 0, "barPosition": 0, "millisecondOffset": offset },
-            ];
-            this.api.score.applyFlatSyncPoints(syncPoints);
-        },
-
-        advancedSync(syncPointsText) {
-            const syncPoints = convertAlphaTexSyncPoint(syncPointsText);
-            this.api.score.applyFlatSyncPoints(syncPoints);
-            console.log("Applying advanced sync points:", syncPoints);
-        },
-
-        // Style the score with custom colors
-        applyColors(score) {
-            let stringColors = {
-                1: alphaTab.model.Color.fromJson("#bf3732"),
-                2: alphaTab.model.Color.fromJson("#fff800"),
-                3: alphaTab.model.Color.fromJson("#0080ff"),
-                4: alphaTab.model.Color.fromJson("#e07b39"),
-                5: alphaTab.model.Color.fromJson("#2A8E08"),
-                6: alphaTab.model.Color.fromJson("#A349A4"),
-            };
-
-            if (this.setting.scoreColor === "light") {
-                stringColors[2] = alphaTab.model.Color.fromJson("#b5a33a");
-            }
-
-            // traverse hierarchy and apply colors as desired
-            for (const track of score.tracks) {
-                for (const staff of track.staves) {
-                    console.log(this.setting.noteColor, staff.stringTuning.tunings.length);
-
-                    // Coloring 5string bass line for louis-bass-v
-                    if (this.setting.noteColor === "louis-bass-v" && staff.stringTuning.tunings.length === 5) {
-                        stringColors = {
-                            1: alphaTab.model.Color.fromJson("#b1da68"),
-                            2: alphaTab.model.Color.fromJson("#bf3732"),
-                            3: alphaTab.model.Color.fromJson("#fff800"),
-                            4: alphaTab.model.Color.fromJson("#0080ff"),
-                            5: alphaTab.model.Color.fromJson("#e07b39"),
-                        };
-                    }
-
-                    for (const bar of staff.bars) {
-                        for (const voice of bar.voices) {
-                            for (const beat of voice.beats) {
-                                // on tuplets colors beam and tuplet bracket
-                                if (beat.hasTuplet) {
-                                    beat.style = new alphaTab.model.BeatStyle();
-                                    const color = alphaTab.model.Color.fromJson("#00DD00");
-                                    beat.style.colors.set(
-                                        alphaTab.model.BeatSubElement.StandardNotationTuplet,
-                                        color,
-                                    );
-                                    beat.style.colors.set(
-                                        alphaTab.model.BeatSubElement.StandardNotationBeams,
-                                        color,
-                                    );
-                                }
-
-                                if (this.setting.noteColor !== "none") {
-                                    for (const note of beat.notes) {
-                                        note.style = new alphaTab.model.NoteStyle();
-                                        note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-
-        /**
-         * Override hidden staves based on Style settings to fix Guitar Pro hidden tabs.
-         * ⚠️ This will break drum score
-         * - Style "tab": showTablature = true, showStandardNotation = false
-         * - Style "score": showTablature = false, showStandardNotation = true
-         * - Style "score-tab": both = true
-         */
-        overrideHiddenStaves(score) {
-            for (const track of score.tracks) {
-                for (const staff of track.staves) {
-                    // Override visibility flags based on user's Style setting
-                    if (this.setting.scoreStyle === "tab" || this.setting.scoreStyle === "horizontal-tab") {
-                        staff.showTablature = true;
-                        staff.showStandardNotation = false;
-                    } else if (this.setting.scoreStyle === "score") {
-                        staff.showTablature = false;
-                        staff.showStandardNotation = true;
-                    } else if (this.setting.scoreStyle === "score-tab") {
-                        staff.showTablature = true;
-                        staff.showStandardNotation = true;
-                    }
-                }
-            }
-        },
-
-        async initSocketIO() {
-            if (this.socket) {
-                this.socket.disconnect();
-                this.socket = null;
-            }
-            this.socket = connectSocketIO();
-
-            this.socket.on("connect", () => {
-                console.log("Connected to server");
-            });
-
-            this.socket.on("disconnect", () => {
-                console.log("Disconnected from server");
-            });
-
-            // Play
-            this.socket.on("play", () => {
-                this.play();
-            });
-
-            // Pause
-            this.socket.on("pause", () => {
-                this.pause();
-            });
-
-            // Seek
-            this.socket.on("seek", (time) => {
-                if (!this.api) {
-                    return;
-                }
-                const diff = Math.abs(this.api.timePosition - time);
-                console.log(this.api.timePosition, time, diff);
-                if (diff < 100) {
-                    return;
-                }
-                this.api.timePosition = time;
-            });
-
-            this.socket.on("no-audio", () => {
-                this.currentAudio = "none";
-            });
-        },
-
-        async audioYoutube(videoID) {
-            this.currentAudio = "youtube-" + videoID;
-            this.closeAllList();
-        },
-
-        async audioFile(filename) {
-            this.currentAudio = "audio-" + filename;
-            this.closeAllList();
-        },
-
-        async initAudio(filename) {
-            if (!this.api) {
-                return;
-            }
-
-            this.closeAllList();
-
-            const audioPlayer = this.$refs.audioPlayer;
-
-            // Init the audio handler if not exists
-            if (!this.audioHandler) {
-                this.audioHandler = {
-                    get backingTrackDuration() {
-                        const duration = audioPlayer.duration;
-                        return Number.isFinite(duration) ? duration * 1000 : 0;
-                    },
-                    get playbackRate() {
-                        return audioPlayer.playbackRate;
-                    },
-                    set playbackRate(value) {
-                        audioPlayer.playbackRate = value;
-                    },
-                    get masterVolume() {
-                        return audioPlayer.volume;
-                    },
-                    set masterVolume(value) {
-                        audioPlayer.volume = value;
-                    },
-                    seekTo(time) {
-                        audioPlayer.currentTime = time / 1000;
-                    },
-                    play() {
-                        audioPlayer.play();
-                    },
-                    pause() {
-                        audioPlayer.pause();
-                    },
-                };
-
-                let updateTimer = 0;
-                const onTimeUpdate = () => {
-                    this.api?.player?.output?.updatePosition(
-                        audioPlayer.currentTime * 1000,
-                    );
-                };
-
-                audioPlayer.addEventListener("timeupdate", onTimeUpdate);
-                audioPlayer.addEventListener("seeked", onTimeUpdate);
-                audioPlayer.addEventListener("play", () => {
-                    window.clearInterval(updateTimer);
-                    this.playing = true;
-                    this.api?.play();
-                    updateTimer = window.setInterval(onTimeUpdate, 50);
-                });
-
-                // state updates
-                audioPlayer.addEventListener("pause", () => {
-                    // If the audio ended, the "pause" event will also be triggered
-                    // Ignore this, because we have "ended" event to handle it
-                    if (audioPlayer.ended) {
-                        return;
-                    }
-
-                    console.log("[audioPlayer] paused");
-                    this.playing = false;
-                    this.api.pause();
-                    window.clearInterval(updateTimer);
-                });
-                audioPlayer.addEventListener("ended", () => {
-                    console.log("[audioPlayer] ended");
-
-                    // If isLooping is true, seek to the beginning and play again
-                    // Else just pause
-                    if (this.isLooping) {
-                        audioPlayer.currentTime = 0;
-                        audioPlayer.play();
-                    } else {
-                        this.playing = false;
-                        this.api.pause();
-                        window.clearInterval(updateTimer);
-                    }
-                });
-                audioPlayer.addEventListener("volumechange", () => {
-                    this.api.masterVolume = audioPlayer.volume;
-                });
-                audioPlayer.addEventListener("ratechange", () => {
-                    this.api.playbackSpeed = audioPlayer.playbackRate;
-                });
-            }
-
-            // Bug? If change to EnabledExternalMedia, and this.api.updateSettings(), this sync point can not be applied correctly.
-            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
-            this.api.updateSettings();
-
-            let found = false;
-
-            // Get offset from youtubeList
-            for (const audio of this.audioList) {
-                if (audio.filename === filename) {
-                    this.audio = audio;
-                    if (audio.syncMethod === "advanced") {
-                        this.advancedSync(audio.advancedSync);
-                    } else {
-                        this.simpleSync(audio.simpleSync);
-                    }
-                    found = true;
-                    break;
-                }
-            }
-
-            // Probably provided an audio file not in the list, switch to synth
-            if (!found) {
-                notify({
-                    type: "error",
-                    title: "Error",
-                    text: "Audio file not found, fallback to synth.",
-                });
-                this.currentAudio = "synth";
-                return;
-            }
-
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
-            this.api.updateSettings();
-
-            this.api.player.output.handler = this.audioHandler;
-
-            const path = baseURL + `/api/tab/${this.tabID}/audio/${encodeURIComponent(filename)}`;
-
-            audioPlayer.src = path;
-            audioPlayer.load();
-            audioPlayer.playbackRate = this.api.playbackSpeed;
-
-            this.pause();
-        },
-
-        async initYoutube(videoID) {
-            this.closeAllList();
-
-            if (!this.youtubePlayer) {
-                await this.initYoutubePlayer();
-            }
-
-            // Bug? If change to EnabledExternalMedia, and this.api.updateSettings(), this sync point can not be applied correctly.
-            // So it must change to EnabledSynthesizer first, then change to EnabledExternalMedia
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
-            this.api.updateSettings();
-
-            let found = false;
-
-            // Get offset from youtubeList
-            for (const yt of this.youtubeList) {
-                if (yt.videoID === videoID) {
-                    this.youtube = yt;
-                    if (yt.syncMethod === "advanced") {
-                        this.advancedSync(yt.advancedSync);
-                    } else {
-                        this.simpleSync(yt.simpleSync);
-                    }
-                    found = true;
-                    break;
-                }
-            }
-
-            // Probably provided a video ID not in the list, switch to synth
-            if (!found) {
-                notify({
-                    type: "error",
-                    title: "Error",
-                    text: "YouTube video not found, fallback to synth.",
-                });
-                this.currentAudio = "synth";
-                return;
-            }
-
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledExternalMedia;
-            this.api.updateSettings();
-
-            this.api.player.output.handler = this.alphaTabYoutubeHandler;
-            this.youtubePlayer.cueVideoById(videoID);
-            this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
-            this.pause();
-        },
-
-        async initYoutubePlayer() {
-            const ytWarning = setTimeout(() => {
-                notify({
-                    type: "warning",
-                    title: "Warning",
-                    text: "If YouTube is taking too long to load, please refresh the page.",
-                });
-            }, 5000);
-
-            this.$refs.youtube.innerHTML = "";
-
-            const isScriptLoaded = typeof YT !== "undefined";
-            console.log("isScriptLoaded:", isScriptLoaded);
-
-            // Create playerElement inside this.$refs.youtube
-            const playerElement = document.createElement("div");
-            this.$refs.youtube.appendChild(playerElement);
-
-            if (!isScriptLoaded) {
-                const tag = document.createElement("script");
-                tag.src = "https://www.youtube.com/player_api";
-                const firstScriptTag = document.getElementsByTagName("script")[0];
-                firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-                console.log("Loading YouTube API");
-
-                const youtubeApiReady = Promise.withResolvers();
-                window.onYouTubePlayerAPIReady = youtubeApiReady.resolve;
-                await youtubeApiReady.promise;
-                console.log("YouTube API ready");
-
-                // Now Youtube Script is loaded
-                // The YT object is now available globally, even if vue route changed. Be careful.
-            } else {
-                console.log("YouTube API already loaded");
-            }
-
-            const youtubePlayerReady = Promise.withResolvers();
-            let currentTimeInterval = 0;
-            const player = new YT.Player(playerElement, {
-                height: "180",
-                width: "320",
-                //videoId: videoID,
-                playerVars: { "autoplay": 0 }, // we do not want autoplay
-                events: {
-                    "onReady": (e) => {
-                        youtubePlayerReady.resolve();
-                    },
-
-                    // when the player state changes we update alphatab accordingly.
-                    "onStateChange": (e) => {
-                        //
-                        switch (e.data) {
-                            case YT.PlayerState.PLAYING:
-                                currentTimeInterval = window.setInterval(() => {
-                                    this.api?.player?.output?.updatePosition(player.getCurrentTime() * 1000);
-                                }, 50);
-                                this.playing = true;
-                                this.api?.play();
-                                break;
-                            case YT.PlayerState.ENDED:
-                                window.clearInterval(currentTimeInterval);
-                                this.playing = false;
-                                this.api?.stop();
-                                break;
-                            case YT.PlayerState.PAUSED:
-                                window.clearInterval(currentTimeInterval);
-                                this.playing = false;
-                                this.api?.pause();
-                                break;
-                            default:
-                                break;
-                        }
-                    },
-                    "onPlaybackRateChange": (e) => {
-                        this.api.playbackSpeed = e.data;
-                    },
-                    "onError": (e) => {
-                        youtubePlayerReady.reject(e);
-                    },
-                },
-            });
-
-            await youtubePlayerReady.promise;
-            console.log("YouTube Player ready");
-
-            let initialSeek = -1;
-            const alphaTabYoutubeHandler = {
-                get backingTrackDuration() {
-                    return player.getDuration() * 1000;
-                },
-                get playbackRate() {
-                    console.log("Get playback rate:", player.getPlaybackRate());
-                    return player.getPlaybackRate();
-                },
-                set playbackRate(value) {
-                    console.log("Set playback rate:", value);
-                    player.setPlaybackRate(value);
-                },
-                get masterVolume() {
-                    return player.getVolume() / 100;
-                },
-                set masterVolume(value) {
-                    player.setVolume(value * 100);
-                },
-                seekTo(time) {
-                    if (
-                        player.getPlayerState() !== YT.PlayerState.PAUSED &&
-                        player.getPlayerState() !== YT.PlayerState.PLAYING
-                    ) {
-                        initialSeek = time / 1000;
-                    } else {
-                        player.seekTo(time / 1000);
-                    }
-                },
-                play() {
-                    player.playVideo();
-                    if (initialSeek >= 0) {
-                        player.seekTo(initialSeek);
-                        initialSeek = -1;
-                    }
-                },
-                pause() {
-                    player.pauseVideo();
-                },
-            };
-
-            this.youtubePlayer = player;
-            this.alphaTabYoutubeHandler = alphaTabYoutubeHandler;
-            clearTimeout(ytWarning);
-        },
-
-        getStaveProfile() {
-            if (this.setting.scoreStyle === "tab" || this.setting.scoreStyle === "horizontal-tab") {
-                return StaveProfile.Tab;
-            } else if (this.setting.scoreStyle === "score") {
-                return StaveProfile.Score;
-            } else if (this.setting.scoreStyle === "score-tab") {
-                return StaveProfile.ScoreTab;
-            } else {
-                return StaveProfile.Default;
-            }
-        },
-
-        async audioSynth() {
-            this.currentAudio = "synth";
-            this.closeAllList();
-        },
-
-        async initSynth() {
-            this.api.settings.player.playerMode = alphaTab.PlayerMode.EnabledSynthesizer;
-            this.api.updateSettings();
-            this.pause();
-        },
-
-        async audioBackingTrack() {
-            if (!this.hasBackingTrack()) {
-                notify({
-                    type: "error",
-                    title: "Error",
-                    text: "No backing track found in this tab.",
-                });
-                return;
-            }
-            this.currentAudio = "backingTrack";
-            this.closeAllList();
-        },
-
-        /**
-         * Check if the current track is a drum track (program 0).
-         * this.selectedTrack must be set before calling this function.
-         * @returns {boolean}
-         */
-        isDrum() {
-            if (!this.api || !this.api.score || !this.api.score.tracks) {
-                return false;
-            }
-            const track = this.api.score.tracks[this.selectedTrack];
-            return track.playbackInfo.program === 0;
-        },
-
-        /**
-         * Change the displayed track.
-         * @param trackID
-         * @returns {Promise<void>}
-         */
-        async changeTrack(trackID) {
-            const fromDrum = this.isDrum();
-            this.selectedTrack = trackID;
-            const isDrum = this.isDrum();
-
-            // If switching from/to drum track, need to re-render the whole score
-            // Due to the bug that Drum is not able to render in Tab View
-            if (fromDrum || isDrum) {
-                await this.load(trackID);
-            } else {
-                this.api.renderTracks([this.api.score.tracks[trackID]]);
-                this.setConfig("trackID", trackID);
-            }
-
-            this.closeAllList();
-        },
-
-        showList(type) {
-            if (type === "track") {
-                this.showTrackList = !this.showTrackList;
-                this.showAudioList = false;
-            } else if (type === "audio") {
-                this.showAudioList = !this.showAudioList;
-                this.showTrackList = false;
-            }
-        },
-
-        closeAllList() {
-            this.showTrackList = false;
-            this.showAudioList = false;
-        },
-
-        toggleSolo(trackID) {
-            if (!this.api) {
-                return;
-            }
-
-            if (this.soloTrackID === trackID) {
-                this.api.changeTrackMute(this.api.score.tracks, false);
-                this.soloTrackID = -1;
-                this.muteTrackList = {};
-            } else {
-                const muteList = [];
-                const soloList = [];
-
-                for (const track of this.api.score.tracks) {
-                    if (track.index !== trackID) {
-                        muteList.push(track);
-                        this.muteTrackList[track.index] = true;
-                    } else {
-                        soloList.push(track);
-                        this.muteTrackList[track.index] = false;
-                    }
-                }
-
-                this.api.changeTrackMute(muteList, true);
-                this.api.changeTrackMute(soloList, false);
-
-                this.soloTrackID = trackID;
-            }
-        },
-
-        toggleMute(trackID) {
-            this.soloTrackID = -1;
-
-            this.muteTrackList[trackID] = !this.muteTrackList[trackID];
-
-            const mute = this.muteTrackList[trackID];
-
-            this.api.changeTrackMute([
-                this.api.score.tracks[trackID],
-            ], mute);
-        },
-
-        toggleVolume(trackID, volume) {
-            if (!this.api) {
-                return;
-            }
-            const track = this.api.score.tracks.find(({ index }) => index === trackID);
-            this.api.changeTrackVolume(track, volume / 100);
-        },
-
-        edit() {
-            this.$router.push(`/tab/${this.tabID}/edit/info`);
-        },
-
-        hasBackingTrack() {
-            return !!this.api.score.backingTrack;
-        },
-
-        setConfig(key, value) {
-            localStorage.setItem(`tab-${this.tabID}-${key}`, JSON.stringify(value));
-        },
-
-        getConfig(key, defaultValue) {
-            const value = localStorage.getItem(`tab-${this.tabID}-${key}`);
-            if (value === null) {
-                return defaultValue;
-            }
-            return JSON.parse(value);
-        },
-
-        async saveYoutube() {
-            let res;
-            try {
-                res = await fetch(baseURL + `/api/tab/${this.tabID}/youtube/${this.youtube.videoID}`, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        syncMethod: this.youtube.syncMethod,
-                        simpleSync: this.youtube.simpleSync,
-                        advancedSync: this.youtube.advancedSync,
-                    }),
-                });
-
-                await checkFetch(res);
-            } catch (e) {
-                generalError(e);
-            }
-        },
-
-        async saveAudio() {
-            let res;
-            try {
-                res = await fetch(baseURL + `/api/tab/${this.tabID}/audio/${this.audio.filename}`, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        syncMethod: this.audio.syncMethod,
-                        simpleSync: this.audio.simpleSync,
-                        advancedSync: this.audio.advancedSync,
-                    }),
-                });
-
-                await checkFetch(res);
-            } catch (e) {
-                generalError(e);
-            }
-        },
-
-        /**
-         * Move the cursor to the previous/next bar.
-         * @param steps Number of bars to move. Negative for previous bars.
-         */
-        moveToBar(steps) {
-            try {
-                if (!this.api || !this.api.score || !this.api.score.masterBars || this.api.score.masterBars.length === 0) {
-                    return;
-                }
-
-                const masterBars = this.api.score.masterBars;
-                const currentTick = Number(this.api.tickPosition ?? 0);
-                let index = 0;
-                for (let i = 0; i < masterBars.length; i++) {
-                    const masterBarStart = masterBars[i].start ?? 0;
-                    if (masterBarStart <= currentTick) {
-                        index = i;
-                    } else {
-                        break;
-                    }
-                }
-
-                let target = index + steps;
-                if (target < 0) target = 0;
-                if (target >= masterBars.length) target = masterBars.length - 1;
-
-                const targetTick = masterBars[target].start ?? 0;
-                this.api.tickPosition = targetTick;
             } catch (err) {
-                console.error("moveToBar error:", err);
+                console.error(err);
             }
-        },
-    },
+        };
+        window.addEventListener("click", _onDocumentClick);
+    } catch (e) {
+        notify({
+            type: "error",
+            title: "Error",
+            text: e.message,
+        });
+    }
+
+    await initSocketIO();
+
+    console.log("Mounted");
+});
+
+onBeforeUnmount(() => {
+    console.log("Before unmount");
+    fullDestroy();
+
+    if (_onDocumentClick) {
+        window.removeEventListener("click", _onDocumentClick);
+        _onDocumentClick = undefined;
+    }
+
+    if (socket) {
+        socket.disconnect();
+    }
 });
 </script>
 
 <template>
-    <div class="main" :class='{ "light": this.setting.scoreColor === "light" }'>
+    <div class="main" :class='{ "light": setting.scoreColor === "light" }'>
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
         <div class="key-signature badge bg-secondary" v-if="keySignature && setting.showKeySignature">
@@ -1533,7 +440,7 @@ export default defineComponent({
                 </div>
             </div>
 
-            <div class="audio-list list" v-if="showAudioList" ref="audioList">
+            <div class="audio-list list" v-if="showAudioList" ref="audioListRef">
                 <div class="p-2 text-end list-header">
                     <font-awesome-icon :icon='["fas", "xmark"]' class="me-2 close" @click="showAudioList = false" />
                 </div>
@@ -1542,7 +449,7 @@ export default defineComponent({
                     <div class="name">Synth</div>
                 </div>
 
-                <div class="audio item" @click="audioBackingTrack" :class='{ active: currentAudio === "backingTrack" }' v-if="enableBackingTrack">
+                <div class="audio item" @click="audioBackingTrack(hasBackingTrack)" :class='{ active: currentAudio === "backingTrack" }' v-if="enableBackingTrack">
                     <div class="name">Embedded Backing Track</div>
                 </div>
 
@@ -1578,7 +485,7 @@ export default defineComponent({
 
                 <!-- Youtube Player -->
                 <div v-show='currentAudio.startsWith("youtube-")'>
-                    <div ref="youtube" class="player"></div>
+                    <div ref="youtubeRef" class="player"></div>
                 </div>
 
                 <!-- Audio Player -->
