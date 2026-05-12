@@ -158,13 +158,21 @@ export class ActionBuffer {
 
 let wakeLock: WakeLockSentinel = null;
 
+// Suggested by https://developer.mozilla.org/en-US/docs/Web/API/Screen_Wake_Lock_API
+document.addEventListener("visibilitychange", async () => {
+    if (wakeLock !== null && document.visibilityState === "visible") {
+        // Request a wake lock again when the page becomes visible
+        await requestWakeLock();
+    }
+});
+
 export async function requestWakeLock() {
     try {
         if ("wakeLock" in navigator) {
             wakeLock = await navigator.wakeLock.request("screen");
             console.log("Wake lock is active");
             wakeLock.addEventListener("release", () => {
-                console.log("Wake lock was released");
+                console.log("Wake lock released");
             });
         } else {
             console.log("Wake Lock API not supported.");
@@ -179,7 +187,6 @@ export async function releaseWakeLock() {
         if (wakeLock != null) {
             await wakeLock.release();
             wakeLock = null;
-            console.log("Wake lock released manually");
         }
     } catch (err) {
         console.error(`${err.name}, ${err.message}`);
