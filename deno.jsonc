@@ -62,6 +62,7 @@
     },
 
     "imports": {
+        "@coderline/alphatab": "npm:@coderline/alphatab@~1.8.3",
         "@hono/hono": "jsr:@hono/hono@~4.9.12",
         "@hono/node-server": "npm:@hono/node-server@~1.19.9",
         "@std/dotenv": "jsr:@std/dotenv@~0.225.6",
