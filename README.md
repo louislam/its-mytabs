@@ -121,6 +121,9 @@ MYTABS_PORT=47777
 
 # (boolean) Whether to launch the browser when starting the app (Desktop only) (Default: true)
 MYTABS_LAUNCH_BROWSER=true
+
+# (boolean) Disable built-in login and rely on a trusted reverse proxy/private network (Default: false)
+MYTABS_DISABLE_AUTH=false
 ```
 
 ## Keyboard Shortcuts

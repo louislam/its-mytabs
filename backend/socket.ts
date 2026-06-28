@@ -1,6 +1,6 @@
 import { Server, ServerOptions, Socket } from "socket.io";
 import { ServerType } from "@hono/node-server";
-import { devOriginList, isDev } from "./util.ts";
+import { devOriginList, isAuthDisabled, isDev } from "./util.ts";
 import { auth } from "./auth.ts";
 
 export function socketIO(httpServer: ServerType) {
@@ -25,7 +25,13 @@ export function socketIO(httpServer: ServerType) {
         let session;
 
         // Get Auth Session
-        if (clientType === "tabPlayer") {
+        if (isAuthDisabled) {
+            session = {
+                user: {
+                    id: "auth-disabled",
+                },
+            };
+        } else if (clientType === "tabPlayer") {
             const context = {
                 headers: new Headers(),
             };

@@ -16,6 +16,11 @@ export default defineComponent({
         };
     },
     async mounted() {
+        if (window.authDisabled === true) {
+            this.$router.push("/");
+            return;
+        }
+
         const res = await fetch(baseURL + "/api/is-finish-setup");
         const isFinishSetup = await res.json();
         if (isFinishSetup) {

@@ -16,8 +16,10 @@
                 }
                 const config = JSON.parse(appConfigElement.textContent);
                 window.isDemo = config.isDemo;
+                window.authDisabled = config.authDisabled;
             } catch (e) {
                 window.isDemo = false;
+                window.authDisabled = false;
             }
         </script>
         <script type="module" src="/src/main.ts"></script>

@@ -6,6 +6,10 @@ export const authClient = createAuthClient({
 });
 
 export async function isLoggedIn() {
+    if (window.authDisabled === true) {
+        return true;
+    }
+
     const session = await authClient.getSession();
     return session.data !== null;
 }

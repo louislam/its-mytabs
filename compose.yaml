@@ -7,4 +7,6 @@ services:
         volumes:
             # Host Path:Container Path
             - ./data:/app/data
+        environment:
+            MYTABS_DISABLE_AUTH: "false"
         restart: unless-stopped
