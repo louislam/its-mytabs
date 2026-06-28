@@ -1,5 +1,5 @@
 import { db } from "./db.ts";
-import { ConfigJSON, TabInfo, TabInfoSchema } from "./zod.ts";
+import { ConfigJSON, ConfigJSONSchema, TabInfo, TabInfoSchema } from "./zod.ts";
 
 type SqlValue = string | number | bigint | null;
 type SqlRow = Record<string, SqlValue>;
@@ -485,11 +485,44 @@ export function getLibraryConfigJSON(id: string): ConfigJSON | null {
     if (!tab) {
         return null;
     }
+    const legacyConfig = getLegacyTabConfig(id);
+    if (legacyConfig) {
+        legacyConfig.tab = tab;
+        return legacyConfig;
+    }
     return {
         tab,
         audio: [],
         youtube: [],
     };
+}
+
+export function upsertLegacyTabConfig(tabId: string, config: ConfigJSON): void {
+    requireLibraryTab(tabId);
+
+    const migratedAt = new Date().toISOString();
+    const configJson = JSON.stringify(ConfigJSONSchema.parse({
+        ...config,
+        tab: {
+            ...config.tab,
+            id: tabId,
+        },
+    }));
+    db.prepare(`
+        INSERT INTO legacy_tab_configs (tab_id, config_json, migrated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(tab_id) DO UPDATE SET
+            config_json = excluded.config_json,
+            migrated_at = excluded.migrated_at
+    `).run(tabId, configJson, migratedAt);
+}
+
+export function getLegacyTabConfig(tabId: string): ConfigJSON | null {
+    const row = db.prepare("SELECT config_json FROM legacy_tab_configs WHERE tab_id = ?").get(tabId) as SqlRow | undefined;
+    if (!row) {
+        return null;
+    }
+    return ConfigJSONSchema.parse(JSON.parse(readString(row, "config_json")));
 }
 
 export function getAllLibraryTabInfos(options: LibraryTabListOptions = {}): TabInfo[] {

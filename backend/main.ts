@@ -51,6 +51,7 @@ import {
     updateLibraryTabVisibility,
 } from "./library.ts";
 import { resolveStoredPath } from "./storage.ts";
+import { migrateLegacyTabsToLibrary } from "./legacy-migration.ts";
 
 let httpServer: ServerType;
 
@@ -62,6 +63,7 @@ export async function main() {
     }
 
     await migrate();
+    await runLegacyLibraryMigration();
 
     const frontendDir = getFrontendDir();
 
@@ -857,6 +859,22 @@ export async function main() {
         console.log("unhandled rejection at:", e.promise, "reason:", e.reason);
         e.preventDefault();
     });
+}
+
+async function runLegacyLibraryMigration() {
+    try {
+        const result = await migrateLegacyTabsToLibrary();
+        if (result.scanned > 0) {
+            console.log(`Legacy library migration: ${result.migrated} migrated, ${result.skipped} skipped, ${result.failed} failed.`);
+        }
+        if (result.failed > 0) {
+            for (const detail of result.details.filter((detail) => detail.status === "failed")) {
+                console.warn(`Legacy library migration failed for tab ${detail.id}: ${detail.reason}`);
+            }
+        }
+    } catch (error) {
+        console.error("Legacy library migration failed:", error);
+    }
 }
 
 export function closeServer() {

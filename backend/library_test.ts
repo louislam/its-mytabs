@@ -42,7 +42,7 @@ Deno.test("library schema migration creates idempotent tables and indexes", () =
         ORDER BY name
     `).all().map((row) => (row as { name: string }).name);
 
-    for (const expected of ["artists", "artist_aliases", "albums", "songs", "tabs", "tab_files", "tab_file_sources", "import_jobs", "import_items"]) {
+    for (const expected of ["artists", "artist_aliases", "albums", "songs", "tabs", "tab_files", "tab_file_sources", "legacy_tab_configs", "import_jobs", "import_items"]) {
         assertEquals(tableNames.includes(expected), true, `${expected} table is missing`);
     }
 

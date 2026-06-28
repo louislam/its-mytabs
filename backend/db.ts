@@ -144,6 +144,13 @@ export async function migrateLibrarySchema() {
             FOREIGN KEY (tab_file_id) REFERENCES tab_files(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS legacy_tab_configs (
+            tab_id TEXT PRIMARY KEY,
+            config_json TEXT NOT NULL,
+            migrated_at TEXT NOT NULL,
+            FOREIGN KEY (tab_id) REFERENCES tabs(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS import_jobs (
             id TEXT PRIMARY KEY,
             source_type TEXT NOT NULL,
@@ -212,6 +219,7 @@ export async function migrateLibrarySchema() {
         CREATE INDEX IF NOT EXISTS idx_tabs_tab_file_id ON tabs(tab_file_id);
         CREATE INDEX IF NOT EXISTS idx_tab_files_sha256 ON tab_files(sha256);
         CREATE INDEX IF NOT EXISTS idx_tab_file_sources_source_path ON tab_file_sources(source_path);
+        CREATE INDEX IF NOT EXISTS idx_legacy_tab_configs_tab_id ON legacy_tab_configs(tab_id);
         CREATE INDEX IF NOT EXISTS idx_import_items_job_status_selected ON import_items(job_id, status, selected);
         CREATE INDEX IF NOT EXISTS idx_import_items_job_selected ON import_items(job_id, selected);
         CREATE INDEX IF NOT EXISTS idx_import_items_probable_duplicate_song_id ON import_items(job_id, probable_duplicate_song_id);
