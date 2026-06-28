@@ -60,7 +60,7 @@ export async function storeLibraryFile(data: Uint8Array | ReadableStream<Uint8Ar
     const writer = file.writable.getWriter();
 
     try {
-        const stream = data instanceof Uint8Array ? new Blob([data]).stream() : data;
+        const stream = data instanceof Uint8Array ? readableFromBytes(data) : data;
         const reader = stream.getReader();
         while (true) {
             const { done, value } = await reader.read();
@@ -251,6 +251,15 @@ async function removeIfExists(filePath: string): Promise<void> {
             throw error;
         }
     }
+}
+
+function readableFromBytes(data: Uint8Array): ReadableStream<Uint8Array> {
+    return new ReadableStream({
+        start(controller) {
+            controller.enqueue(data);
+            controller.close();
+        },
+    });
 }
 
 function readString(row: SqlRow, key: string): string {
