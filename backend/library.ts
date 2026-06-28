@@ -78,6 +78,12 @@ export interface LibraryTab {
     deletedAt: string | null;
 }
 
+export interface ImportCreatedTabSummary {
+    id: string;
+    title: string;
+    artist: string;
+}
+
 export interface UpsertLibraryTabInput {
     id?: string;
     songId: number;
@@ -354,6 +360,20 @@ export function getLibraryTab(id: string): LibraryTab | null {
     return row ? mapTab(row) : null;
 }
 
+export function getCreatedImportTabSummaries(jobId: string): ImportCreatedTabSummary[] {
+    const rows = db.prepare(`
+        SELECT tabs.id AS id, songs.title AS title, artists.name AS artist
+        FROM import_items
+        INNER JOIN tabs ON tabs.id = import_items.created_tab_id
+        INNER JOIN songs ON songs.id = tabs.song_id
+        INNER JOIN artists ON artists.id = songs.artist_id
+        WHERE import_items.job_id = ? AND import_items.created_tab_id IS NOT NULL
+        ORDER BY artists.name COLLATE NOCASE, songs.title COLLATE NOCASE, tabs.version
+    `).all(jobId) as SqlRow[];
+
+    return rows.map(mapImportCreatedTabSummary);
+}
+
 export function deleteLibraryTab(id: string): void {
     db.prepare("UPDATE tabs SET deleted_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), id);
 }
@@ -610,6 +630,14 @@ function mapTab(row: SqlRow): LibraryTab {
         createdAt: readString(row, "created_at"),
         updatedAt: readString(row, "updated_at"),
         deletedAt: readNullableString(row, "deleted_at"),
+    };
+}
+
+function mapImportCreatedTabSummary(row: SqlRow): ImportCreatedTabSummary {
+    return {
+        id: readString(row, "id"),
+        title: readString(row, "title"),
+        artist: readString(row, "artist"),
     };
 }
 

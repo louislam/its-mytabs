@@ -36,6 +36,7 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
+import { registerImportRoutes } from "./import-routes.ts";
 
 let httpServer: ServerType;
 
@@ -687,6 +688,8 @@ export async function main() {
             return generalError(c, e);
         }
     });
+
+    registerImportRoutes(app);
 
     app.get("/", (c) => {
         return c.html(indexHTML);
