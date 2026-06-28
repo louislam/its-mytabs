@@ -16,7 +16,9 @@ const {
     canReadLibraryTab,
     findArtistByName,
     getAllLibraryTabInfos,
+    getLibraryBrowse,
     getLibraryConfigJSON,
+    getLibrarySongVersionsForTab,
     getLibraryTabInfo,
     getTabFileByHash,
     normalizeLibraryText,
@@ -176,6 +178,77 @@ Deno.test("library tabs preserve exact ids, denormalized fields, versions, and v
 
     const favTabs = getAllLibraryTabInfos({ favOnly: true });
     assertEquals(favTabs.every((tab) => tab.fav), true);
+});
+
+Deno.test("library browse groups artist album song versions and preferred tab", () => {
+    const artist = upsertArtist("Browse Artist");
+    const album = upsertAlbum(artist.id, "Browse Album");
+    const albumSong = upsertSong(artist.id, "Grouped Song", album.id);
+    const flatSong = upsertSong(artist.id, "Loose Song");
+    const firstFile = upsertTabFile({
+        sha256: "b".repeat(64),
+        byteSize: 12,
+        ext: "gp5",
+        storedPath: `files/bb/${"b".repeat(64)}.gp5`,
+    });
+    const secondFile = upsertTabFile({
+        sha256: "c".repeat(64),
+        byteSize: 12,
+        ext: "gp",
+        storedPath: `files/cc/${"c".repeat(64)}.gp`,
+    });
+
+    const firstVersion = upsertLibraryTab({
+        id: "browse-100",
+        songId: albumSong.id,
+        tabFileId: firstFile.id,
+        versionLabel: "Studio",
+        filename: "tab.gp5",
+        originalFilename: "grouped-studio.gp5",
+        public: true,
+    });
+    const secondVersion = upsertLibraryTab({
+        id: "browse-101",
+        songId: albumSong.id,
+        tabFileId: secondFile.id,
+        versionLabel: "Live",
+        filename: "tab.gp",
+        originalFilename: "grouped-live.gp",
+        public: false,
+        fav: true,
+    });
+    upsertLibraryTab({
+        id: "browse-102",
+        songId: flatSong.id,
+        tabFileId: secondFile.id,
+        filename: "tab.gp",
+        originalFilename: "loose.gp",
+        public: true,
+    });
+    setPreferredSongTab(albumSong.id, secondVersion.id);
+
+    const grouped = getLibraryBrowse({ mode: "album", includePrivate: true });
+    const browseArtist = grouped.artists.find((candidate) => candidate.id === artist.id);
+    assertExists(browseArtist);
+    const browseAlbum = browseArtist.albums.find((candidate) => candidate.id === album.id);
+    assertExists(browseAlbum);
+    assertEquals(browseAlbum.songCount, 1);
+    assertEquals(browseAlbum.versionCount, 2);
+    const browseSong = browseAlbum.songs.find((candidate) => candidate.id === albumSong.id);
+    assertExists(browseSong);
+    assertEquals(browseSong.versionCount, 2);
+    assertEquals(browseSong.preferredVersion?.id, secondVersion.id);
+    assertEquals(browseSong.versions.map((version) => version.id), [firstVersion.id, secondVersion.id]);
+
+    const flat = getLibraryBrowse({ mode: "flat", includePrivate: true });
+    const flatArtist = flat.artists.find((candidate) => candidate.id === artist.id);
+    assertExists(flatArtist);
+    assertEquals(flatArtist.albums.length, 0);
+    assertEquals(flatArtist.songs.some((song) => song.id === albumSong.id), true);
+
+    const publicSong = getLibrarySongVersionsForTab(firstVersion.id, { publicOnly: true });
+    assertExists(publicSong);
+    assertEquals(publicSong.versions.map((version) => version.id), [firstVersion.id]);
 });
 
 Deno.test("artist merge preserves aliases, songs, and tab versions", () => {
