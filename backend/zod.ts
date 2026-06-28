@@ -101,6 +101,18 @@ const QueryBooleanSchema = z.preprocess((value) => {
     }
     return value;
 }, z.boolean());
+const FilterBooleanSchema = z.preprocess((value) => {
+    if (value === "" || value === undefined) {
+        return undefined;
+    }
+    if (value === "true") {
+        return true;
+    }
+    if (value === "false") {
+        return false;
+    }
+    return value;
+}, z.boolean().optional());
 
 export const CreateImportJobSchema = z.object({
     sourceType: ImportSourceTypeSchema.default("server-folder"),
@@ -141,7 +153,7 @@ export const BulkImportItemsSchema = z.object({
     filters: z.object({
         search: QueryStringSchema,
         status: z.enum(["pending", "parsing", "ready", "committed", "skipped", "failed"]).optional(),
-        selected: z.boolean().optional(),
+        selected: FilterBooleanSchema,
         duplicate: z.enum(["none", "exact", "probable"]).optional(),
         decision: ImportItemDecisionSchema.optional(),
         sort: z.enum(["artist-title", "album-title", "confidence-asc", "confidence-desc", "source-path"]).optional(),
