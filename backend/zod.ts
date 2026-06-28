@@ -162,3 +162,13 @@ export const BulkImportItemsSchema = z.object({
     decision: ImportItemDecisionSchema.optional(),
 });
 export type BulkImportItemsRequest = z.infer<typeof BulkImportItemsSchema>;
+
+export const LibraryBrowseQuerySchema = z.object({
+    mode: z.enum(["album", "flat"]).default("album"),
+});
+export type LibraryBrowseQuery = z.infer<typeof LibraryBrowseQuerySchema>;
+
+export const SetPreferredTabSchema = z.object({
+    tabId: z.string().min(1).nullable(),
+});
+export type SetPreferredTabRequest = z.infer<typeof SetPreferredTabSchema>;

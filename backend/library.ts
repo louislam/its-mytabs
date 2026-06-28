@@ -106,6 +106,93 @@ export interface LibraryTabListOptions {
     favOnly?: boolean;
 }
 
+export interface LibraryBrowseVersion {
+    id: string;
+    songId: number;
+    version: number;
+    versionLabel: string | null;
+    title: string;
+    artist: string;
+    album: string;
+    filename: string;
+    originalFilename: string;
+    ext: string | null;
+    public: boolean;
+    fav: boolean;
+    preferred: boolean;
+    hasAudio: boolean;
+    hasYoutube: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface LibraryBrowseSong {
+    id: number;
+    title: string;
+    preferredTabId: string | null;
+    preferredVersion: LibraryBrowseVersion | null;
+    versionCount: number;
+    publicVersionCount: number;
+    favVersionCount: number;
+    versions: LibraryBrowseVersion[];
+}
+
+export interface LibraryBrowseAlbum {
+    id: number | null;
+    title: string;
+    songCount: number;
+    versionCount: number;
+    songs: LibraryBrowseSong[];
+}
+
+export interface LibraryBrowseArtist {
+    id: number;
+    name: string;
+    songCount: number;
+    versionCount: number;
+    albums: LibraryBrowseAlbum[];
+    songs: LibraryBrowseSong[];
+}
+
+export interface LibraryBrowseResult {
+    mode: "album" | "flat";
+    artistCount: number;
+    songCount: number;
+    versionCount: number;
+    artists: LibraryBrowseArtist[];
+}
+
+interface LibraryBrowseRow {
+    artistId: number;
+    artistName: string;
+    albumId: number | null;
+    albumTitle: string | null;
+    songId: number;
+    songTitle: string;
+    preferredTabId: string | null;
+    tabId: string;
+    tabFileId: number | null;
+    version: number;
+    versionLabel: string | null;
+    tabTitle: string;
+    tabArtist: string;
+    tabAlbum: string;
+    filename: string;
+    originalFilename: string;
+    ext: string | null;
+    public: boolean;
+    fav: boolean;
+    hasAudio: boolean;
+    hasYoutube: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+interface LibraryBrowseOptions extends LibraryTabListOptions {
+    mode?: "album" | "flat";
+    songId?: number;
+}
+
 interface SongContext {
     title: string;
     artist: string;
@@ -423,6 +510,44 @@ export function getAllLibraryTabInfos(options: LibraryTabListOptions = {}): TabI
     return rows.map((row) => toTabInfo(mapTab(row)));
 }
 
+export function getLibraryBrowse(options: LibraryBrowseOptions = {}): LibraryBrowseResult {
+    const mode = options.mode ?? "album";
+    const rows = getLibraryBrowseRows(options);
+    const artists = buildLibraryBrowseArtists(rows, mode);
+    const songIds = new Set<number>();
+    let versionCount = 0;
+
+    for (const artist of artists) {
+        versionCount += artist.versionCount;
+        for (const album of artist.albums) {
+            for (const song of album.songs) {
+                songIds.add(song.id);
+            }
+        }
+        for (const song of artist.songs) {
+            songIds.add(song.id);
+        }
+    }
+
+    return {
+        mode,
+        artistCount: artists.length,
+        songCount: songIds.size,
+        versionCount,
+        artists,
+    };
+}
+
+export function getLibrarySongVersionsForTab(tabId: string, options: LibraryTabListOptions = {}): LibraryBrowseSong | null {
+    const tab = getLibraryTab(tabId);
+    if (!tab) {
+        return null;
+    }
+    const rows = getLibraryBrowseRows({ ...options, songId: tab.songId });
+    const artists = buildLibraryBrowseArtists(rows, "flat");
+    return artists[0]?.songs[0] ?? null;
+}
+
 export function canReadLibraryTab(id: string, loggedIn: boolean): boolean {
     const tab = getLibraryTab(id);
     if (!tab) {
@@ -440,6 +565,198 @@ export function setPreferredSongTab(songId: number, tabId: string | null): Libra
     }
     db.prepare("UPDATE songs SET preferred_tab_id = ?, updated_at = ? WHERE id = ?").run(tabId, new Date().toISOString(), songId);
     return requireSong(songId);
+}
+
+export function getLibraryTabStoredPath(id: string): string | null {
+    const row = db.prepare(`
+        SELECT tab_files.stored_path AS stored_path
+        FROM tabs
+        INNER JOIN tab_files ON tab_files.id = tabs.tab_file_id
+        WHERE tabs.id = ? AND tabs.deleted_at IS NULL
+    `).get(id) as SqlRow | undefined;
+    return row ? readString(row, "stored_path") : null;
+}
+
+function getLibraryBrowseRows(options: LibraryBrowseOptions): LibraryBrowseRow[] {
+    const clauses = ["tabs.deleted_at IS NULL"];
+    const params: Array<string | number> = [];
+    if (options.publicOnly || options.includePrivate === false) {
+        clauses.push("tabs.public = 1");
+    }
+    if (options.favOnly) {
+        clauses.push("tabs.fav = 1");
+    }
+    if (options.songId !== undefined) {
+        clauses.push("songs.id = ?");
+        params.push(options.songId);
+    }
+
+    const rows = db.prepare(`
+        SELECT
+            artists.id AS artist_id,
+            artists.name AS artist_name,
+            albums.id AS album_id,
+            albums.title AS album_title,
+            songs.id AS song_id,
+            songs.title AS song_title,
+            songs.preferred_tab_id AS preferred_tab_id,
+            tabs.id AS tab_id,
+            tabs.tab_file_id AS tab_file_id,
+            tabs.version AS version,
+            tabs.version_label AS version_label,
+            tabs.title AS tab_title,
+            tabs.artist AS tab_artist,
+            tabs.album AS tab_album,
+            tabs.filename AS filename,
+            tabs.original_filename AS original_filename,
+            tab_files.ext AS ext,
+            tabs.public AS public,
+            tabs.fav AS fav,
+            0 AS has_audio,
+            0 AS has_youtube,
+            tabs.created_at AS created_at,
+            tabs.updated_at AS updated_at
+        FROM tabs
+        INNER JOIN songs ON songs.id = tabs.song_id
+        INNER JOIN artists ON artists.id = songs.artist_id
+        LEFT JOIN albums ON albums.id = songs.album_id
+        LEFT JOIN tab_files ON tab_files.id = tabs.tab_file_id
+        WHERE ${clauses.join(" AND ")}
+        ORDER BY artists.name COLLATE NOCASE, albums.title IS NULL, albums.title COLLATE NOCASE, songs.title COLLATE NOCASE, tabs.version
+    `).all(...params) as SqlRow[];
+
+    return rows.map(mapLibraryBrowseRow);
+}
+
+function buildLibraryBrowseArtists(rows: LibraryBrowseRow[], mode: "album" | "flat"): LibraryBrowseArtist[] {
+    const artistMap = new Map<number, LibraryBrowseArtist>();
+
+    for (const row of rows) {
+        let artist = artistMap.get(row.artistId);
+        if (!artist) {
+            artist = {
+                id: row.artistId,
+                name: row.artistName,
+                songCount: 0,
+                versionCount: 0,
+                albums: [],
+                songs: [],
+            };
+            artistMap.set(row.artistId, artist);
+        }
+
+        const version = toLibraryBrowseVersion(row);
+        const songList = mode === "album" && row.albumId !== null ? getOrCreateAlbum(artist, row).songs : artist.songs;
+        const song = getOrCreateSong(songList, row);
+        song.versions.push(version);
+    }
+
+    const artists = Array.from(artistMap.values());
+    for (const artist of artists) {
+        finalizeSongs(artist.songs);
+        for (const album of artist.albums) {
+            finalizeSongs(album.songs);
+            album.songCount = album.songs.length;
+            album.versionCount = album.songs.reduce((sum, song) => sum + song.versionCount, 0);
+        }
+        artist.songCount = artist.songs.length + artist.albums.reduce((sum, album) => sum + album.songCount, 0);
+        artist.versionCount = artist.songs.reduce((sum, song) => sum + song.versionCount, 0) + artist.albums.reduce((sum, album) => sum + album.versionCount, 0);
+    }
+
+    return artists;
+}
+
+function getOrCreateAlbum(artist: LibraryBrowseArtist, row: LibraryBrowseRow): LibraryBrowseAlbum {
+    let album = artist.albums.find((candidate) => candidate.id === row.albumId);
+    if (!album) {
+        album = {
+            id: row.albumId,
+            title: row.albumTitle ?? "",
+            songCount: 0,
+            versionCount: 0,
+            songs: [],
+        };
+        artist.albums.push(album);
+    }
+    return album;
+}
+
+function getOrCreateSong(songs: LibraryBrowseSong[], row: LibraryBrowseRow): LibraryBrowseSong {
+    let song = songs.find((candidate) => candidate.id === row.songId);
+    if (!song) {
+        song = {
+            id: row.songId,
+            title: row.songTitle,
+            preferredTabId: row.preferredTabId,
+            preferredVersion: null,
+            versionCount: 0,
+            publicVersionCount: 0,
+            favVersionCount: 0,
+            versions: [],
+        };
+        songs.push(song);
+    }
+    return song;
+}
+
+function finalizeSongs(songs: LibraryBrowseSong[]): void {
+    for (const song of songs) {
+        song.versions.sort((a, b) => a.version - b.version || a.id.localeCompare(b.id));
+        song.versionCount = song.versions.length;
+        song.publicVersionCount = song.versions.filter((version) => version.public).length;
+        song.favVersionCount = song.versions.filter((version) => version.fav).length;
+        song.preferredVersion = song.versions.find((version) => version.id === song.preferredTabId) ?? song.versions[0] ?? null;
+    }
+}
+
+function toLibraryBrowseVersion(row: LibraryBrowseRow): LibraryBrowseVersion {
+    return {
+        id: row.tabId,
+        songId: row.songId,
+        version: row.version,
+        versionLabel: row.versionLabel,
+        title: row.tabTitle,
+        artist: row.tabArtist,
+        album: row.tabAlbum,
+        filename: row.filename,
+        originalFilename: row.originalFilename,
+        ext: row.ext,
+        public: row.public,
+        fav: row.fav,
+        preferred: row.preferredTabId === row.tabId,
+        hasAudio: row.hasAudio,
+        hasYoutube: row.hasYoutube,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+    };
+}
+
+function mapLibraryBrowseRow(row: SqlRow): LibraryBrowseRow {
+    return {
+        artistId: readNumber(row, "artist_id"),
+        artistName: readString(row, "artist_name"),
+        albumId: readNullableNumber(row, "album_id"),
+        albumTitle: readNullableString(row, "album_title"),
+        songId: readNumber(row, "song_id"),
+        songTitle: readString(row, "song_title"),
+        preferredTabId: readNullableString(row, "preferred_tab_id"),
+        tabId: readString(row, "tab_id"),
+        tabFileId: readNullableNumber(row, "tab_file_id"),
+        version: readNumber(row, "version"),
+        versionLabel: readNullableString(row, "version_label"),
+        tabTitle: readString(row, "tab_title"),
+        tabArtist: readString(row, "tab_artist"),
+        tabAlbum: readString(row, "tab_album"),
+        filename: readString(row, "filename"),
+        originalFilename: readString(row, "original_filename"),
+        ext: readNullableString(row, "ext"),
+        public: readBoolean(row, "public"),
+        fav: readBoolean(row, "fav"),
+        hasAudio: readBoolean(row, "has_audio"),
+        hasYoutube: readBoolean(row, "has_youtube"),
+        createdAt: readString(row, "created_at"),
+        updatedAt: readString(row, "updated_at"),
+    };
 }
 
 function requireArtist(id: number): LibraryArtist {

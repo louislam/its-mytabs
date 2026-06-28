@@ -107,3 +107,64 @@ export const ImportReportSchema = z.object({
     failedItems: z.array(ImportItemSchema).optional().default([]),
 });
 export type ImportReport = z.infer<typeof ImportReportSchema>;
+
+export const LibraryBrowseVersionSchema = z.object({
+    id: z.string(),
+    songId: z.number(),
+    version: z.number(),
+    versionLabel: z.string().nullable(),
+    title: z.string(),
+    artist: z.string(),
+    album: z.string(),
+    filename: z.string(),
+    originalFilename: z.string(),
+    ext: z.string().nullable(),
+    public: ApiBooleanSchema,
+    fav: ApiBooleanSchema,
+    preferred: ApiBooleanSchema,
+    hasAudio: ApiBooleanSchema,
+    hasYoutube: ApiBooleanSchema,
+    createdAt: z.string(),
+    updatedAt: z.string(),
+});
+export type LibraryBrowseVersion = z.infer<typeof LibraryBrowseVersionSchema>;
+
+export const LibraryBrowseSongSchema = z.object({
+    id: z.number(),
+    title: z.string(),
+    preferredTabId: z.string().nullable(),
+    preferredVersion: LibraryBrowseVersionSchema.nullable(),
+    versionCount: z.number(),
+    publicVersionCount: z.number(),
+    favVersionCount: z.number(),
+    versions: z.array(LibraryBrowseVersionSchema),
+});
+export type LibraryBrowseSong = z.infer<typeof LibraryBrowseSongSchema>;
+
+export const LibraryBrowseAlbumSchema = z.object({
+    id: z.number().nullable(),
+    title: z.string(),
+    songCount: z.number(),
+    versionCount: z.number(),
+    songs: z.array(LibraryBrowseSongSchema),
+});
+export type LibraryBrowseAlbum = z.infer<typeof LibraryBrowseAlbumSchema>;
+
+export const LibraryBrowseArtistSchema = z.object({
+    id: z.number(),
+    name: z.string(),
+    songCount: z.number(),
+    versionCount: z.number(),
+    albums: z.array(LibraryBrowseAlbumSchema),
+    songs: z.array(LibraryBrowseSongSchema),
+});
+export type LibraryBrowseArtist = z.infer<typeof LibraryBrowseArtistSchema>;
+
+export const LibraryBrowseSchema = z.object({
+    mode: z.enum(["album", "flat"]),
+    artistCount: z.number(),
+    songCount: z.number(),
+    versionCount: z.number(),
+    artists: z.array(LibraryBrowseArtistSchema),
+});
+export type LibraryBrowse = z.infer<typeof LibraryBrowseSchema>;
