@@ -1,9 +1,15 @@
 services:
     app:
-        image: louislam/its-mytabs:1
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: its-mytabs:local
         ports:
             # Host Port:Container Port
             - "47777:47777"
+        # Fedora&Podman specific
+        security_opt:
+            - label=disable
         environment:
             MYTABS_IMPORT_ROOTS: /srv/tabs/import
         volumes:

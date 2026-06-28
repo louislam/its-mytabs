@@ -38,6 +38,10 @@ export async function checkTabExists(id: string): Promise<void> {
  * Returns the filename if found, null otherwise
  */
 async function findTabFile(dirPath: string): Promise<string | null> {
+    if (!await fs.exists(dirPath)) {
+        return null;
+    }
+
     for await (const entry of Deno.readDir(dirPath)) {
         if (!entry.isFile) continue;
         const ext = path.extname(entry.name).slice(1).toLowerCase();
@@ -53,6 +57,10 @@ async function findTabFile(dirPath: string): Promise<string | null> {
  */
 async function findAudioFiles(dirPath: string): Promise<string[]> {
     const audioFiles: string[] = [];
+    if (!await fs.exists(dirPath)) {
+        return audioFiles;
+    }
+
     for await (const entry of Deno.readDir(dirPath)) {
         if (!entry.isFile) continue;
         const ext = path.extname(entry.name).slice(1).toLowerCase();

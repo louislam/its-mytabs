@@ -40,7 +40,7 @@ COPY --chown=deno:deno ./dist /app/dist
 # Install and cache dependencies
 RUN deno install && \
     deno cache ./backend/main.ts && \
-    timeout 10s deno -A main.ts || exit 0
+    timeout 10s deno -A ./backend/main.ts || exit 0
 
 # Switch back to root, I found that it will cause permission issues if the user does not set permissions correctly
 # Use PUID / PGID to switch back to `deno` user instead

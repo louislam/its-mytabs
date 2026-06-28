@@ -21,6 +21,8 @@ await Deno.writeTextFile(indexPath, "<html><head></head><body>test</body></html>
 // Now import functions after env setup
 const { createTab, addAudio, getConfigJSON, updateConfigJSON } = await import("./tab.ts");
 const { main, closeServer } = await import("./main.ts");
+const { upsertArtist, upsertLibraryTab, upsertSong, upsertTabFile } = await import("./library.ts");
+const { storeLibraryFile } = await import("./storage.ts");
 
 // Start the server
 await main();
@@ -117,6 +119,35 @@ Deno.test({
         assertEquals(resFile.status, 200);
         // close it
         await resFile.body?.cancel();
+    },
+});
+
+Deno.test({
+    name: "library-backed tab info does not require a legacy tab folder (HTTP)",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    fn: async () => {
+        const stored = await storeLibraryFile(new Uint8Array([210, 211, 212]), "gp");
+        const tabFile = upsertTabFile(stored);
+        const artist = upsertArtist("Imported Artist");
+        const song = upsertSong(artist.id, "Imported Song");
+        const tab = upsertLibraryTab({
+            id: "imported-without-folder",
+            songId: song.id,
+            tabFileId: tabFile.id,
+            title: "Imported Song",
+            artist: "Imported Artist",
+            filename: "tab.gp",
+            originalFilename: "imported.gp",
+            public: true,
+        });
+
+        const res = await fetch(`${baseURL}/api/tab/${encodeURIComponent(tab.id)}`, { method: "GET" });
+        const json = await res.json();
+
+        assertEquals(res.status, 200, JSON.stringify(json));
+        assertEquals(json.ok, true);
+        assertEquals(json.tab.id, tab.id);
     },
 });
 

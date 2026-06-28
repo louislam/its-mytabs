@@ -297,6 +297,7 @@ export async function main() {
             const id = c.req.param("id");
 
             let config = await getConfigJSON(id);
+            const isLegacyTab = config !== null;
             if (!config) {
                 config = getLibraryConfigJSON(id);
             }
@@ -308,7 +309,9 @@ export async function main() {
                 await checkLogin(c);
             }
 
-            config = await fixMissingTab(config);
+            if (isLegacyTab) {
+                config = await fixMissingTab(config);
+            }
 
             let filePath = "";
             if (await isLoggedIn(c)) {
