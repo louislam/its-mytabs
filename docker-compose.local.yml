@@ -11,10 +11,8 @@ services:
         security_opt:
             - label=disable
         environment:
-            MYTABS_IMPORT_ROOTS: /srv/tabs/import
-            MYTABS_DISABLE_AUTH: "false"
+            MYTABS_DISABLE_AUTH: "true"
         volumes:
             # Host Path:Container Path
             - ./data:/app/data
-            - ./import:/srv/tabs/import:ro
         restart: unless-stopped
