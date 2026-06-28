@@ -19,6 +19,7 @@ type LoginChecker = (c: Context) => Promise<void>;
 
 interface RegisterLibraryMaintenanceRouteOptions {
     checkLogin?: LoginChecker;
+    enabled?: boolean;
     musicBrainz?: MusicBrainzLookupOptions;
 }
 
@@ -26,6 +27,11 @@ type SqlValue = string | number | bigint | null;
 type SqlRow = Record<string, SqlValue>;
 
 export function registerLibraryMaintenanceRoutes(app: Hono, options: RegisterLibraryMaintenanceRouteOptions = {}): void {
+    const enabled = options.enabled ?? Deno.env.get("MYTABS_ENABLE_LIBRARY_MAINTENANCE_API") === "1";
+    if (!enabled) {
+        return;
+    }
+
     const requireLogin = options.checkLogin ?? checkLogin;
 
     app.post("/api/library-maintenance/artist-aliases", async (c) => {

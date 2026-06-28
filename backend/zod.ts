@@ -165,6 +165,8 @@ export type BulkImportItemsRequest = z.infer<typeof BulkImportItemsSchema>;
 
 export const LibraryBrowseQuerySchema = z.object({
     mode: z.enum(["album", "flat"]).default("album"),
+    search: QueryStringSchema,
+    limit: z.coerce.number().int().min(1).max(1000).default(500),
 });
 export type LibraryBrowseQuery = z.infer<typeof LibraryBrowseQuerySchema>;
 

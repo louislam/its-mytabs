@@ -33,13 +33,10 @@ if (!stat.isDirectory && !stat.isFile) {
     Deno.exit(0);
 }
 
-let tempDataDir: string | null = null;
-if (!Deno.env.get("DATA_DIR")) {
-    tempDataDir = await Deno.makeTempDir({
-        prefix: "mytabs-real-library-dry-run-",
-    });
-    Deno.env.set("DATA_DIR", tempDataDir);
-}
+const tempDataDir = await Deno.makeTempDir({
+    prefix: "mytabs-real-library-dry-run-",
+});
+Deno.env.set("DATA_DIR", tempDataDir);
 
 Deno.env.set("MYTABS_DEMO_MODE", "false");
 if (!Deno.env.get("MYTABS_IMPORT_ROOTS")) {
@@ -84,10 +81,7 @@ try {
         decision: "skip_unsupported",
         sort: "source-path",
     });
-    const parseFailures = sampleItemsWhere(
-        job.id,
-        "status_message LIKE 'Parser metadata unavailable:%'",
-    );
+    const parseFailures = sampleItemsByPredicate(job.id, "parserFailure");
     const exactDuplicates = listImportItems(job.id, {
         limit: 20,
         offset: 0,
@@ -115,7 +109,7 @@ try {
     await writeMarkdownReport(reportPath, {
         rootPath,
         durationMs,
-        usedTemporaryDataDir: tempDataDir !== null,
+        usedTemporaryDataDir: true,
         job: scanned,
         totals: report.totals,
         quality,
@@ -132,7 +126,7 @@ try {
             ok: true,
             dryRunOnly: true,
             dataDir: Deno.env.get("DATA_DIR"),
-            usedTemporaryDataDir: tempDataDir !== null,
+            usedTemporaryDataDir: true,
             rootPath,
             reportPath,
             durationMs: Math.round(durationMs),
@@ -168,9 +162,7 @@ try {
 } finally {
     kv.close();
     db.close();
-    if (tempDataDir) {
-        await Deno.remove(tempDataDir, { recursive: true });
-    }
+    await Deno.remove(tempDataDir, { recursive: true });
 }
 
 interface QualityStats {
@@ -201,11 +193,20 @@ interface QualityStats {
     >;
 }
 
-function sampleItemsWhere(jobId: string, where: string) {
+const qualityPredicates = {
+    reviewRequired: "review_required = 1",
+    parserFailure: "status_message LIKE 'Parser metadata unavailable:%'",
+    missingArtist: "suggested_artist IS NULL OR suggested_artist = ''",
+    missingTitle: "suggested_title IS NULL OR suggested_title = ''",
+} as const;
+
+type QualityPredicate = keyof typeof qualityPredicates;
+
+function sampleItemsByPredicate(jobId: string, predicate: QualityPredicate) {
     const rows = db.prepare(`
         SELECT relative_path, status_message, suggested_artist, suggested_title, suggested_album, confidence
         FROM import_items
-        WHERE job_id = ? AND ${where}
+        WHERE job_id = ? AND ${qualityPredicates[predicate]}
         ORDER BY relative_path COLLATE NOCASE
         LIMIT 20
     `).all(jobId) as Array<Record<string, string | number | null>>;
@@ -225,19 +226,10 @@ function collectQualityStats(jobId: string): QualityStats {
         statusCounts: collectCounts(jobId, "status"),
         decisionCounts: collectCounts(jobId, "decision"),
         extensionCounts: collectCounts(jobId, "ext"),
-        reviewRequiredCount: countWhere(jobId, "review_required = 1"),
-        parserFailureCount: countWhere(
-            jobId,
-            "status_message LIKE 'Parser metadata unavailable:%'",
-        ),
-        missingArtistCount: countWhere(
-            jobId,
-            "suggested_artist IS NULL OR suggested_artist = ''",
-        ),
-        missingTitleCount: countWhere(
-            jobId,
-            "suggested_title IS NULL OR suggested_title = ''",
-        ),
+        reviewRequiredCount: countByPredicate(jobId, "reviewRequired"),
+        parserFailureCount: countByPredicate(jobId, "parserFailure"),
+        missingArtistCount: countByPredicate(jobId, "missingArtist"),
+        missingTitleCount: countByPredicate(jobId, "missingTitle"),
         confidence: collectConfidence(jobId),
         batchExactDuplicateGroups: collectBatchExactDuplicateGroups(jobId),
         batchProbableDuplicateGroups: collectBatchProbableDuplicateGroups(
@@ -267,9 +259,9 @@ function collectCounts(
     );
 }
 
-function countWhere(jobId: string, where: string): number {
+function countByPredicate(jobId: string, predicate: QualityPredicate): number {
     const row = db.prepare(
-        `SELECT COUNT(*) AS count FROM import_items WHERE job_id = ? AND ${where}`,
+        `SELECT COUNT(*) AS count FROM import_items WHERE job_id = ? AND ${qualityPredicates[predicate]}`,
     ).get(jobId) as Record<string, string | number | null>;
     return readNumber(row, "count");
 }

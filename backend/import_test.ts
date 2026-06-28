@@ -20,6 +20,7 @@ const {
     listImportReviewGroups,
     patchImportItem,
     scanImportJob,
+    startImportJobScan,
 } = await import("./import.ts");
 const { db, kv } = await import("./db.ts");
 const { upsertArtist, upsertLibraryTab, upsertSong, upsertTabFile } = await import("./library.ts");
@@ -69,6 +70,46 @@ Deno.test("import jobs can be canceled before scan", async () => {
     const canceled = cancelImportJob(job.id);
     assertEquals(canceled.status, "canceled");
     assertEquals(getImportJob(job.id)?.status, "canceled");
+});
+
+Deno.test("background import scan returns while job is scanning", async () => {
+    const root = await makeImportRoot("background-scan");
+    await Deno.writeTextFile(path.join(root, "Background Artist - Background Song.gp"), "background");
+    Deno.env.set("MYTABS_IMPORT_ROOTS", root);
+
+    const job = await createImportJob({
+        sourceType: "server-folder",
+        rootPath: root,
+        copyMode: "copy",
+        groupingMode: "auto",
+    });
+    const started = await startImportJobScan(job.id);
+    assertEquals(started.status, "scanning");
+
+    const completed = await waitForImportJob(job.id, "ready_for_review");
+    assertEquals(completed.totalCount, 1);
+});
+
+Deno.test("background import scan rejects concurrent starts for one job", async () => {
+    const root = await makeImportRoot("scan-race");
+    await Deno.writeTextFile(path.join(root, "Race Artist - Race Song.gp"), "race");
+    Deno.env.set("MYTABS_IMPORT_ROOTS", root);
+
+    const job = await createImportJob({
+        sourceType: "server-folder",
+        rootPath: root,
+        copyMode: "copy",
+        groupingMode: "auto",
+    });
+
+    const results = await Promise.allSettled([
+        startImportJobScan(job.id),
+        startImportJobScan(job.id),
+    ]);
+    assertEquals(results.filter((result) => result.status === "fulfilled").length, 1);
+    assertEquals(results.filter((result) => result.status === "rejected").length, 1);
+
+    await waitForImportJob(job.id, "ready_for_review");
 });
 
 Deno.test("paginated import items and grouped review use suggested metadata", async () => {
@@ -252,6 +293,18 @@ async function makeImportRoot(name: string): Promise<string> {
     const root = path.join(tempDir, "imports", name);
     await fs.ensureDir(root);
     return await Deno.realPath(root);
+}
+
+async function waitForImportJob(jobId: string, status: string) {
+    const started = performance.now();
+    while (performance.now() - started < 5_000) {
+        const job = getImportJob(jobId);
+        if (job?.status === status) {
+            return job;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Import job did not reach ${status}`);
 }
 
 async function hashFile(filePath: string): Promise<{ sha256: string; byteSize: number }> {

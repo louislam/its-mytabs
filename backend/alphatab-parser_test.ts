@@ -24,3 +24,22 @@ Deno.test("parseAlphaTabBytes captures parser errors structurally", async () => 
         assert(result.elapsedMs >= 0);
     }
 });
+
+Deno.test("parseAlphaTabBytes rejects files above configured parse limit", async () => {
+    const previous = Deno.env.get("MYTABS_MAX_PARSE_BYTES");
+    Deno.env.set("MYTABS_MAX_PARSE_BYTES", "2");
+    try {
+        const result = await parseAlphaTabBytes(new Uint8Array([1, 2, 3]), "song.gp5");
+
+        assertEquals(result.ok, false);
+        if (!result.ok) {
+            assertEquals(result.error.name, "AlphaTabFileTooLargeError");
+        }
+    } finally {
+        if (previous === undefined) {
+            Deno.env.delete("MYTABS_MAX_PARSE_BYTES");
+        } else {
+            Deno.env.set("MYTABS_MAX_PARSE_BYTES", previous);
+        }
+    }
+});

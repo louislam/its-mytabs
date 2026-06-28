@@ -20,6 +20,8 @@ export default defineComponent({
             setting: {},
             library: null,
             expandedSongs: {},
+            searchRefreshTimer: null,
+            libraryRequestId: 0,
         };
     },
 
@@ -33,12 +35,7 @@ export default defineComponent({
         }
 
         try {
-            const res = await fetch(baseURL + "/api/tabs", { credentials: "include" });
-            const data = await res.json();
-            this.tabList = data.tabs;
-            const libraryRes = await fetch(baseURL + "/api/library?mode=album", { credentials: "include" });
-            const libraryData = await libraryRes.json();
-            this.library = LibraryBrowseSchema.parse(libraryData.library);
+            await this.refreshLibrary();
             this.ready = true;
 
             await this.$nextTick();
@@ -53,15 +50,7 @@ export default defineComponent({
 
     computed: {
         filteredTabList() {
-            if (!this.searchQuery.trim()) return this.tabList;
-
-            const query = this.searchQuery.trim().toLowerCase();
-
-            return this.tabList.filter((tab) => {
-                const title = (tab.title || "").toLowerCase();
-                const artist = (tab.artist || "").toLowerCase();
-                return title.includes(query) || artist.includes(query);
-            });
+            return this.tabList;
         },
 
         favoritedTabs() {
@@ -99,49 +88,7 @@ export default defineComponent({
         },
 
         filteredLibrary() {
-            if (!this.library) {
-                return null;
-            }
-            const query = this.searchQuery.trim().toLowerCase();
-            if (!query) {
-                return this.library;
-            }
-
-            const artists = [];
-            for (const artist of this.library.artists) {
-                const albums = [];
-                const songs = this.filterLibrarySongs(artist.songs, query, artist.name, "");
-
-                for (const album of artist.albums) {
-                    const albumSongs = this.filterLibrarySongs(album.songs, query, artist.name, album.title);
-                    if (albumSongs.length > 0 || album.title.toLowerCase().includes(query)) {
-                        albums.push({
-                            ...album,
-                            songs: albumSongs.length > 0 ? albumSongs : album.songs,
-                            songCount: albumSongs.length > 0 ? albumSongs.length : album.songCount,
-                            versionCount: albumSongs.length > 0 ? albumSongs.reduce((sum, song) => sum + song.versionCount, 0) : album.versionCount,
-                        });
-                    }
-                }
-
-                if (albums.length > 0 || songs.length > 0 || artist.name.toLowerCase().includes(query)) {
-                    artists.push({
-                        ...artist,
-                        albums,
-                        songs: songs.length > 0 ? songs : artist.name.toLowerCase().includes(query) ? artist.songs : [],
-                        songCount: albums.reduce((sum, album) => sum + album.songCount, 0) + (songs.length > 0 ? songs.length : 0),
-                        versionCount: albums.reduce((sum, album) => sum + album.versionCount, 0) + (songs.length > 0 ? songs.reduce((sum, song) => sum + song.versionCount, 0) : 0),
-                    });
-                }
-            }
-
-            return {
-                ...this.library,
-                artists,
-                artistCount: artists.length,
-                songCount: artists.reduce((sum, artist) => sum + artist.songCount, 0),
-                versionCount: artists.reduce((sum, artist) => sum + artist.versionCount, 0),
-            };
+            return this.library;
         },
 
         useLibraryGrouping() {
@@ -149,20 +96,32 @@ export default defineComponent({
         },
     },
 
-    methods: {
-        filterLibrarySongs(songs, query, artistName, albumTitle) {
-            return songs.filter((song) => {
-                if (song.title.toLowerCase().includes(query) || artistName.toLowerCase().includes(query) || albumTitle.toLowerCase().includes(query)) {
-                    return true;
-                }
-                return song.versions.some((version) => {
-                    return (version.versionLabel || "").toLowerCase().includes(query) ||
-                        (version.originalFilename || "").toLowerCase().includes(query) ||
-                        (version.ext || "").toLowerCase().includes(query);
+    watch: {
+        searchQuery() {
+            if (!this.ready) {
+                return;
+            }
+            if (this.searchRefreshTimer) {
+                window.clearTimeout(this.searchRefreshTimer);
+            }
+            this.searchRefreshTimer = window.setTimeout(() => {
+                this.refreshLibrary().catch((error) => {
+                    notify({
+                        text: error.message,
+                        type: "error",
+                    });
                 });
-            });
+            }, 250);
         },
+    },
 
+    beforeUnmount() {
+        if (this.searchRefreshTimer) {
+            window.clearTimeout(this.searchRefreshTimer);
+        }
+    },
+
+    methods: {
         handleFavToggled() {
             // Force re-render by creating a new array reference
             this.tabList = [...this.tabList];
@@ -234,9 +193,47 @@ export default defineComponent({
         },
 
         async refreshLibrary() {
-            const libraryRes = await fetch(baseURL + "/api/library?mode=album", { credentials: "include" });
+            const params = new URLSearchParams({
+                mode: "album",
+                limit: "1000",
+            });
+            if (this.searchQuery.trim()) {
+                params.set("search", this.searchQuery.trim());
+            }
+            const requestId = ++this.libraryRequestId;
+            const libraryRes = await fetch(baseURL + `/api/library?${params.toString()}`, { credentials: "include" });
             const libraryData = await libraryRes.json();
+            if (requestId !== this.libraryRequestId) {
+                return;
+            }
             this.library = LibraryBrowseSchema.parse(libraryData.library);
+            this.tabList = this.flattenLibraryTabs(this.library);
+        },
+
+        flattenLibraryTabs(library) {
+            const tabs = [];
+            const addSongVersions = (song) => {
+                for (const version of song.versions) {
+                    tabs.push({
+                        id: version.id,
+                        title: version.title,
+                        artist: version.artist,
+                        filename: version.filename,
+                        originalFilename: version.originalFilename,
+                        createdAt: version.createdAt,
+                        public: version.public,
+                        fav: version.fav,
+                    });
+                }
+            };
+
+            for (const artist of library.artists) {
+                for (const album of artist.albums) {
+                    album.songs.forEach(addSongVersions);
+                }
+                artist.songs.forEach(addSongVersions);
+            }
+            return tabs;
         },
     },
 });

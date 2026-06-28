@@ -321,6 +321,20 @@ Deno.test("maintenance tools move versions, split songs, and clean album assignm
     assertEquals(noAlbumRow.album, "");
 });
 
+Deno.test("maintenance version allocation skips soft-deleted versions", () => {
+    const artist = upsertArtist("Soft Delete Version Artist");
+    const sourceSong = upsertSong(artist.id, "Soft Delete Source");
+    const targetSong = upsertSong(artist.id, "Soft Delete Target");
+    const sourceTab = upsertLibraryTab({ id: "soft-delete-version-source", songId: sourceSong.id });
+    upsertLibraryTab({ id: "soft-delete-version-active", songId: targetSong.id });
+    const deletedTab = upsertLibraryTab({ id: "soft-delete-version-deleted", songId: targetSong.id });
+    db.prepare("UPDATE tabs SET deleted_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), deletedTab.id);
+
+    const moved = moveTabVersion(sourceTab.id, targetSong.id, "After Deleted");
+    assertEquals(moved.version, 3);
+    assertEquals(moved.versionLabel, "After Deleted");
+});
+
 Deno.test.afterAll(async () => {
     kv.close();
     db.close();

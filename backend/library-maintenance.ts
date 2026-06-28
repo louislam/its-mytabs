@@ -1,4 +1,4 @@
-import { db } from "./db.ts";
+import { db, withTransaction } from "./db.ts";
 import { LibraryArtistAlias, LibrarySong, LibraryTab, upsertAlbum, upsertArtistAlias, upsertSong } from "./library.ts";
 
 type SqlValue = string | number | bigint | null;
@@ -12,94 +12,106 @@ export interface ArtistMergeResult {
 }
 
 export function createArtistAlias(artistId: number, alias: string): LibraryArtistAlias {
-    return upsertArtistAlias(artistId, alias);
+    return withTransaction(() => upsertArtistAlias(artistId, alias));
 }
 
 export function mergeArtists(sourceArtistId: number, targetArtistId: number): ArtistMergeResult {
-    if (sourceArtistId === targetArtistId) {
-        throw new Error("Source and target artists must be different");
-    }
+    return withTransaction(() => {
+        if (sourceArtistId === targetArtistId) {
+            throw new Error("Source and target artists must be different");
+        }
 
-    const source = requireArtistRow(sourceArtistId);
-    requireArtistRow(targetArtistId);
+        const source = requireArtistRow(sourceArtistId);
+        requireArtistRow(targetArtistId);
 
-    const createdAliases: LibraryArtistAlias[] = [upsertArtistAlias(targetArtistId, readString(source, "name"))];
-    for (const alias of getArtistAliases(sourceArtistId)) {
-        createdAliases.push(upsertArtistAlias(targetArtistId, alias.alias));
-    }
+        const createdAliases: LibraryArtistAlias[] = [upsertArtistAlias(targetArtistId, readString(source, "name"))];
+        for (const alias of getArtistAliases(sourceArtistId)) {
+            createdAliases.push(upsertArtistAlias(targetArtistId, alias.alias));
+        }
 
-    const albumIdMap = mergeArtistAlbums(sourceArtistId, targetArtistId);
-    const movedSongs = moveArtistSongs(sourceArtistId, targetArtistId, albumIdMap);
-    const movedTabs = refreshArtistTabDenormalizedFields(targetArtistId);
+        const albumIdMap = mergeArtistAlbums(sourceArtistId, targetArtistId);
+        const movedSongs = moveArtistSongs(sourceArtistId, targetArtistId, albumIdMap);
+        const movedTabs = refreshArtistTabDenormalizedFields(targetArtistId);
 
-    db.prepare("DELETE FROM artists WHERE id = ?").run(sourceArtistId);
-    return { targetArtistId, movedSongs, movedTabs, createdAliases };
+        db.prepare("DELETE FROM artists WHERE id = ?").run(sourceArtistId);
+        return { targetArtistId, movedSongs, movedTabs, createdAliases };
+    });
 }
 
 export function moveSongToAlbum(songId: number, albumId: number | null): LibrarySong {
-    const song = requireSongRow(songId);
-    const artistId = readNumber(song, "artist_id");
-    if (albumId !== null) {
-        const album = requireAlbumRow(albumId);
-        if (readNumber(album, "artist_id") !== artistId) {
-            throw new Error("Album does not belong to the song artist");
+    return withTransaction(() => {
+        const song = requireSongRow(songId);
+        const artistId = readNumber(song, "artist_id");
+        if (albumId !== null) {
+            const album = requireAlbumRow(albumId);
+            if (readNumber(album, "artist_id") !== artistId) {
+                throw new Error("Album does not belong to the song artist");
+            }
         }
-    }
 
-    const normalizedTitle = readString(song, "normalized_title");
-    const conflict = findSongByArtistTitleAlbum(artistId, normalizedTitle, albumId, songId);
-    if (conflict) {
-        moveSongTabs(songId, readNumber(conflict, "id"));
-        db.prepare("DELETE FROM songs WHERE id = ?").run(songId);
-        refreshSongTabDenormalizedFields(readNumber(conflict, "id"));
-        return mapSong(conflict);
-    }
+        const normalizedTitle = readString(song, "normalized_title");
+        const conflict = findSongByArtistTitleAlbum(artistId, normalizedTitle, albumId, songId);
+        if (conflict) {
+            const conflictSongId = readNumber(conflict, "id");
+            preservePreferredTab(songId, conflictSongId);
+            moveSongTabs(songId, conflictSongId);
+            db.prepare("DELETE FROM songs WHERE id = ?").run(songId);
+            refreshSongTabDenormalizedFields(conflictSongId);
+            return mapSong(requireSongRow(conflictSongId));
+        }
 
-    db.prepare("UPDATE songs SET album_id = ?, updated_at = ? WHERE id = ?").run(albumId, new Date().toISOString(), songId);
-    refreshSongTabDenormalizedFields(songId);
-    return mapSong(requireSongRow(songId));
+        db.prepare("UPDATE songs SET album_id = ?, updated_at = ? WHERE id = ?").run(albumId, new Date().toISOString(), songId);
+        refreshSongTabDenormalizedFields(songId);
+        return mapSong(requireSongRow(songId));
+    });
 }
 
 export function moveTabVersion(tabId: string, targetSongId: number, versionLabel?: string | null): LibraryTab {
-    const tab = requireTabRow(tabId);
-    requireSongRow(targetSongId);
-    const sourceSongId = readNumber(tab, "song_id");
-    if (sourceSongId === targetSongId) {
-        return mapTab(tab);
-    }
+    return withTransaction(() => {
+        const tab = requireTabRow(tabId);
+        requireSongRow(targetSongId);
+        const sourceSongId = readNumber(tab, "song_id");
+        if (sourceSongId === targetSongId) {
+            return mapTab(tab);
+        }
 
-    const nextVersion = nextTabVersion(targetSongId);
-    const context = getSongContext(targetSongId);
-    db.prepare(`
+        const nextVersion = nextTabVersion(targetSongId);
+        const context = getSongContext(targetSongId);
+        db.prepare(`
         UPDATE tabs
         SET song_id = ?, version = ?, version_label = COALESCE(?, version_label), title = ?, artist = ?, album = ?, updated_at = ?
         WHERE id = ? AND deleted_at IS NULL
     `).run(targetSongId, nextVersion, versionLabel ?? null, context.title, context.artist, context.album, new Date().toISOString(), tabId);
-    clearInvalidPreferredTab(sourceSongId);
-    return mapTab(requireTabRow(tabId));
+        clearInvalidPreferredTab(sourceSongId);
+        return mapTab(requireTabRow(tabId));
+    });
 }
 
 export function splitTabToSong(input: { tabId: string; artistId: number; title: string; albumId?: number | null; versionLabel?: string | null }): LibraryTab {
-    const artistId = input.artistId;
-    requireArtistRow(artistId);
-    if (input.albumId !== undefined && input.albumId !== null) {
-        const album = requireAlbumRow(input.albumId);
-        if (readNumber(album, "artist_id") !== artistId) {
-            throw new Error("Album does not belong to the target artist");
+    return withTransaction(() => {
+        const artistId = input.artistId;
+        requireArtistRow(artistId);
+        if (input.albumId !== undefined && input.albumId !== null) {
+            const album = requireAlbumRow(input.albumId);
+            if (readNumber(album, "artist_id") !== artistId) {
+                throw new Error("Album does not belong to the target artist");
+            }
         }
-    }
 
-    const song = upsertSong(artistId, input.title, input.albumId ?? null);
-    return moveTabVersion(input.tabId, song.id, input.versionLabel ?? null);
+        const song = upsertSong(artistId, input.title, input.albumId ?? null);
+        return moveTabVersion(input.tabId, song.id, input.versionLabel ?? null);
+    });
 }
 
 export function assignSongAlbumByTitle(songId: number, albumTitle: string | null): LibrarySong {
-    const song = requireSongRow(songId);
-    if (albumTitle === null || albumTitle.trim() === "") {
-        return moveSongToAlbum(songId, null);
-    }
-    const album = upsertAlbum(readNumber(song, "artist_id"), albumTitle);
-    return moveSongToAlbum(songId, album.id);
+    return withTransaction(() => {
+        const song = requireSongRow(songId);
+        if (albumTitle === null || albumTitle.trim() === "") {
+            return moveSongToAlbum(songId, null);
+        }
+        const album = upsertAlbum(readNumber(song, "artist_id"), albumTitle);
+        return moveSongToAlbum(songId, album.id);
+    });
 }
 
 function mergeArtistAlbums(sourceArtistId: number, targetArtistId: number): Map<number, number | null> {
@@ -130,7 +142,9 @@ function moveArtistSongs(sourceArtistId: number, targetArtistId: number, albumId
         const conflict = findSongByArtistTitleAlbum(targetArtistId, normalizedTitle, targetAlbumId, sourceSongId);
 
         if (conflict) {
-            moveSongTabs(sourceSongId, readNumber(conflict, "id"));
+            const conflictSongId = readNumber(conflict, "id");
+            preservePreferredTab(sourceSongId, conflictSongId);
+            moveSongTabs(sourceSongId, conflictSongId);
             db.prepare("DELETE FROM songs WHERE id = ?").run(sourceSongId);
         } else {
             db.prepare("UPDATE songs SET artist_id = ?, album_id = ?, updated_at = ? WHERE id = ?").run(targetArtistId, targetAlbumId, new Date().toISOString(), sourceSongId);
@@ -184,6 +198,23 @@ function clearInvalidPreferredTab(songId: number): void {
     `).run(new Date().toISOString(), songId, songId);
 }
 
+function preservePreferredTab(sourceSongId: number, targetSongId: number): void {
+    const target = requireSongRow(targetSongId);
+    if (readNullableString(target, "preferred_tab_id") !== null) {
+        return;
+    }
+    const source = requireSongRow(sourceSongId);
+    const preferredTabId = readNullableString(source, "preferred_tab_id");
+    if (preferredTabId === null) {
+        return;
+    }
+    db.prepare(`
+        UPDATE songs
+        SET preferred_tab_id = ?, updated_at = ?
+        WHERE id = ? AND preferred_tab_id IS NULL
+    `).run(preferredTabId, new Date().toISOString(), targetSongId);
+}
+
 function getArtistAliases(artistId: number): Array<{ alias: string }> {
     return db.prepare("SELECT alias FROM artist_aliases WHERE artist_id = ? ORDER BY alias COLLATE NOCASE").all(artistId) as Array<{ alias: string }>;
 }
@@ -212,7 +243,7 @@ function findSongByArtistTitleAlbum(artistId: number, normalizedTitle: string, a
 }
 
 function nextTabVersion(songId: number): number {
-    const row = db.prepare("SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM tabs WHERE song_id = ? AND deleted_at IS NULL").get(songId) as SqlRow | undefined;
+    const row = db.prepare("SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM tabs WHERE song_id = ?").get(songId) as SqlRow | undefined;
     return row ? readNumber(row, "next_version") : 1;
 }
 

@@ -191,6 +191,8 @@ interface LibraryBrowseRow {
 interface LibraryBrowseOptions extends LibraryTabListOptions {
     mode?: "album" | "flat";
     songId?: number;
+    search?: string;
+    limit?: number;
 }
 
 interface SongContext {
@@ -623,6 +625,23 @@ function getLibraryBrowseRows(options: LibraryBrowseOptions): LibraryBrowseRow[]
         clauses.push("songs.id = ?");
         params.push(options.songId);
     }
+    if (options.search?.trim()) {
+        clauses.push(`(
+            artists.name LIKE ? ESCAPE '\\'
+            OR albums.title LIKE ? ESCAPE '\\'
+            OR songs.title LIKE ? ESCAPE '\\'
+            OR tabs.title LIKE ? ESCAPE '\\'
+            OR tabs.artist LIKE ? ESCAPE '\\'
+            OR tabs.album LIKE ? ESCAPE '\\'
+            OR tabs.original_filename LIKE ? ESCAPE '\\'
+        )`);
+        const search = `%${escapeLike(options.search.trim())}%`;
+        params.push(search, search, search, search, search, search, search);
+    }
+    const limitClause = options.limit === undefined ? "" : "LIMIT ?";
+    if (options.limit !== undefined) {
+        params.push(options.limit);
+    }
 
     const rows = db.prepare(`
         SELECT
@@ -656,9 +675,14 @@ function getLibraryBrowseRows(options: LibraryBrowseOptions): LibraryBrowseRow[]
         LEFT JOIN tab_files ON tab_files.id = tabs.tab_file_id
         WHERE ${clauses.join(" AND ")}
         ORDER BY artists.name COLLATE NOCASE, albums.title IS NULL, albums.title COLLATE NOCASE, songs.title COLLATE NOCASE, tabs.version
+        ${limitClause}
     `).all(...params) as SqlRow[];
 
     return rows.map(mapLibraryBrowseRow);
+}
+
+function escapeLike(value: string): string {
+    return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
 function buildLibraryBrowseArtists(rows: LibraryBrowseRow[], mode: "album" | "flat"): LibraryBrowseArtist[] {

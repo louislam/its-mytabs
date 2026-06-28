@@ -275,6 +275,8 @@ export async function main() {
                 ok: true,
                 library: getLibraryBrowse({
                     mode: query.mode,
+                    search: query.search,
+                    limit: query.limit,
                     includePrivate: loggedIn,
                     publicOnly: !loggedIn,
                 }),
@@ -816,7 +818,12 @@ export async function main() {
     });
 
     registerImportRoutes(app);
-    registerLibraryMaintenanceRoutes(app);
+    registerLibraryMaintenanceRoutes(app, {
+        musicBrainz: {
+            userAgent: Deno.env.get("MYTABS_MUSICBRAINZ_USER_AGENT") ?? `its-mytabs/${appVersion} (${Deno.env.get("MYTABS_CONTACT_EMAIL") ?? "contact unavailable"})`,
+            timeoutMs: Number(Deno.env.get("MYTABS_MUSICBRAINZ_TIMEOUT_MS") ?? 10_000),
+        },
+    });
 
     app.get("/", (c) => {
         return c.html(indexHTML);

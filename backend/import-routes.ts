@@ -4,7 +4,6 @@ import { checkLogin } from "./auth.ts";
 import {
     bulkUpdateImportItems,
     cancelImportJob,
-    commitImportJob,
     createImportJob,
     getImportJob,
     getImportReport,
@@ -12,7 +11,8 @@ import {
     listImportJobs,
     listImportReviewGroups,
     patchImportItem,
-    scanImportJob,
+    startImportJobCommit,
+    startImportJobScan,
 } from "./import.ts";
 import { BulkImportItemsSchema, CreateImportJobSchema, ImportItemsQuerySchema, PatchImportItemSchema } from "./zod.ts";
 
@@ -22,7 +22,7 @@ export function registerImportRoutes(app: Hono): void {
             await checkLogin(c);
             const input = CreateImportJobSchema.parse(await c.req.json());
             const job = await createImportJob(input);
-            return c.json(job);
+            return c.json({ ok: true, job });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -31,7 +31,7 @@ export function registerImportRoutes(app: Hono): void {
     app.get("/api/import-jobs", async (c) => {
         try {
             await checkLogin(c);
-            return c.json({ jobs: listImportJobs() });
+            return c.json({ ok: true, jobs: listImportJobs() });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -44,7 +44,7 @@ export function registerImportRoutes(app: Hono): void {
             if (!job) {
                 throw new Error("Import job not found.");
             }
-            return c.json(job);
+            return c.json({ ok: true, job });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -53,8 +53,8 @@ export function registerImportRoutes(app: Hono): void {
     app.post("/api/import-jobs/:jobId/scan", async (c) => {
         try {
             await checkLogin(c);
-            const job = await scanImportJob(c.req.param("jobId"));
-            return c.json(job);
+            const job = await startImportJobScan(c.req.param("jobId"));
+            return c.json({ ok: true, job });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -65,7 +65,7 @@ export function registerImportRoutes(app: Hono): void {
             await checkLogin(c);
             const query = ImportItemsQuerySchema.parse(c.req.query());
             const page = listImportItems(c.req.param("jobId"), query);
-            return c.json(page);
+            return c.json({ ok: true, page });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -76,7 +76,7 @@ export function registerImportRoutes(app: Hono): void {
             await checkLogin(c);
             const query = ImportItemsQuerySchema.parse(c.req.query());
             const page = listImportReviewGroups(c.req.param("jobId"), query);
-            return c.json(page);
+            return c.json({ ok: true, page });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -87,7 +87,7 @@ export function registerImportRoutes(app: Hono): void {
             await checkLogin(c);
             const input = PatchImportItemSchema.parse(await c.req.json());
             const item = patchImportItem(c.req.param("jobId"), c.req.param("itemId"), input);
-            return c.json(item);
+            return c.json({ ok: true, item });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -98,7 +98,7 @@ export function registerImportRoutes(app: Hono): void {
             await checkLogin(c);
             const input = BulkImportItemsSchema.parse(await c.req.json());
             const result = bulkUpdateImportItems(c.req.param("jobId"), input);
-            return c.json(result.page);
+            return c.json({ ok: true, page: result.page, updated: result.updated });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -107,8 +107,8 @@ export function registerImportRoutes(app: Hono): void {
     app.post("/api/import-jobs/:jobId/commit", async (c) => {
         try {
             await checkLogin(c);
-            const job = await commitImportJob(c.req.param("jobId"));
-            return c.json(job);
+            const job = await startImportJobCommit(c.req.param("jobId"));
+            return c.json({ ok: true, job });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -118,7 +118,7 @@ export function registerImportRoutes(app: Hono): void {
         try {
             await checkLogin(c);
             const job = cancelImportJob(c.req.param("jobId"));
-            return c.json(job);
+            return c.json({ ok: true, job });
         } catch (error) {
             return importRouteError(c, error);
         }
@@ -128,7 +128,7 @@ export function registerImportRoutes(app: Hono): void {
         try {
             await checkLogin(c);
             const report = getImportReport(c.req.param("jobId"));
-            return c.json(report);
+            return c.json({ ok: true, report });
         } catch (error) {
             return importRouteError(c, error);
         }

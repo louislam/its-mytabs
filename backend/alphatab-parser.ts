@@ -75,6 +75,11 @@ export async function parseAlphaTabFile(filePath: string): Promise<AlphaTabParse
     }
 
     try {
+        const stat = await Deno.stat(filePath);
+        const maxBytes = maxParseBytes();
+        if (stat.size > maxBytes) {
+            throw new AlphaTabFileTooLargeError(stat.size, maxBytes);
+        }
         const data = await Deno.readFile(filePath);
         return await parseAlphaTabBytes(data, filename, startedAt);
     } catch (error) {
@@ -105,6 +110,10 @@ export async function parseAlphaTabBytes(data: Uint8Array, filename: string, sta
     }
 
     try {
+        const maxBytes = maxParseBytes();
+        if (data.byteLength > maxBytes) {
+            throw new AlphaTabFileTooLargeError(data.byteLength, maxBytes);
+        }
         const alphaTab = await loadAlphaTab();
         const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(data, new alphaTab.Settings()) as ScoreLike;
         return {
@@ -122,6 +131,18 @@ export async function parseAlphaTabBytes(data: Uint8Array, filename: string, sta
             elapsedMs: elapsedSince(startedAt),
             error: toStructuredAlphaTabError(error, await getLoadedAlphaTabModule()),
         };
+    }
+}
+
+function maxParseBytes(): number {
+    const configured = Number(Deno.env.get("MYTABS_MAX_PARSE_BYTES") ?? 20 * 1024 * 1024);
+    return Number.isFinite(configured) && configured > 0 ? configured : 20 * 1024 * 1024;
+}
+
+class AlphaTabFileTooLargeError extends Error {
+    constructor(size: number, maxBytes: number) {
+        super(`File is too large to parse (${size} bytes, max ${maxBytes} bytes).`);
+        this.name = "AlphaTabFileTooLargeError";
     }
 }
 

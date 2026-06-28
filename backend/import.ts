@@ -7,6 +7,7 @@ import { inferMetadataFromPath, normalizeMetadata } from "./metadata.ts";
 import { getCreatedImportTabSummaries, getTabFileByHash, normalizeLibraryText, upsertAlbum, upsertArtist, upsertLibraryTab, upsertSong, upsertTabFile, upsertTabFileSource } from "./library.ts";
 import { hashReadableStream, storeLibraryFile } from "./storage.ts";
 import { BulkImportItemsRequest, CreateImportJobRequest, ImportGroupingMode, ImportItemDecision, ImportItemsQuery, ImportJobStatus, PatchImportItemRequest } from "./zod.ts";
+import { releaseReservedImportTask, reserveImportTask } from "./import-background.ts";
 
 type SqlValue = string | number | bigint | null;
 type SqlRow = Record<string, SqlValue>;
@@ -137,6 +138,24 @@ export function getImportJob(id: string): ImportJob | null {
 }
 
 export async function scanImportJob(jobId: string): Promise<ImportJob> {
+    const scan = await prepareImportScan(jobId);
+    await runImportScan(scan.jobId, scan.rootPath);
+    return requireImportJob(scan.jobId);
+}
+
+export async function startImportJobScan(jobId: string): Promise<ImportJob> {
+    const trackTask = reserveImportTask(jobId);
+    try {
+        const scan = await prepareImportScan(jobId);
+        trackTask(runImportScan(scan.jobId, scan.rootPath));
+        return requireImportJob(scan.jobId);
+    } catch (error) {
+        releaseReservedImportTask(jobId);
+        throw error;
+    }
+}
+
+async function prepareImportScan(jobId: string): Promise<{ jobId: string; rootPath: string }> {
     const job = requireImportJob(jobId);
     if (!["created", "ready_for_review", "failed"].includes(job.status)) {
         throw new Error(`Cannot scan import job with status "${job.status}".`);
@@ -160,31 +179,39 @@ export async function scanImportJob(jobId: string): Promise<ImportJob> {
     `).run(rootPath, now, now, job.id);
     db.prepare("DELETE FROM import_items WHERE job_id = ?").run(job.id);
 
+    return { jobId: job.id, rootPath };
+}
+
+async function runImportScan(jobId: string, rootPath: string): Promise<void> {
     try {
         const stat = await Deno.stat(rootPath);
         if (stat.isFile) {
-            await scanOneFile(requireImportJob(job.id), rootPath, path.basename(rootPath));
+            await scanOneFile(requireRunnableImportJob(jobId, "scanning"), rootPath, path.basename(rootPath));
         } else if (stat.isDirectory) {
             for await (const entry of fs.walk(rootPath, { includeDirs: false, followSymlinks: false })) {
                 if (!entry.isFile) {
                     continue;
                 }
                 const relativePath = path.relative(rootPath, entry.path).split(path.SEPARATOR).join("/");
-                await scanOneFile(requireImportJob(job.id), entry.path, relativePath);
+                await scanOneFile(requireRunnableImportJob(jobId, "scanning"), entry.path, relativePath);
             }
         } else {
             throw new Error("Import path is not a file or directory.");
         }
 
-        updateJobCounts(job.id, "ready_for_review");
-        return requireImportJob(job.id);
+        if (getImportJob(jobId)?.status === "scanning") {
+            updateJobCounts(jobId, "ready_for_review");
+        }
     } catch (error) {
+        if (error instanceof ImportCanceledError) {
+            return;
+        }
         const message = error instanceof Error ? error.message : String(error);
         db.prepare("UPDATE import_jobs SET status = 'failed', error_message = ?, finished_at = ?, updated_at = ? WHERE id = ?").run(
             message,
             new Date().toISOString(),
             new Date().toISOString(),
-            job.id,
+            jobId,
         );
         throw error;
     }
@@ -425,12 +452,33 @@ export function bulkUpdateImportItems(jobId: string, input: BulkImportItemsReque
 }
 
 export async function commitImportJob(jobId: string): Promise<ImportJob> {
+    prepareImportCommit(jobId);
+    await runImportCommit(jobId);
+    return requireImportJob(jobId);
+}
+
+export async function startImportJobCommit(jobId: string): Promise<ImportJob> {
+    const trackTask = reserveImportTask(jobId);
+    try {
+        prepareImportCommit(jobId);
+        trackTask(runImportCommit(jobId));
+        return requireImportJob(jobId);
+    } catch (error) {
+        releaseReservedImportTask(jobId);
+        throw error;
+    }
+}
+
+function prepareImportCommit(jobId: string): void {
     const job = requireImportJob(jobId);
     if (job.status !== "ready_for_review" && job.status !== "failed") {
         throw new Error(`Cannot commit import job with status "${job.status}".`);
     }
 
     db.prepare("UPDATE import_jobs SET status = 'committing', updated_at = ? WHERE id = ?").run(new Date().toISOString(), jobId);
+}
+
+async function runImportCommit(jobId: string): Promise<void> {
     const rows = db.prepare(`
         SELECT * FROM import_items
         WHERE job_id = ? AND status IN ('ready', 'failed')
@@ -444,15 +492,16 @@ export async function commitImportJob(jobId: string): Promise<ImportJob> {
             continue;
         }
         try {
-            await commitImportItem(requireImportJob(jobId), item);
+            await commitImportItem(requireRunnableImportJob(jobId, "committing"), item);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             db.prepare("UPDATE import_items SET status = 'failed', commit_error = ?, updated_at = ? WHERE id = ? AND job_id = ?").run(message, new Date().toISOString(), item.id, item.jobId);
         }
     }
 
-    updateJobCounts(jobId, "completed");
-    return requireImportJob(jobId);
+    if (getImportJob(jobId)?.status === "committing") {
+        updateJobCounts(jobId, "completed");
+    }
 }
 
 export function cancelImportJob(jobId: string): ImportJob {
@@ -678,6 +727,10 @@ async function commitImportItem(job: ImportJob, item: ImportItem): Promise<void>
         return;
     }
 
+    if (item.decision === "split_song") {
+        throw new Error("Split-song import decisions must be resolved before commit.");
+    }
+
     if (!item.suggestedArtist || !item.suggestedTitle) {
         throw new Error("Suggested artist and title are required before commit.");
     }
@@ -694,7 +747,7 @@ async function commitImportItem(job: ImportJob, item: ImportItem): Promise<void>
 
     const artist = upsertArtist(item.suggestedArtist);
     const album = item.suggestedAlbum ? upsertAlbum(artist.id, item.suggestedAlbum) : null;
-    const song = item.decision === "keep_as_version" && item.probableDuplicateSongId !== null ? { id: item.probableDuplicateSongId } : upsertSong(artist.id, item.suggestedTitle, album?.id ?? null);
+    const song = resolveImportTargetSong(item, artist.id, album?.id ?? null);
     const tab = upsertLibraryTab({
         songId: song.id,
         tabFileId: tabFile.id,
@@ -711,6 +764,18 @@ async function commitImportItem(job: ImportJob, item: ImportItem): Promise<void>
         item.id,
         item.jobId,
     );
+}
+
+function resolveImportTargetSong(item: ImportItem, artistId: number, albumId: number | null): { id: number } {
+    if (item.decision === "keep_as_version" && item.probableDuplicateSongId !== null && songExists(item.probableDuplicateSongId)) {
+        return { id: item.probableDuplicateSongId };
+    }
+    return upsertSong(artistId, item.suggestedTitle!, albumId);
+}
+
+function songExists(songId: number): boolean {
+    const row = db.prepare("SELECT 1 AS found FROM songs WHERE id = ?").get(songId) as SqlRow | undefined;
+    return !!row;
 }
 
 async function storeFileFromPath(sourcePath: string, ext: string): Promise<{ sha256: string; byteSize: number; ext: string; storedPath: string }> {
@@ -782,6 +847,23 @@ function requireImportJob(id: string): ImportJob {
         throw new Error("Import job not found.");
     }
     return job;
+}
+
+function requireRunnableImportJob(id: string, expectedStatus: ImportJobStatus): ImportJob {
+    const job = requireImportJob(id);
+    if (job.status === "canceled") {
+        throw new ImportCanceledError();
+    }
+    if (job.status !== expectedStatus) {
+        throw new Error(`Import job changed status to "${job.status}".`);
+    }
+    return job;
+}
+
+class ImportCanceledError extends Error {
+    constructor() {
+        super("Import job canceled.");
+    }
 }
 
 function requireImportItem(jobId: string, itemId: string): ImportItem {

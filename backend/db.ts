@@ -43,6 +43,20 @@ export function hasUser() {
     return row.count > 0;
 }
 
+export function withTransaction<T>(fn: () => T): T {
+    const savepoint = `tx_${crypto.randomUUID().replaceAll("-", "")}`;
+    db.exec(`SAVEPOINT ${savepoint}`);
+    try {
+        const result = fn();
+        db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        return result;
+    } catch (error) {
+        db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        throw error;
+    }
+}
+
 export async function migrateLibrarySchema() {
     const migrationId = "2026-06-28-library-schema";
     const appliedAt = new Date().toISOString();

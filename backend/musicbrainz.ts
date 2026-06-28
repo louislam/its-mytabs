@@ -5,6 +5,8 @@ export interface MusicBrainzLookupOptions {
     fetcher?: typeof fetch;
     userAgent?: string;
     limit?: number;
+    timeoutMs?: number;
+    rateLimitMs?: number;
 }
 
 export interface MusicBrainzArtistCandidate {
@@ -46,12 +48,13 @@ export async function lookupMusicBrainzMetadata(
         return { artists: [], recordings: [] };
     }
 
-    const fetcher = options.fetcher ?? fetch;
     const limit = options.limit ?? 5;
-    const [artistResponse, recordingResponse] = await Promise.all([
-        artist ? searchMusicBrainz("artist", `artist:${quoteQuery(artist)}`, limit, fetcher, options) : Promise.resolve(null),
-        title ? searchMusicBrainz("recording", buildRecordingQuery({ artist, title, album }), limit, fetcher, options) : Promise.resolve(null),
-    ]);
+    const artistResponse = artist ? await searchMusicBrainz("artist", `artist:${quoteQuery(artist)}`, limit, options) : null;
+    const rateLimitMs = options.rateLimitMs ?? (options.fetcher ? 0 : 1100);
+    if (artistResponse && title && rateLimitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, rateLimitMs));
+    }
+    const recordingResponse = title ? await searchMusicBrainz("recording", buildRecordingQuery({ artist, title, album }), limit, options) : null;
 
     return {
         artists: artistResponse ? mapArtists(artistResponse) : [],
@@ -70,17 +73,23 @@ export function buildRecordingQuery(input: { artist?: string; title: string; alb
     return clauses.join(" AND ");
 }
 
-async function searchMusicBrainz(entity: "artist" | "recording", query: string, limit: number, fetcher: typeof fetch, options: MusicBrainzLookupOptions): Promise<unknown> {
+async function searchMusicBrainz(entity: "artist" | "recording", query: string, limit: number, options: MusicBrainzLookupOptions): Promise<unknown> {
     const baseUrl = options.baseUrl ?? "https://musicbrainz.org/ws/2";
+    const fetcher = options.fetcher ?? fetch;
+    const userAgent = options.userAgent ?? "its-mytabs/unknown (contact unavailable)";
+    if (userAgent.includes("spike/0.0") || userAgent.includes("Placeholder")) {
+        throw new Error("MusicBrainz user agent must identify this application and a contact.");
+    }
     const url = new URL(`${baseUrl.replace(/\/$/, "")}/${entity}`);
     url.searchParams.set("query", query);
     url.searchParams.set("fmt", "json");
     url.searchParams.set("limit", String(limit));
 
     const response = await fetcher(url, {
+        signal: AbortSignal.timeout(options.timeoutMs ?? 10_000),
         headers: {
             "Accept": "application/json",
-            "User-Agent": options.userAgent ?? "its-mytabs-batch-import-spike/0.0",
+            "User-Agent": userAgent,
         },
     });
     if (!response.ok) {

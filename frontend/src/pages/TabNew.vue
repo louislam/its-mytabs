@@ -6,11 +6,12 @@ import { notify } from "@kyvg/vue3-notification";
 import { baseURL, checkFetch, generalError, successMessage } from "../app.js";
 import { bulkUpdateImportItems, commitImportJob, createImportJob, getImportJob, getImportReport, listImportItems, startImportScan, updateImportItem } from "../import-client.js";
 import { supportedFormatCommaString } from "../../../backend/common.js";
+import ImportReviewTable from "../components/ImportReviewTable.vue";
 
 const alphaTab = await import("@coderline/alphatab");
 
 export default defineComponent({
-    components: { Vue3Dropzone },
+    components: { ImportReviewTable, Vue3Dropzone },
     data() {
         return {
             mode: "upload",
@@ -247,23 +248,30 @@ export default defineComponent({
             const previous = item.selected;
             item.selected = selected;
             try {
-                await this.applyBulkUpdate({
-                    action: selected ? "select" : "deselect",
-                    itemIds: [item.id],
-                }, false);
+                const updated = await updateImportItem(this.importJob.id, item.id, {
+                    selected,
+                });
+                Object.assign(item, updated);
             } catch (e) {
                 item.selected = previous;
                 generalError(e);
             }
         },
 
-        async updateItemDecision(item) {
+        updateItemDraft(item, field, value) {
+            item[field] = value;
+        },
+
+        async updateItemDecision(item, decision) {
+            const previous = item.decision;
+            item.decision = decision;
             try {
                 const updated = await updateImportItem(this.importJob.id, item.id, {
                     decision: item.decision,
                 });
                 Object.assign(item, updated);
             } catch (e) {
+                item.decision = previous;
                 generalError(e);
             }
         },
@@ -427,69 +435,6 @@ export default defineComponent({
             };
         },
 
-        itemTitle(item) {
-            return item.suggestedTitle || item.parsedTitle || "Untitled";
-        },
-
-        itemArtist(item) {
-            return item.suggestedArtist || item.parsedArtist || "Unknown Artist";
-        },
-
-        itemAlbum(item) {
-            return item.suggestedAlbum || item.parsedAlbum || "";
-        },
-
-        duplicateLabel(item) {
-            if (item.duplicateTabFileId) {
-                return "Exact file";
-            }
-            if (item.probableDuplicateSongId) {
-                return "Probable song";
-            }
-            if (item.existingTabId) {
-                return "Existing tab";
-            }
-            return "New";
-        },
-
-        duplicateClass(item) {
-            if (item.duplicateTabFileId) {
-                return "text-bg-danger";
-            }
-            if (item.probableDuplicateSongId || item.existingTabId) {
-                return "text-bg-warning";
-            }
-            return "text-bg-success";
-        },
-
-        confidenceClass(confidence) {
-            if (confidence >= 0.75) {
-                return "text-bg-success";
-            }
-            if (confidence >= 0.45) {
-                return "text-bg-warning";
-            }
-            return "text-bg-danger";
-        },
-
-        formatConfidence(confidence) {
-            return `${Math.round(confidence * 100)}%`;
-        },
-
-        isMetadataSaving(item) {
-            return !!this.editingMetadataIds[item.id];
-        },
-
-        itemErrors(item) {
-            const errors = [...item.errors];
-            if (item.statusMessage) {
-                errors.push(item.statusMessage);
-            }
-            if (item.commitError) {
-                errors.push(item.commitError);
-            }
-            return errors;
-        },
     },
 });
 </script>
@@ -686,7 +631,6 @@ export default defineComponent({
                             <option value="skip_exact_duplicate">Skip exact duplicate</option>
                             <option value="link_duplicate_source">Link duplicate source</option>
                             <option value="keep_as_version">Keep as version</option>
-                            <option value="split_song">Split song</option>
                         </select>
                         <button class="btn btn-outline-primary" :disabled="isApplyingBulk || selectedVisibleCount === 0" @click="bulkSetDecision">Apply to selected</button>
                     </div>
@@ -705,80 +649,17 @@ export default defineComponent({
             <div v-else-if="importItemsPage" class="review-list">
                 <div v-if="importItems.length === 0" class="text-muted border rounded p-3">No import items match the current filters.</div>
 
-                <div v-if='reviewMode === "flat"' class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th class="select-col">Selected</th>
-                                <th>Metadata</th>
-                                <th>Source</th>
-                                <th>Status</th>
-                                <th>Confidence</th>
-                                <th>Duplicate</th>
-                                <th>Decision</th>
-                                <th>Errors</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="item in importItems" :key="item.id">
-                                <td>
-                                    <input class="form-check-input" type="checkbox" :checked="item.selected" :disabled="isApplyingBulk"
-                                        @change="updateItemSelection(item, $event.target.checked)" />
-                                </td>
-                                <td class="metadata-cell">
-                                    <div class="metadata-grid">
-                                        <label class="metadata-field">
-                                            <span>Artist</span>
-                                            <input v-model="item.suggestedArtist" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                @focus='rememberMetadataValue(item, "suggestedArtist")' @blur='updateItemMetadata(item, "suggestedArtist")'
-                                                @keydown.enter.prevent="$event.target.blur()" />
-                                        </label>
-                                        <label class="metadata-field">
-                                            <span>Title</span>
-                                            <input v-model="item.suggestedTitle" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                @focus='rememberMetadataValue(item, "suggestedTitle")' @blur='updateItemMetadata(item, "suggestedTitle")'
-                                                @keydown.enter.prevent="$event.target.blur()" />
-                                        </label>
-                                        <label class="metadata-field">
-                                            <span>Album</span>
-                                            <input v-model="item.suggestedAlbum" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                @focus='rememberMetadataValue(item, "suggestedAlbum")' @blur='updateItemMetadata(item, "suggestedAlbum")'
-                                                @keydown.enter.prevent="$event.target.blur()" />
-                                        </label>
-                                        <label class="metadata-field">
-                                            <span>Version</span>
-                                            <input v-model="item.suggestedVersionLabel" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)" placeholder="default"
-                                                @focus='rememberMetadataValue(item, "suggestedVersionLabel")' @blur='updateItemMetadata(item, "suggestedVersionLabel")'
-                                                @keydown.enter.prevent="$event.target.blur()" />
-                                        </label>
-                                    </div>
-                                    <div v-if="isMetadataSaving(item)" class="small text-muted mt-1">Saving metadata</div>
-                                </td>
-                                <td class="source-path">
-                                    <div>{{ item.relativePath || item.sourcePath }}</div>
-                                    <div class="small text-muted">{{ item.ext || "unknown" }}<span v-if="item.byteSize !== null">, {{ item.byteSize }} bytes</span></div>
-                                </td>
-                                <td><span class="badge text-bg-secondary">{{ item.status }}</span></td>
-                                <td><span class="badge" :class="confidenceClass(item.confidence)">{{ formatConfidence(item.confidence) }}</span></td>
-                                <td><span class="badge" :class="duplicateClass(item)">{{ duplicateLabel(item) }}</span></td>
-                                <td>
-                                    <select v-model="item.decision" class="form-select form-select-sm decision-select" :disabled="isApplyingBulk" @change="updateItemDecision(item)">
-                                        <option value="import">Import</option>
-                                        <option value="manual_skip">Manual skip</option>
-                                        <option value="skip_unsupported">Skip unsupported</option>
-                                        <option value="skip_exact_duplicate">Skip exact duplicate</option>
-                                        <option value="link_duplicate_source">Link duplicate source</option>
-                                        <option value="keep_as_version">Keep as version</option>
-                                        <option value="split_song">Split song</option>
-                                    </select>
-                                </td>
-                                <td class="errors-cell">
-                                    <div v-for="error in itemErrors(item)" :key="error" class="text-danger small">{{ error }}</div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <ImportReviewTable
+                    v-if='reviewMode === "flat"'
+                    :items="importItems"
+                    :is-applying-bulk="isApplyingBulk"
+                    :editing-metadata-ids="editingMetadataIds"
+                    @update-selection="updateItemSelection"
+                    @update-decision="updateItemDecision"
+                    @update-draft="updateItemDraft"
+                    @remember-metadata="rememberMetadataValue"
+                    @update-metadata="updateItemMetadata"
+                />
 
                 <template v-else>
                     <div v-for="group in groupedReviewItems" :key="group.key" class="review-group mb-3">
@@ -790,81 +671,16 @@ export default defineComponent({
                             <span class="badge text-bg-secondary">{{ group.items.length }}</span>
                         </div>
 
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle mb-0">
-                                <thead>
-                                    <tr>
-                                        <th class="select-col">Selected</th>
-                                        <th>Metadata</th>
-                                        <th>Source</th>
-                                        <th>Status</th>
-                                        <th>Confidence</th>
-                                        <th>Duplicate</th>
-                                        <th>Decision</th>
-                                        <th>Errors</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="item in group.items" :key="item.id">
-                                        <td>
-                                            <input class="form-check-input" type="checkbox" :checked="item.selected" :disabled="isApplyingBulk"
-                                                @change="updateItemSelection(item, $event.target.checked)" />
-                                        </td>
-                                        <td class="metadata-cell">
-                                            <div class="metadata-grid">
-                                                <label class="metadata-field">
-                                                    <span>Artist</span>
-                                                    <input v-model="item.suggestedArtist" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                        @focus='rememberMetadataValue(item, "suggestedArtist")' @blur='updateItemMetadata(item, "suggestedArtist")'
-                                                        @keydown.enter.prevent="$event.target.blur()" />
-                                                </label>
-                                                <label class="metadata-field">
-                                                    <span>Title</span>
-                                                    <input v-model="item.suggestedTitle" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                        @focus='rememberMetadataValue(item, "suggestedTitle")' @blur='updateItemMetadata(item, "suggestedTitle")'
-                                                        @keydown.enter.prevent="$event.target.blur()" />
-                                                </label>
-                                                <label class="metadata-field">
-                                                    <span>Album</span>
-                                                    <input v-model="item.suggestedAlbum" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                        @focus='rememberMetadataValue(item, "suggestedAlbum")' @blur='updateItemMetadata(item, "suggestedAlbum")'
-                                                        @keydown.enter.prevent="$event.target.blur()" />
-                                                </label>
-                                                <label class="metadata-field">
-                                                    <span>Version</span>
-                                                    <input v-model="item.suggestedVersionLabel" class="form-control form-control-sm" type="text" :disabled="isMetadataSaving(item)"
-                                                        placeholder="default"
-                                                        @focus='rememberMetadataValue(item, "suggestedVersionLabel")' @blur='updateItemMetadata(item, "suggestedVersionLabel")'
-                                                        @keydown.enter.prevent="$event.target.blur()" />
-                                                </label>
-                                            </div>
-                                            <div v-if="isMetadataSaving(item)" class="small text-muted mt-1">Saving metadata</div>
-                                        </td>
-                                        <td class="source-path">
-                                            <div>{{ item.relativePath || item.sourcePath }}</div>
-                                            <div class="small text-muted">{{ item.ext || "unknown" }}<span v-if="item.byteSize !== null">, {{ item.byteSize }} bytes</span></div>
-                                        </td>
-                                        <td><span class="badge text-bg-secondary">{{ item.status }}</span></td>
-                                        <td><span class="badge" :class="confidenceClass(item.confidence)">{{ formatConfidence(item.confidence) }}</span></td>
-                                        <td><span class="badge" :class="duplicateClass(item)">{{ duplicateLabel(item) }}</span></td>
-                                        <td>
-                                            <select v-model="item.decision" class="form-select form-select-sm decision-select" :disabled="isApplyingBulk" @change="updateItemDecision(item)">
-                                                <option value="import">Import</option>
-                                                <option value="manual_skip">Manual skip</option>
-                                                <option value="skip_unsupported">Skip unsupported</option>
-                                                <option value="skip_exact_duplicate">Skip exact duplicate</option>
-                                                <option value="link_duplicate_source">Link duplicate source</option>
-                                                <option value="keep_as_version">Keep as version</option>
-                                                <option value="split_song">Split song</option>
-                                            </select>
-                                        </td>
-                                        <td class="errors-cell">
-                                            <div v-for="error in itemErrors(item)" :key="error" class="text-danger small">{{ error }}</div>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        <ImportReviewTable
+                            :items="group.items"
+                            :is-applying-bulk="isApplyingBulk"
+                            :editing-metadata-ids="editingMetadataIds"
+                            @update-selection="updateItemSelection"
+                            @update-decision="updateItemDecision"
+                            @update-draft="updateItemDraft"
+                            @remember-metadata="rememberMetadataValue"
+                            @update-metadata="updateItemMetadata"
+                        />
                     </div>
                 </template>
 

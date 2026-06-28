@@ -38,9 +38,13 @@ export interface PatchImportItemInput {
     reviewRequired?: boolean;
 }
 
-async function parseJSON<T>(res: Response, parser: { parse(data: unknown): T }): Promise<T> {
+async function parseJSON<T>(res: Response, parser: { parse(data: unknown): T }, key?: string): Promise<T> {
     await checkFetch(res);
-    return parser.parse(await res.json());
+    const data = await res.json();
+    if (key && data && typeof data === "object" && "ok" in data) {
+        return parser.parse((data as Record<string, unknown>)[key]);
+    }
+    return parser.parse(data);
 }
 
 export async function createImportJob(input: CreateImportJobInput): Promise<ImportJob> {
@@ -57,7 +61,7 @@ export async function createImportJob(input: CreateImportJobInput): Promise<Impo
         }),
     });
 
-    return parseJSON(res, ImportJobSchema);
+    return parseJSON(res, ImportJobSchema, "job");
 }
 
 export async function getImportJob(jobId: string): Promise<ImportJob> {
@@ -65,7 +69,7 @@ export async function getImportJob(jobId: string): Promise<ImportJob> {
         credentials: "include",
     });
 
-    return parseJSON(res, ImportJobSchema);
+    return parseJSON(res, ImportJobSchema, "job");
 }
 
 export async function startImportScan(jobId: string): Promise<ImportJob> {
@@ -74,7 +78,7 @@ export async function startImportScan(jobId: string): Promise<ImportJob> {
         credentials: "include",
     });
 
-    return parseJSON(res, ImportJobSchema);
+    return parseJSON(res, ImportJobSchema, "job");
 }
 
 export async function listImportItems(jobId: string, input: ListImportItemsInput): Promise<ImportItemsPage> {
@@ -91,7 +95,7 @@ export async function listImportItems(jobId: string, input: ListImportItemsInput
         credentials: "include",
     });
 
-    return parseJSON(res, ImportItemsPageSchema);
+    return parseJSON(res, ImportItemsPageSchema, "page");
 }
 
 export async function bulkUpdateImportItems(jobId: string, input: BulkImportItemsInput): Promise<ImportItemsPage> {
@@ -104,7 +108,7 @@ export async function bulkUpdateImportItems(jobId: string, input: BulkImportItem
         body: JSON.stringify(input),
     });
 
-    return parseJSON(res, ImportItemsPageSchema);
+    return parseJSON(res, ImportItemsPageSchema, "page");
 }
 
 export async function updateImportItem(jobId: string, itemId: string, input: PatchImportItemInput): Promise<ImportItem> {
@@ -117,7 +121,7 @@ export async function updateImportItem(jobId: string, itemId: string, input: Pat
         body: JSON.stringify(input),
     });
 
-    return parseJSON(res, ImportItemSchema);
+    return parseJSON(res, ImportItemSchema, "item");
 }
 
 export async function commitImportJob(jobId: string): Promise<ImportJob> {
@@ -126,7 +130,7 @@ export async function commitImportJob(jobId: string): Promise<ImportJob> {
         credentials: "include",
     });
 
-    return parseJSON(res, ImportJobSchema);
+    return parseJSON(res, ImportJobSchema, "job");
 }
 
 export async function getImportReport(jobId: string): Promise<ImportReport> {
@@ -134,7 +138,7 @@ export async function getImportReport(jobId: string): Promise<ImportReport> {
         credentials: "include",
     });
 
-    return parseJSON(res, ImportReportSchema);
+    return parseJSON(res, ImportReportSchema, "report");
 }
 
 function addParam(params: URLSearchParams, key: string, value: string | undefined): void {

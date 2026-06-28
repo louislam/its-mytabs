@@ -11,7 +11,7 @@ const { db, kv } = await import("./db.ts");
 const { registerLibraryMaintenanceRoutes } = await import("./library-maintenance-routes.ts");
 const { upsertAlbum, upsertArtist, upsertLibraryTab, upsertSong } = await import("./library.ts");
 
-Deno.test("library maintenance routes require login by default", async () => {
+Deno.test("library maintenance routes are disabled unless explicitly enabled", async () => {
     const app = new Hono();
     registerLibraryMaintenanceRoutes(app);
 
@@ -20,8 +20,19 @@ Deno.test("library maintenance routes require login by default", async () => {
         body: JSON.stringify({ artistId: 1, alias: "Alias" }),
         headers: { "Content-Type": "application/json" },
     });
-    const body = await response.json();
+    assertEquals(response.status, 404);
+});
 
+Deno.test("enabled library maintenance routes require login by default", async () => {
+    const app = new Hono();
+    registerLibraryMaintenanceRoutes(app, { enabled: true });
+
+    const response = await app.request("/api/library-maintenance/artist-aliases", {
+        method: "POST",
+        body: JSON.stringify({ artistId: 1, alias: "Alias" }),
+        headers: { "Content-Type": "application/json" },
+    });
+    const body = await response.json();
     assertEquals(response.status, 400);
     assertEquals(body.ok, false);
     assertEquals(body.msg, "Not logged in");
@@ -167,6 +178,7 @@ Deno.test.afterAll(async () => {
 function authenticatedApp(musicBrainz?: { baseUrl: string; fetcher: typeof fetch; limit?: number }): Hono {
     const app = new Hono();
     registerLibraryMaintenanceRoutes(app, {
+        enabled: true,
         checkLogin: async () => {},
         musicBrainz,
     });
