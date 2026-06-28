@@ -54,6 +54,8 @@ Deno.test("import scanner records supported and unsupported files and transition
     assertEquals(supported.suggestedArtist, "Artist One");
     assertEquals(supported.suggestedTitle, "First Song");
     assertEquals(supported.status, "ready");
+    assertEquals(supported.reviewRequired, true);
+    assertEquals(supported.statusMessage?.startsWith("Parser metadata unavailable:"), true);
 });
 
 Deno.test("import jobs can be canceled before scan", async () => {
@@ -213,6 +215,34 @@ Deno.test("probable duplicates default to keep_as_version and commit as new vers
     assertEquals(newTab.version, 2);
 });
 
+Deno.test("commit records per-item failure when source file disappears", async () => {
+    const root = await makeImportRoot("commit-missing-source");
+    const keepPath = path.join(root, "Commit Artist - Keep Song.gp");
+    const missingPath = path.join(root, "Commit Artist - Missing Song.gp");
+    await Deno.writeTextFile(keepPath, "keep content");
+    await Deno.writeTextFile(missingPath, "missing content");
+    Deno.env.set("MYTABS_IMPORT_ROOTS", root);
+
+    const job = await createImportJob({
+        sourceType: "server-folder",
+        rootPath: root,
+        copyMode: "copy",
+        groupingMode: "auto",
+    });
+    await scanImportJob(job.id);
+    await Deno.remove(missingPath);
+
+    const committed = await commitImportJob(job.id);
+    assertEquals(committed.status, "completed");
+
+    const committedItems = listImportItems(job.id, { limit: 10, offset: 0, status: "committed" }).items;
+    const failedItems = listImportItems(job.id, { limit: 10, offset: 0, status: "failed" }).items;
+    assertEquals(committedItems.length, 1);
+    assertEquals(failedItems.length, 1);
+    assertEquals(failedItems[0].relativePath.endsWith("Missing Song.gp"), true);
+    assertExists(failedItems[0].commitError);
+});
+
 Deno.test("item patch, bulk actions, and report expose review progress", async () => {
     const root = await makeImportRoot("bulk");
     await Deno.writeTextFile(path.join(root, "Bulk Artist - Bulk Song.gp"), "bulk");
@@ -254,7 +284,7 @@ Deno.test("import routes require login", async () => {
         method: "GET",
     });
     const body = await response.json();
-    assertEquals(response.status, 400);
+    assertEquals(response.status, 401);
     assertEquals(body.ok, false);
     assertEquals(body.msg, "Not logged in");
 });

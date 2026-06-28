@@ -42,6 +42,20 @@ Deno.test("inferMetadataFromPath rejects generic album folders", () => {
     assert(result.reasons.some((reason) => reason.includes("Rejected generic folder")));
 });
 
+Deno.test("inferMetadataFromPath keeps version words when they are part of the title", () => {
+    const live = inferMetadataFromPath("Paul McCartney - Live and Let Die.gp");
+    assertEquals(live.title, "Live and Let Die");
+    assertEquals(live.versionLabel, undefined);
+
+    const bass = inferMetadataFromPath("Singer - Bass.gp");
+    assertEquals(bass.title, "Bass");
+    assertEquals(bass.versionLabel, undefined);
+
+    const suffix = inferMetadataFromPath("Metallica - One solo.gp");
+    assertEquals(suffix.title, "One");
+    assertEquals(suffix.versionLabel, "solo");
+});
+
 Deno.test("folder classification helpers reject buckets and generic names", () => {
     assertEquals(isAlphabeticBucket("B"), true);
     assertEquals(isAlphabeticBucket("BB"), false);

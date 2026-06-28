@@ -33,6 +33,7 @@ Deno.test("parseAlphaTabBytes rejects files above configured parse limit", async
 
         assertEquals(result.ok, false);
         if (!result.ok) {
+            assertEquals(result.error.category, "file-too-large");
             assertEquals(result.error.name, "AlphaTabFileTooLargeError");
         }
     } finally {

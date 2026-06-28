@@ -188,6 +188,16 @@ function maintenanceRouteError(c: Context, error: unknown) {
         }, 400);
     }
     if (error instanceof Error) {
+        if (error.message === "Not logged in") {
+            return c.json({ ok: false, msg: "Not logged in" }, 401);
+        }
+        if (error.message.endsWith("not found") || error.message.endsWith("not found.")) {
+            return c.json({ ok: false, msg: error.message }, 404);
+        }
+        if (error instanceof Deno.errors.NotFound || error instanceof Deno.errors.PermissionDenied) {
+            console.error("Library maintenance route failed:", error);
+            return c.json({ ok: false, msg: "Library maintenance request failed." }, 500);
+        }
         return c.json({
             ok: false,
             msg: error.message,

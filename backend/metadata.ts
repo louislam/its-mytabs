@@ -56,15 +56,14 @@ const genericFolderNames = new Set([
 ]);
 
 const versionLabelPatterns: Array<{ pattern: RegExp; label: string }> = [
-    { pattern: /\bintro\b/i, label: "intro" },
-    { pattern: /\boutro\b/i, label: "outro" },
-    { pattern: /\bsolo\b/i, label: "solo" },
-    { pattern: /\bacoustic\b/i, label: "acoustic" },
-    { pattern: /\blive\b/i, label: "live" },
-    { pattern: /\bbass\b/i, label: "bass" },
-    { pattern: /\bver(?:sion)?\.?\s*([0-9]+)\b/i, label: "version $1" },
-    { pattern: /\bv(?:er)?\.?\s*([0-9]+)\b/i, label: "version $1" },
-    { pattern: /\(([0-9]+)\)/, label: "version $1" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(intro)(?:\)|\])?$/i, label: "intro" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(outro)(?:\)|\])?$/i, label: "outro" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(solo)(?:\)|\])?$/i, label: "solo" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(acoustic)(?:\)|\])?$/i, label: "acoustic" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(live)(?:\)|\])?$/i, label: "live" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(bass)(?:\)|\])?$/i, label: "bass" },
+    { pattern: /(?:\s+-\s+|\s+|\(|\[)(?:ver(?:sion)?\.?\s*([0-9]+)|v(?:er)?\.?\s*([0-9]+))(?:\)|\])?$/i, label: "version $1" },
+    { pattern: /\(([0-9]+)\)$/, label: "version $1" },
 ];
 
 export function normalizeMetadata(input: { artist?: string | null; title?: string | null; album?: string | null }): MetadataNormalizationResult {
@@ -254,9 +253,13 @@ function extractVersionLabel(value: string): { label: string; raw: string } | nu
     for (const item of versionLabelPatterns) {
         const match = value.match(item.pattern);
         if (match) {
+            const raw = match[0];
+            if (!value.slice(0, match.index).trim()) {
+                continue;
+            }
             return {
-                label: item.label.replace("$1", match[1] ?? ""),
-                raw: match[0],
+                label: item.label.replace("$1", match[1] ?? match[2] ?? ""),
+                raw,
             };
         }
     }

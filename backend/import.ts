@@ -1,6 +1,6 @@
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { db } from "./db.ts";
+import { db, withTransaction } from "./db.ts";
 import { parseAlphaTabFile } from "./alphatab-parser.ts";
 import { checkImportPathAllowed, classifyImportExtension, loadImportRootPolicy } from "./import-policy.ts";
 import { inferMetadataFromPath, normalizeMetadata } from "./metadata.ts";
@@ -135,6 +135,18 @@ export function listImportJobs(): ImportJob[] {
 export function getImportJob(id: string): ImportJob | null {
     const row = db.prepare("SELECT * FROM import_jobs WHERE id = ?").get(id) as SqlRow | undefined;
     return row ? mapJob(row) : null;
+}
+
+export function reconcileInterruptedImportJobs(): number {
+    const result = db.prepare(`
+        UPDATE import_jobs
+        SET status = 'failed',
+            error_message = 'Import was interrupted before completion. Please scan or commit again.',
+            finished_at = ?,
+            updated_at = ?
+        WHERE status IN ('scanning', 'committing')
+    `).run(new Date().toISOString(), new Date().toISOString());
+    return Number(result.changes);
 }
 
 export async function scanImportJob(jobId: string): Promise<ImportJob> {
@@ -711,19 +723,21 @@ async function commitImportItem(job: ImportJob, item: ImportItem): Promise<void>
         if (item.duplicateTabFileId === null) {
             throw new Error("Exact duplicate file is missing.");
         }
-        upsertTabFileSource({
-            tabFileId: item.duplicateTabFileId,
-            sourceType: job.sourceType,
-            sourcePath: item.sourcePath,
-            originalFilename: path.basename(item.sourcePath),
-            metadata: sourceMetadata(item),
+        withTransaction(() => {
+            upsertTabFileSource({
+                tabFileId: item.duplicateTabFileId!,
+                sourceType: job.sourceType,
+                sourcePath: item.sourcePath,
+                originalFilename: path.basename(item.sourcePath),
+                metadata: sourceMetadata(item),
+            });
+            db.prepare("UPDATE import_items SET status = 'committed', committed_at = ?, updated_at = ? WHERE id = ? AND job_id = ?").run(
+                new Date().toISOString(),
+                new Date().toISOString(),
+                item.id,
+                item.jobId,
+            );
         });
-        db.prepare("UPDATE import_items SET status = 'committed', committed_at = ?, updated_at = ? WHERE id = ? AND job_id = ?").run(
-            new Date().toISOString(),
-            new Date().toISOString(),
-            item.id,
-            item.jobId,
-        );
         return;
     }
 
@@ -734,43 +748,47 @@ async function commitImportItem(job: ImportJob, item: ImportItem): Promise<void>
     if (!item.suggestedArtist || !item.suggestedTitle) {
         throw new Error("Suggested artist and title are required before commit.");
     }
+    const suggestedArtist = item.suggestedArtist;
+    const suggestedTitle = item.suggestedTitle;
 
     const file = await storeFileFromPath(item.sourcePath, item.ext);
-    const tabFile = upsertTabFile(file);
-    upsertTabFileSource({
-        tabFileId: tabFile.id,
-        sourceType: job.sourceType,
-        sourcePath: item.sourcePath,
-        originalFilename: path.basename(item.sourcePath),
-        metadata: sourceMetadata(item),
-    });
+    withTransaction(() => {
+        const tabFile = upsertTabFile(file);
+        upsertTabFileSource({
+            tabFileId: tabFile.id,
+            sourceType: job.sourceType,
+            sourcePath: item.sourcePath,
+            originalFilename: path.basename(item.sourcePath),
+            metadata: sourceMetadata(item),
+        });
 
-    const artist = upsertArtist(item.suggestedArtist);
-    const album = item.suggestedAlbum ? upsertAlbum(artist.id, item.suggestedAlbum) : null;
-    const song = resolveImportTargetSong(item, artist.id, album?.id ?? null);
-    const tab = upsertLibraryTab({
-        songId: song.id,
-        tabFileId: tabFile.id,
-        versionLabel: item.suggestedVersionLabel,
-        filename: `tab.${item.ext || tabFile.ext}`,
-        originalFilename: path.basename(item.sourcePath),
-        public: false,
-        fav: false,
+        const artist = upsertArtist(suggestedArtist);
+        const album = item.suggestedAlbum ? upsertAlbum(artist.id, item.suggestedAlbum) : null;
+        const song = resolveImportTargetSong(item, artist.id, suggestedTitle, album?.id ?? null);
+        const tab = upsertLibraryTab({
+            songId: song.id,
+            tabFileId: tabFile.id,
+            versionLabel: item.suggestedVersionLabel,
+            filename: `tab.${item.ext || tabFile.ext}`,
+            originalFilename: path.basename(item.sourcePath),
+            public: false,
+            fav: false,
+        });
+        db.prepare("UPDATE import_items SET status = 'committed', created_tab_id = ?, committed_at = ?, commit_error = NULL, updated_at = ? WHERE id = ? AND job_id = ?").run(
+            tab.id,
+            new Date().toISOString(),
+            new Date().toISOString(),
+            item.id,
+            item.jobId,
+        );
     });
-    db.prepare("UPDATE import_items SET status = 'committed', created_tab_id = ?, committed_at = ?, commit_error = NULL, updated_at = ? WHERE id = ? AND job_id = ?").run(
-        tab.id,
-        new Date().toISOString(),
-        new Date().toISOString(),
-        item.id,
-        item.jobId,
-    );
 }
 
-function resolveImportTargetSong(item: ImportItem, artistId: number, albumId: number | null): { id: number } {
+function resolveImportTargetSong(item: ImportItem, artistId: number, title: string, albumId: number | null): { id: number } {
     if (item.decision === "keep_as_version" && item.probableDuplicateSongId !== null && songExists(item.probableDuplicateSongId)) {
         return { id: item.probableDuplicateSongId };
     }
-    return upsertSong(artistId, item.suggestedTitle!, albumId);
+    return upsertSong(artistId, title, albumId);
 }
 
 function songExists(songId: number): boolean {

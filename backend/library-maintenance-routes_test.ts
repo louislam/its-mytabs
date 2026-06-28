@@ -33,7 +33,7 @@ Deno.test("enabled library maintenance routes require login by default", async (
         headers: { "Content-Type": "application/json" },
     });
     const body = await response.json();
-    assertEquals(response.status, 400);
+    assertEquals(response.status, 401);
     assertEquals(body.ok, false);
     assertEquals(body.msg, "Not logged in");
 });
@@ -180,7 +180,7 @@ function authenticatedApp(musicBrainz?: { baseUrl: string; fetcher: typeof fetch
     registerLibraryMaintenanceRoutes(app, {
         enabled: true,
         checkLogin: async () => {},
-        musicBrainz,
+        musicBrainz: musicBrainz ? { userAgent: "its-mytabs-test/1.0 (test@example.com)", ...musicBrainz } : undefined,
     });
     return app;
 }

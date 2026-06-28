@@ -146,6 +146,7 @@ export default defineComponent({
                             <option value="skip_exact_duplicate">Skip exact duplicate</option>
                             <option value="link_duplicate_source">Link duplicate source</option>
                             <option value="keep_as_version">Keep as version</option>
+                            <option v-if='item.decision === "split_song"' value="split_song" disabled>Split song requires manual resolution</option>
                         </select>
                     </td>
                     <td class="errors-cell">

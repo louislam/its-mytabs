@@ -77,7 +77,7 @@ async function searchMusicBrainz(entity: "artist" | "recording", query: string, 
     const baseUrl = options.baseUrl ?? "https://musicbrainz.org/ws/2";
     const fetcher = options.fetcher ?? fetch;
     const userAgent = options.userAgent ?? "its-mytabs/unknown (contact unavailable)";
-    if (userAgent.includes("spike/0.0") || userAgent.includes("Placeholder")) {
+    if (userAgent.includes("spike/0.0") || userAgent.includes("Placeholder") || userAgent.includes("contact unavailable")) {
         throw new Error("MusicBrainz user agent must identify this application and a contact.");
     }
     const url = new URL(`${baseUrl.replace(/\/$/, "")}/${entity}`);

@@ -54,6 +54,27 @@ Deno.test("checkImportPathAllowed rejects outside roots without listing filesyst
     }
 });
 
+Deno.test("checkImportPathAllowed rejects symlink escapes from allowed roots", async () => {
+    const root = await Deno.makeTempDir();
+    const outside = await Deno.makeTempDir();
+    const outsideFile = path.join(outside, "escaped.gp");
+    const linkPath = path.join(root, "escaped-link.gp");
+    await Deno.writeTextFile(outsideFile, "outside");
+
+    try {
+        await Deno.symlink(outsideFile, linkPath);
+        const policy = await loadImportRootPolicy({ envValue: root, demoMode: false });
+        const check = await checkImportPathAllowed(linkPath, policy);
+
+        assertEquals(check.ok, false);
+        assertEquals(check.reason, "outside-import-roots");
+        assertEquals(check.message, "Import path is outside the configured import roots.");
+    } finally {
+        await Deno.remove(root, { recursive: true });
+        await Deno.remove(outside, { recursive: true });
+    }
+});
+
 Deno.test("loadImportRootPolicy disables server import in demo mode", async () => {
     const root = await Deno.makeTempDir();
 

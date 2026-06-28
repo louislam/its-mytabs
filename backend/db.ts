@@ -51,8 +51,12 @@ export function withTransaction<T>(fn: () => T): T {
         db.exec(`RELEASE SAVEPOINT ${savepoint}`);
         return result;
     } catch (error) {
-        db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
-        db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        try {
+            db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+            db.exec(`RELEASE SAVEPOINT ${savepoint}`);
+        } catch (rollbackError) {
+            console.error("Failed to rollback transaction:", rollbackError);
+        }
         throw error;
     }
 }

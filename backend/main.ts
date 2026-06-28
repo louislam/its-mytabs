@@ -37,6 +37,7 @@ import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
 import { registerImportRoutes } from "./import-routes.ts";
+import { reconcileInterruptedImportJobs } from "./import.ts";
 import { registerLibraryMaintenanceRoutes } from "./library-maintenance-routes.ts";
 import {
     canReadLibraryTab,
@@ -65,6 +66,10 @@ export async function main() {
 
     await migrate();
     await runLegacyLibraryMigration();
+    const interruptedImports = reconcileInterruptedImportJobs();
+    if (interruptedImports > 0) {
+        console.warn(`Marked ${interruptedImports} interrupted import job(s) as failed.`);
+    }
 
     const frontendDir = getFrontendDir();
 

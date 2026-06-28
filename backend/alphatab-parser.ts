@@ -10,7 +10,7 @@ export interface AlphaTabParseSummary {
 }
 
 export interface AlphaTabParseError {
-    category: "unsupported-extension" | "unsupported-format" | "parser-error" | "io-error";
+    category: "unsupported-extension" | "unsupported-format" | "file-too-large" | "parser-error" | "io-error";
     name: string;
     message: string;
 }
@@ -196,6 +196,13 @@ function cleanScoreText(value: string | undefined): string | undefined {
 }
 
 function toStructuredAlphaTabError(error: unknown, alphaTab?: AlphaTabModule, fallbackCategory: AlphaTabParseError["category"] = "parser-error"): AlphaTabParseError {
+    if (error instanceof AlphaTabFileTooLargeError) {
+        return {
+            category: "file-too-large",
+            name: error.name,
+            message: safeErrorMessage(error),
+        };
+    }
     if (alphaTab && error instanceof alphaTab.importer.UnsupportedFormatError) {
         return {
             category: "unsupported-format",
