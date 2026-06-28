@@ -20,6 +20,8 @@
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
         "install-frontend-deps": "cd frontend && deno install",
         "test": "deno test --allow-all",
+        "test-batch-import-quality": "deno test --allow-all backend/import_quality_test.ts",
+        "batch-import-real-library-dry-run": "deno run --allow-all extra/batch-import-real-library-dry-run.ts",
         "fmt": "deno fmt && deno lint --fix && cd frontend && deno fmt",
         "check": "deno fmt --check && deno lint && deno check && cd frontend && deno fmt --check",
 

@@ -259,7 +259,7 @@ export async function fixMissingTab(config: ConfigJSON): Promise<ConfigJSON> {
 export async function replaceTab(tab: TabInfo, tabFileData: Uint8Array, ext: string, originalFilename: string) {
     // Rename old file to filename.ext.timestamp
     const oldFilePath = getTabFilePath(tab);
-    const renamedOldFilePath = oldFilePath + "." + Date.now().toString();
+    const renamedOldFilePath = await getBackupTabFilePath(oldFilePath);
     await Deno.rename(oldFilePath, renamedOldFilePath);
 
     // Write new file
@@ -271,6 +271,22 @@ export async function replaceTab(tab: TabInfo, tabFileData: Uint8Array, ext: str
     tab.filename = filename;
     tab.originalFilename = originalFilename;
     await writeTabInfo(tab);
+}
+
+async function getBackupTabFilePath(filePath: string): Promise<string> {
+    const basePath = filePath + "." + Date.now().toString();
+    if (!await fs.exists(basePath)) {
+        return basePath;
+    }
+
+    for (let index = 1; index < 1000; index++) {
+        const candidate = `${basePath}.${index}`;
+        if (!await fs.exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    throw new Error("Unable to create backup tab filename");
 }
 
 /**
