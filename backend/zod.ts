@@ -172,3 +172,56 @@ export const SetPreferredTabSchema = z.object({
     tabId: z.string().min(1).nullable(),
 });
 export type SetPreferredTabRequest = z.infer<typeof SetPreferredTabSchema>;
+
+const PositiveIntegerSchema = z.number().int().positive();
+const OptionalVersionLabelSchema = z.string().trim().nullable().optional();
+
+export const CreateArtistAliasSchema = z.object({
+    artistId: PositiveIntegerSchema,
+    alias: z.string().trim().min(1),
+});
+export type CreateArtistAliasRequest = z.infer<typeof CreateArtistAliasSchema>;
+
+export const MergeArtistsSchema = z.object({
+    sourceArtistId: PositiveIntegerSchema,
+    targetArtistId: PositiveIntegerSchema,
+});
+export type MergeArtistsRequest = z.infer<typeof MergeArtistsSchema>;
+
+export const MoveTabVersionSchema = z.object({
+    targetSongId: PositiveIntegerSchema,
+    versionLabel: OptionalVersionLabelSchema,
+});
+export type MoveTabVersionRequest = z.infer<typeof MoveTabVersionSchema>;
+
+export const SplitTabToSongSchema = z.object({
+    artistId: PositiveIntegerSchema,
+    title: z.string().trim().min(1),
+    albumId: PositiveIntegerSchema.nullable().optional(),
+    versionLabel: OptionalVersionLabelSchema,
+});
+export type SplitTabToSongRequest = z.infer<typeof SplitTabToSongSchema>;
+
+export const MoveSongToAlbumSchema = z.object({
+    albumId: PositiveIntegerSchema.nullable(),
+});
+export type MoveSongToAlbumRequest = z.infer<typeof MoveSongToAlbumSchema>;
+
+export const AssignSongAlbumByTitleSchema = z.object({
+    albumTitle: z.string().trim().nullable(),
+});
+export type AssignSongAlbumByTitleRequest = z.infer<typeof AssignSongAlbumByTitleSchema>;
+
+export const MusicBrainzLookupSchema = z.object({
+    artist: z.string().trim().optional().nullable(),
+    title: z.string().trim().optional().nullable(),
+    album: z.string().trim().optional().nullable(),
+    limit: z.number().int().min(1).max(25).optional(),
+});
+export type MusicBrainzLookupRequest = z.infer<typeof MusicBrainzLookupSchema>;
+
+export const MusicBrainzEnrichSongSchema = MusicBrainzLookupSchema.extend({
+    songId: PositiveIntegerSchema,
+    applyBestReleaseAlbum: z.boolean().default(false),
+});
+export type MusicBrainzEnrichSongRequest = z.infer<typeof MusicBrainzEnrichSongSchema>;
