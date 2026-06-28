@@ -1,6 +1,6 @@
 import { baseURL, checkFetch } from "./app.ts";
-import { ImportItemsPageSchema, ImportJobSchema, ImportReportSchema } from "./zod.ts";
-import type { ImportDecision, ImportGroupingMode, ImportItemsPage, ImportJob, ImportReport } from "./zod.ts";
+import { ImportItemSchema, ImportItemsPageSchema, ImportJobSchema, ImportReportSchema } from "./zod.ts";
+import type { ImportDecision, ImportGroupingMode, ImportItem, ImportItemsPage, ImportJob, ImportReport } from "./zod.ts";
 
 export interface CreateImportJobInput {
     rootPath: string;
@@ -26,6 +26,16 @@ export interface BulkImportItemsInput {
     allMatching?: boolean;
     filters?: ImportReviewFilters;
     decision?: ImportDecision;
+}
+
+export interface PatchImportItemInput {
+    selected?: boolean;
+    decision?: ImportDecision;
+    suggestedArtist?: string;
+    suggestedTitle?: string;
+    suggestedAlbum?: string;
+    suggestedVersionLabel?: string;
+    reviewRequired?: boolean;
 }
 
 async function parseJSON<T>(res: Response, parser: { parse(data: unknown): T }): Promise<T> {
@@ -95,6 +105,19 @@ export async function bulkUpdateImportItems(jobId: string, input: BulkImportItem
     });
 
     return parseJSON(res, ImportItemsPageSchema);
+}
+
+export async function updateImportItem(jobId: string, itemId: string, input: PatchImportItemInput): Promise<ImportItem> {
+    const res = await fetch(baseURL + `/api/import-jobs/${encodeURIComponent(jobId)}/items/${encodeURIComponent(itemId)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
+    });
+
+    return parseJSON(res, ImportItemSchema);
 }
 
 export async function commitImportJob(jobId: string): Promise<ImportJob> {
