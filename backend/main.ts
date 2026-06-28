@@ -37,6 +37,7 @@ import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
 import { registerImportRoutes } from "./import-routes.ts";
+import { registerLibraryMaintenanceRoutes } from "./library-maintenance-routes.ts";
 import {
     canReadLibraryTab,
     deleteLibraryTab,
@@ -815,6 +816,7 @@ export async function main() {
     });
 
     registerImportRoutes(app);
+    registerLibraryMaintenanceRoutes(app);
 
     app.get("/", (c) => {
         return c.html(indexHTML);
