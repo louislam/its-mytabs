@@ -15,6 +15,7 @@ export default defineComponent({
     },
     data() {
         return {
+            authDisabled: window.authDisabled === true,
             isLoggedIn: false,
             ready: false,
             fixedNavbar: false,
@@ -31,6 +32,10 @@ export default defineComponent({
     },
     methods: {
         async signOut() {
+            if (this.authDisabled) {
+                return;
+            }
+
             const res = await authClient.signOut();
             this.$router.push("/login");
         },
@@ -69,12 +74,12 @@ export default defineComponent({
                 </div>
 
                 <div class="right" v-show="ready">
-                    <a href="#" @click.prevent="signOut()" v-if="isLoggedIn">
+                    <a href="#" @click.prevent="signOut()" v-if="isLoggedIn && !authDisabled">
                         <font-awesome-icon :icon='["fas", "arrow-right-from-bracket"]' />
                         Log out
                     </a>
 
-                    <router-link to="/login" v-else>
+                    <router-link to="/login" v-else-if="!authDisabled">
                         <font-awesome-icon :icon='["fas", "arrow-right-to-bracket"]' />
                         Log in
                     </router-link>
