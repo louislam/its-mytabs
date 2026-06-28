@@ -27,6 +27,7 @@ const {
     upsertAlbum,
     upsertArtist,
     upsertArtistAlias,
+    upsertLegacyTabConfig,
     upsertLibraryTab,
     setPreferredSongTab,
     upsertSong,
@@ -226,6 +227,20 @@ Deno.test("library browse groups artist album song versions and preferred tab", 
         public: true,
     });
     setPreferredSongTab(albumSong.id, secondVersion.id);
+    upsertLegacyTabConfig(secondVersion.id, {
+        tab: {
+            id: secondVersion.id,
+            title: secondVersion.title,
+            artist: secondVersion.artist,
+            filename: secondVersion.filename,
+            originalFilename: secondVersion.originalFilename,
+            createdAt: secondVersion.createdAt,
+            public: secondVersion.public,
+            fav: secondVersion.fav,
+        },
+        audio: [{ filename: "browse.mp3", syncMethod: "simple", simpleSync: 0, advancedSync: "" }],
+        youtube: [{ videoID: "browse-video", syncMethod: "simple", simpleSync: 0, advancedSync: "" }],
+    });
 
     const grouped = getLibraryBrowse({ mode: "album", includePrivate: true });
     const browseArtist = grouped.artists.find((candidate) => candidate.id === artist.id);
@@ -238,6 +253,8 @@ Deno.test("library browse groups artist album song versions and preferred tab", 
     assertExists(browseSong);
     assertEquals(browseSong.versionCount, 2);
     assertEquals(browseSong.preferredVersion?.id, secondVersion.id);
+    assertEquals(browseSong.preferredVersion?.hasAudio, true);
+    assertEquals(browseSong.preferredVersion?.hasYoutube, true);
     assertEquals(browseSong.versions.map((version) => version.id), [firstVersion.id, secondVersion.id]);
 
     const flat = getLibraryBrowse({ mode: "flat", includePrivate: true });

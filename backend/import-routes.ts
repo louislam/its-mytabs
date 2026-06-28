@@ -1,5 +1,4 @@
 import { Context, Hono } from "@hono/hono";
-import { ZodError } from "zod";
 import { checkLogin } from "./auth.ts";
 import {
     bulkUpdateImportItems,
@@ -14,6 +13,7 @@ import {
     startImportJobCommit,
     startImportJobScan,
 } from "./import.ts";
+import { routeError } from "./route-errors.ts";
 import { BulkImportItemsSchema, CreateImportJobSchema, ImportItemsQuerySchema, PatchImportItemSchema } from "./zod.ts";
 
 export function registerImportRoutes(app: Hono): void {
@@ -136,30 +136,8 @@ export function registerImportRoutes(app: Hono): void {
 }
 
 function importRouteError(c: Context, error: unknown) {
-    if (error instanceof ZodError) {
-        return c.json({
-            ok: false,
-            msg: error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n"),
-        }, 400);
-    }
-    if (error instanceof Error) {
-        if (error.message === "Not logged in") {
-            return c.json({ ok: false, msg: "Not logged in" }, 401);
-        }
-        if (error.message.endsWith("not found.") || error.message.endsWith("not found")) {
-            return c.json({ ok: false, msg: error.message }, 404);
-        }
-        if (error instanceof Deno.errors.NotFound || error instanceof Deno.errors.PermissionDenied) {
-            console.error("Import route failed:", error);
-            return c.json({ ok: false, msg: "Import request failed." }, 500);
-        }
-        return c.json({
-            ok: false,
-            msg: error.message,
-        }, 400);
-    }
-    return c.json({
-        ok: false,
-        msg: "Unknown error",
-    }, 400);
+    return routeError(c, error, {
+        logPrefix: "Import route failed",
+        fallbackMessage: "Import request failed.",
+    });
 }
