@@ -19,6 +19,7 @@ export default defineComponent({
             searchQuery: "",
             setting: {},
             library: null,
+            expandedAlbums: {},
             expandedSongs: {},
             searchRefreshTimer: null,
             libraryRequestId: 0,
@@ -129,6 +130,17 @@ export default defineComponent({
 
         isSongExpanded(song) {
             return !!this.expandedSongs[song.id];
+        },
+
+        isAlbumExpanded(album) {
+            return this.expandedAlbums[album.id] !== false;
+        },
+
+        toggleAlbum(album) {
+            this.expandedAlbums = {
+                ...this.expandedAlbums,
+                [album.id]: !this.isAlbumExpanded(album),
+            };
         },
 
         toggleSong(song) {
@@ -297,21 +309,26 @@ export default defineComponent({
                 <h4>{{ artist.name }}</h4>
 
                 <div v-for="album in artist.albums" :key="album.id" class="library-album mb-3">
-                    <div class="album-title">{{ album.title }}</div>
+                    <h4 class="album-title">
+                        <button class="album-title-button" type="button" @click="toggleAlbum(album)" :aria-expanded="isAlbumExpanded(album)">
+                            <font-awesome-icon :icon='isAlbumExpanded(album) ? "chevron-down" : "chevron-right"' />
+                            <span>{{ album.title }}</span>
+                        </button>
+                    </h4>
 
-                    <div v-for="song in album.songs" :key="song.id" class="library-song">
-                        <div class="song-row">
-                            <button class="expand-btn" type="button" @click="toggleSong(song)" :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'">
+                    <div v-for="song in album.songs" v-show="isAlbumExpanded(album)" :key="song.id" class="library-song">
+                        <div class="song-row" :class="{ 'song-row-single': song.versionCount <= 1 }">
+                            <button v-if="song.versionCount > 1" class="expand-btn" type="button" @click="toggleSong(song)" :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'">
                                 <font-awesome-icon :icon='isSongExpanded(song) ? "chevron-down" : "chevron-right"' />
                             </button>
 
                             <router-link class="song-main" :to="`/tab/${primaryVersion(song).id}`">
                                 <span class="song-title">{{ song.title }}</span>
-                                <span class="song-meta">{{ song.versionCount }} {{ song.versionCount === 1 ? "version" : "versions" }}</span>
+                                <span v-if="song.versionCount > 1" class="song-meta">{{ song.versionCount }} versions</span>
                             </router-link>
                         </div>
 
-                        <div class="version-list" v-if="isSongExpanded(song) || song.versionCount === 1">
+                        <div class="version-list" v-if="song.versionCount > 1 && isSongExpanded(song)">
                             <router-link v-for="version in song.versions" :key="version.id" class="version-row" :to="`/tab/${version.id}`">
                                 <span class="version-name">
                                     {{ versionTitle(version) }}
@@ -325,18 +342,18 @@ export default defineComponent({
                 </div>
 
                 <div v-for="song in artist.songs" :key="song.id" class="library-song">
-                    <div class="song-row">
-                        <button class="expand-btn" type="button" @click="toggleSong(song)" :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'">
+                    <div class="song-row" :class="{ 'song-row-single': song.versionCount <= 1 }">
+                        <button v-if="song.versionCount > 1" class="expand-btn" type="button" @click="toggleSong(song)" :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'">
                             <font-awesome-icon :icon='isSongExpanded(song) ? "chevron-down" : "chevron-right"' />
                         </button>
 
                         <router-link class="song-main" :to="`/tab/${primaryVersion(song).id}`">
                             <span class="song-title">{{ song.title }}</span>
-                            <span class="song-meta">{{ song.versionCount }} {{ song.versionCount === 1 ? "version" : "versions" }}</span>
+                            <span v-if="song.versionCount > 1" class="song-meta">{{ song.versionCount }} versions</span>
                         </router-link>
                     </div>
 
-                    <div class="version-list" v-if="isSongExpanded(song) || song.versionCount === 1">
+                    <div class="version-list" v-if="song.versionCount > 1 && isSongExpanded(song)">
                         <router-link v-for="version in song.versions" :key="version.id" class="version-row" :to="`/tab/${version.id}`">
                             <span class="version-name">
                                 {{ versionTitle(version) }}
@@ -410,7 +427,19 @@ h4 {
 .album-title {
     color: $color2-dark;
     font-weight: 600;
-    margin: 8px 0;
+    margin: 10px 0;
+}
+
+.album-title-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
 }
 
 .library-song {
@@ -430,6 +459,10 @@ h4 {
 
 .song-row {
     min-height: 44px;
+}
+
+.song-row-single {
+    padding-left: 42px;
 }
 
 .expand-btn {
