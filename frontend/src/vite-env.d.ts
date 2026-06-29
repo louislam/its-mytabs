@@ -11,5 +11,6 @@ declare global {
          * When true, navigation is restricted to demo tab, settings, and register pages.
          */
         isDemo: boolean;
+        defaultImportRoot?: string;
     }
 }

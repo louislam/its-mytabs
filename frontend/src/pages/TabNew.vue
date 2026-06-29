@@ -9,6 +9,8 @@ import { supportedFormatCommaString } from "../../../backend/common.js";
 import ImportReviewTable from "../components/ImportReviewTable.vue";
 
 const alphaTab = await import("@coderline/alphatab");
+const fallbackImportSourcePath = "/srv/tabs/import";
+const importSourcePathStorageKey = "importSourcePath";
 
 export default defineComponent({
     components: { ImportReviewTable, Vue3Dropzone },
@@ -18,7 +20,8 @@ export default defineComponent({
             files: [],
             supportedFormatCommaString,
             isUploading: false,
-            sourcePath: "",
+            defaultImportSourcePath: fallbackImportSourcePath,
+            sourcePath: fallbackImportSourcePath,
             groupingMode: "auto",
             importJob: null,
             importItemsPage: null,
@@ -93,6 +96,10 @@ export default defineComponent({
         canCommit() {
             return this.importJob?.status === "ready_for_review" && this.importItemsPage && this.importItemsPage.total > 0;
         },
+    },
+    mounted() {
+        this.defaultImportSourcePath = window.defaultImportRoot || fallbackImportSourcePath;
+        this.sourcePath = localStorage.getItem(importSourcePathStorageKey) || this.defaultImportSourcePath;
     },
     beforeUnmount() {
         this.clearPoll();
@@ -186,8 +193,10 @@ export default defineComponent({
             this.importReport = null;
 
             try {
+                const rootPath = this.sourcePath.trim();
+                localStorage.setItem(importSourcePathStorageKey, rootPath);
                 let job = await createImportJob({
-                    rootPath: this.sourcePath.trim(),
+                    rootPath,
                     groupingMode: this.groupingMode,
                 });
                 this.importJob = job;
@@ -434,7 +443,6 @@ export default defineComponent({
                 sort: this.reviewFilters.sort,
             };
         },
-
     },
 });
 </script>
@@ -512,7 +520,7 @@ export default defineComponent({
             <div class="row g-3 align-items-end mb-4">
                 <div class="col-12 col-lg-7">
                     <label for="server-folder-path" class="form-label">Server folder path</label>
-                    <input id="server-folder-path" v-model="sourcePath" class="form-control" type="text" placeholder="/srv/tabs/import" :disabled="isStartingScan || isCommitting" />
+                    <input id="server-folder-path" v-model="sourcePath" class="form-control" type="text" :placeholder="defaultImportSourcePath" :disabled="isStartingScan || isCommitting" />
                 </div>
                 <div class="col-12 col-md-6 col-lg-3">
                     <label for="grouping-mode" class="form-label">Grouping</label>

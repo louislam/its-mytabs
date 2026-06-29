@@ -93,7 +93,7 @@ export async function main() {
 
     // Inject demo mode flag using cheerio
     const $ = cheerio.load(indexHTMLContent);
-    $("head").append(`<script id="app-config" type="application/json">${JSON.stringify({ isDemo: isDemoMode })}</script>`);
+    $("head").append(`<script id="app-config" type="application/json">${JSON.stringify({ isDemo: isDemoMode, defaultImportRoot: getDefaultImportRoot() })}</script>`);
     const indexHTML = $.html();
 
     if (isDemoMode) {
@@ -913,6 +913,10 @@ async function getTabInfoForAccess(id: string) {
         }
         throw error;
     }
+}
+
+function getDefaultImportRoot(): string {
+    return (Deno.env.get("MYTABS_IMPORT_ROOTS") ?? "").split(path.DELIMITER).map((root) => root.trim()).find(Boolean) ?? "";
 }
 
 function generalError(c: Context, e: unknown) {
