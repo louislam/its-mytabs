@@ -2,9 +2,11 @@ import { checkAudioFormat, checkFilename, flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
 import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, SyncRequest, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSchema } from "./zod.ts";
-import { kv } from "./db.ts";
+import { kv, withTransaction } from "./db.ts";
 import sanitize from "sanitize-filename";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
+import { deleteLibraryTab, getLibraryTab, upsertArtist, upsertLegacyTabConfig, upsertLibraryTab, upsertSong, upsertTabFile, upsertTabFileSource } from "./library.ts";
+import { storeLibraryFile } from "./storage.ts";
 
 const updateQueues = new Map<string, Promise<ConfigJSON>>();
 
@@ -171,6 +173,7 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
     };
 
     await writeConfigJSON(id.toString(), info);
+    await syncLibraryTabFromConfig(info, tabFileData, "new-tab", path.resolve(path.join(dir, filename)));
 
     return id.toString();
 }
@@ -236,6 +239,7 @@ export async function getOrCreateTab(id: string): Promise<TabInfo | null> {
     };
 
     await writeConfigJSON(id, newConfig);
+    await syncLibraryTabFromConfig(newConfig, undefined, "legacy-tab", path.resolve(path.join(dirPath, tabFile)));
     return tab;
 }
 
@@ -279,6 +283,10 @@ export async function replaceTab(tab: TabInfo, tabFileData: Uint8Array, ext: str
     tab.filename = filename;
     tab.originalFilename = originalFilename;
     await writeTabInfo(tab);
+    const config = await getConfigJSON(tab.id, true);
+    if (config) {
+        await syncLibraryTabFromConfig(config, tabFileData, "replace-tab", path.resolve(newFilePath));
+    }
 }
 
 async function getBackupTabFilePath(filePath: string): Promise<string> {
@@ -338,11 +346,19 @@ export async function updateTab(tab: TabInfo, data: UpdateTabInfo) {
     tab.artist = data.artist;
     tab.public = data.public;
     await writeTabInfo(tab);
+    const config = await getConfigJSON(tab.id, true);
+    if (config) {
+        await syncLibraryTabFromConfig(config);
+    }
 }
 
 export async function updateTabFav(tab: TabInfo, data: UpdateTabFav) {
     tab.fav = data.fav;
     await writeTabInfo(tab);
+    const config = await getConfigJSON(tab.id, true);
+    if (config) {
+        await syncLibraryTabFromConfig(config);
+    }
 }
 
 export function getTabFilePath(tab: TabInfo) {
@@ -370,6 +386,9 @@ export async function deleteTab(id: string) {
     const newPath = path.join(tabDir, "deleted", id + "-" + Date.now().toString());
     await fs.ensureDir(path.join(tabDir, "deleted"));
     await Deno.rename(oldPath, newPath);
+    if (getLibraryTab(id)) {
+        deleteLibraryTab(id);
+    }
 }
 
 export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, originalFilename: string) {
@@ -426,10 +445,54 @@ export async function updateConfigJSON(id: string, callback: (config: ConfigJSON
         }
         await callback(config);
         await writeConfigJSON(id, config);
+        if (getLibraryTab(config.tab.id)) {
+            await syncLibraryTabFromConfig(config);
+        }
         return config;
     });
     updateQueues.set(id, newQueue);
     return newQueue;
+}
+
+async function syncLibraryTabFromConfig(config: ConfigJSON, tabFileData?: Uint8Array, sourceType = "legacy-tab", sourcePath?: string): Promise<void> {
+    const tab = config.tab;
+    const ext = path.extname(tab.filename).slice(1).toLowerCase() || "gp";
+    const existing = getLibraryTab(tab.id);
+
+    let tabFileId = existing?.tabFileId ?? null;
+    if (tabFileData) {
+        const stored = await storeLibraryFile(tabFileData, ext);
+        const tabFile = upsertTabFile(stored);
+        tabFileId = tabFile.id;
+        upsertTabFileSource({
+            tabFileId,
+            sourceType,
+            sourcePath: sourcePath ?? getTabFullFilePath(tab),
+            originalFilename: tab.originalFilename,
+            metadata: {
+                legacyTabId: tab.id,
+                legacyFilename: tab.filename,
+            },
+        });
+    }
+
+    withTransaction(() => {
+        const artist = upsertArtist(tab.artist || "Unknown Artist");
+        const song = upsertSong(artist.id, tab.title || tab.id);
+        const libraryTab = upsertLibraryTab({
+            id: tab.id,
+            songId: song.id,
+            tabFileId,
+            title: tab.title,
+            artist: tab.artist,
+            filename: tab.filename,
+            originalFilename: tab.originalFilename,
+            public: tab.public,
+            fav: tab.fav,
+            createdAt: tab.createdAt,
+        });
+        upsertLegacyTabConfig(libraryTab.id, config);
+    });
 }
 
 export async function updateAudio(tab: TabInfo, filename: string, data: SyncRequest) {
