@@ -21,7 +21,7 @@ await Deno.writeTextFile(indexPath, "<html><head></head><body>test</body></html>
 // Now import functions after env setup
 const { createTab, addAudio, getConfigJSON, updateConfigJSON } = await import("./tab.ts");
 const { main, closeServer } = await import("./main.ts");
-const { upsertArtist, upsertLibraryTab, upsertSong, upsertTabFile } = await import("./library.ts");
+const { getLibraryTab, upsertArtist, upsertLibraryTab, upsertSong, upsertTabFile } = await import("./library.ts");
 const { storeLibraryFile } = await import("./storage.ts");
 
 // Start the server
@@ -71,6 +71,12 @@ Deno.test({
         const res3 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file`, { method: "GET" });
         const j3 = await res3.json();
         assertEquals(res3.status, 400);
+
+        // 4) Library browse should require auth even when public tabs exist
+        const res4 = await fetch(`${baseURL}/api/library?mode=album&limit=10`, { method: "GET" });
+        const j4 = await res4.json();
+        assertEquals(res4.status, 400);
+        assertEquals(j4.ok, false);
     },
 });
 
@@ -220,6 +226,45 @@ Deno.test({
         });
         assertEquals(resFile.status, 200);
         await resFile.body?.cancel();
+
+        const stored = await storeLibraryFile(new Uint8Array([1, 4, 7]), "gp");
+        const tabFile = upsertTabFile(stored);
+        const importedArtist = upsertArtist("HTTP Imported Artist");
+        const importedSong = upsertSong(importedArtist.id, "HTTP Imported Song");
+        const importedTab = upsertLibraryTab({
+            id: "http-imported-edit",
+            songId: importedSong.id,
+            tabFileId: tabFile.id,
+            title: "HTTP Imported Song",
+            artist: "HTTP Imported Artist",
+            filename: "tab.gp",
+            originalFilename: "http-imported.gp",
+            public: false,
+        });
+
+        const editRes = await fetch(`${baseURL}/api/tab/${encodeURIComponent(importedTab.id)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookiePair },
+            body: JSON.stringify({ title: "HTTP Renamed Song", artist: "HTTP Renamed Artist", public: true }),
+        });
+        const editJson = await editRes.json();
+        assertEquals(editRes.status, 200, JSON.stringify(editJson));
+        assertEquals(editJson.ok, true);
+
+        const updatedTab = getLibraryTab(importedTab.id);
+        assertExists(updatedTab);
+        assertEquals(updatedTab.title, "HTTP Renamed Song");
+        assertEquals(updatedTab.artist, "HTTP Renamed Artist");
+        assertEquals(updatedTab.public, true);
+
+        const libraryRes = await fetch(`${baseURL}/api/library?mode=album&limit=1&offset=0&search=${encodeURIComponent("HTTP Renamed")}`, {
+            method: "GET",
+            headers: { Cookie: cookiePair },
+        });
+        const libraryJson = await libraryRes.json();
+        assertEquals(libraryRes.status, 200, JSON.stringify(libraryJson));
+        assertEquals(libraryJson.ok, true);
+        assertEquals(libraryJson.library.totalVersionCount, 1);
     },
 });
 

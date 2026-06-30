@@ -167,6 +167,7 @@ export const LibraryBrowseQuerySchema = z.object({
     mode: z.enum(["album", "flat"]).default("album"),
     search: QueryStringSchema,
     limit: z.coerce.number().int().min(1).max(1000).default(500),
+    offset: z.coerce.number().int().min(0).default(0),
 });
 export type LibraryBrowseQuery = z.infer<typeof LibraryBrowseQuerySchema>;
 

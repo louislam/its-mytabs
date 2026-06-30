@@ -112,6 +112,7 @@ interface LibraryBrowseOptions extends LibraryTabListOptions {
     songId?: number;
     search?: string;
     limit?: number;
+    offset?: number;
 }
 
 interface SongContext {
@@ -325,7 +326,7 @@ export function upsertLibraryTab(input: UpsertLibraryTabInput): LibraryTab {
 
     const id = input.id ?? crypto.randomUUID();
     const existing = getLibraryTab(id);
-    const version = input.version ?? existing?.version ?? getNextTabVersion(input.songId);
+    const version = input.version ?? (existing && existing.songId === input.songId ? existing.version : getNextTabVersion(input.songId));
     const versionLabel = input.versionLabel ?? existing?.versionLabel ?? null;
     const now = new Date().toISOString();
     const createdAt = existing?.createdAt ?? input.createdAt ?? now;
@@ -389,6 +390,24 @@ export function deleteLibraryTab(id: string): void {
 export function updateLibraryTabVisibility(id: string, isPublic: boolean): LibraryTab {
     db.prepare("UPDATE tabs SET public = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL").run(isPublic ? 1 : 0, new Date().toISOString(), id);
     return requireLibraryTab(id);
+}
+
+export function updateLibraryTabInfo(id: string, input: { title: string; artist: string; public: boolean }): LibraryTab {
+    const existing = requireLibraryTab(id);
+    const artist = upsertArtist(input.artist || "Unknown Artist");
+    const song = upsertSong(artist.id, input.title || existing.title);
+    return upsertLibraryTab({
+        id,
+        songId: song.id,
+        tabFileId: existing.tabFileId,
+        versionLabel: existing.versionLabel,
+        title: input.title,
+        artist: input.artist,
+        filename: existing.filename,
+        originalFilename: existing.originalFilename,
+        public: input.public,
+        fav: existing.fav,
+    });
 }
 
 export function updateLibraryTabFav(id: string, fav: boolean): LibraryTab {
@@ -467,7 +486,11 @@ export function getAllLibraryTabInfos(options: LibraryTabListOptions = {}): TabI
 export function getLibraryBrowse(options: LibraryBrowseOptions = {}): LibraryBrowseResult {
     const mode = options.mode ?? "album";
     const rows = getLibraryBrowseRows(options);
-    return buildLibraryBrowse(rows, mode);
+    return buildLibraryBrowse(rows, mode, {
+        totalVersionCount: countLibraryBrowseRows(options),
+        offset: options.offset ?? 0,
+        limit: options.limit ?? null,
+    });
 }
 
 export function getLibrarySongVersionsForTab(tabId: string, options: LibraryTabListOptions = {}): LibraryBrowseSong | null {
@@ -510,34 +533,11 @@ export function getLibraryTabStoredPath(id: string): string | null {
 }
 
 function getLibraryBrowseRows(options: LibraryBrowseOptions): LibraryBrowseRow[] {
-    const clauses = ["tabs.deleted_at IS NULL"];
-    const params: Array<string | number> = [];
-    if (options.publicOnly || options.includePrivate === false) {
-        clauses.push("tabs.public = 1");
-    }
-    if (options.favOnly) {
-        clauses.push("tabs.fav = 1");
-    }
-    if (options.songId !== undefined) {
-        clauses.push("songs.id = ?");
-        params.push(options.songId);
-    }
-    if (options.search?.trim()) {
-        clauses.push(`(
-            artists.name LIKE ? ESCAPE '\\'
-            OR albums.title LIKE ? ESCAPE '\\'
-            OR songs.title LIKE ? ESCAPE '\\'
-            OR tabs.title LIKE ? ESCAPE '\\'
-            OR tabs.artist LIKE ? ESCAPE '\\'
-            OR tabs.album LIKE ? ESCAPE '\\'
-            OR tabs.original_filename LIKE ? ESCAPE '\\'
-        )`);
-        const search = `%${escapeLike(options.search.trim())}%`;
-        params.push(search, search, search, search, search, search, search);
-    }
-    const limitClause = options.limit === undefined ? "" : "LIMIT ?";
+    const { clauses, params } = buildLibraryBrowseFilters(options);
+    const limitClause = options.limit === undefined ? "" : "LIMIT ? OFFSET ?";
+    const queryParams = [...params];
     if (options.limit !== undefined) {
-        params.push(options.limit);
+        queryParams.push(options.limit, options.offset ?? 0);
     }
 
     const rows = db.prepare(`
@@ -573,9 +573,51 @@ function getLibraryBrowseRows(options: LibraryBrowseOptions): LibraryBrowseRow[]
         WHERE ${clauses.join(" AND ")}
         ORDER BY artists.name COLLATE NOCASE, albums.title IS NULL, albums.title COLLATE NOCASE, songs.title COLLATE NOCASE, tabs.version
         ${limitClause}
-    `).all(...params) as SqlRow[];
+    `).all(...queryParams) as SqlRow[];
 
     return rows.map(mapLibraryBrowseRow);
+}
+
+function countLibraryBrowseRows(options: LibraryBrowseOptions): number {
+    const { clauses, params } = buildLibraryBrowseFilters(options);
+    const row = db.prepare(`
+        SELECT COUNT(*) AS total
+        FROM tabs
+        INNER JOIN songs ON songs.id = tabs.song_id
+        INNER JOIN artists ON artists.id = songs.artist_id
+        LEFT JOIN albums ON albums.id = songs.album_id
+        WHERE ${clauses.join(" AND ")}
+    `).get(...params) as SqlRow | undefined;
+    return row ? readNumber(row, "total") : 0;
+}
+
+function buildLibraryBrowseFilters(options: LibraryBrowseOptions): { clauses: string[]; params: Array<string | number> } {
+    const clauses = ["tabs.deleted_at IS NULL"];
+    const params: Array<string | number> = [];
+    if (options.publicOnly || options.includePrivate === false) {
+        clauses.push("tabs.public = 1");
+    }
+    if (options.favOnly) {
+        clauses.push("tabs.fav = 1");
+    }
+    if (options.songId !== undefined) {
+        clauses.push("songs.id = ?");
+        params.push(options.songId);
+    }
+    if (options.search?.trim()) {
+        clauses.push(`(
+            artists.name LIKE ? ESCAPE '\\'
+            OR albums.title LIKE ? ESCAPE '\\'
+            OR songs.title LIKE ? ESCAPE '\\'
+            OR tabs.title LIKE ? ESCAPE '\\'
+            OR tabs.artist LIKE ? ESCAPE '\\'
+            OR tabs.album LIKE ? ESCAPE '\\'
+            OR tabs.original_filename LIKE ? ESCAPE '\\'
+        )`);
+        const search = `%${escapeLike(options.search.trim())}%`;
+        params.push(search, search, search, search, search, search, search);
+    }
+    return { clauses, params };
 }
 
 function escapeLike(value: string): string {

@@ -6,6 +6,8 @@ import { isLoggedIn } from "../auth-client.js";
 import TabItem from "../components/TabItem.vue";
 import { LibraryBrowseSchema } from "../zod.ts";
 
+const libraryPageSize = 500;
+
 export default defineComponent({
     components: {
         TabItem,
@@ -23,6 +25,7 @@ export default defineComponent({
             expandedSongs: {},
             searchRefreshTimer: null,
             libraryRequestId: 0,
+            isLoadingMore: false,
         };
     },
 
@@ -94,6 +97,18 @@ export default defineComponent({
 
         useLibraryGrouping() {
             return this.setting.groupByArtist && this.filteredLibrary && this.filteredLibrary.artists.length > 0;
+        },
+
+        loadedVersionCount() {
+            return this.tabList.length;
+        },
+
+        totalVersionCount() {
+            return this.library?.totalVersionCount ?? this.tabList.length;
+        },
+
+        hasMoreLibraryTabs() {
+            return !!this.library?.hasMore;
         },
     },
 
@@ -204,10 +219,13 @@ export default defineComponent({
             }
         },
 
-        async refreshLibrary() {
+        async refreshLibrary(options = {}) {
+            const append = options.append === true;
+            const offset = append ? this.tabList.length : 0;
             const params = new URLSearchParams({
                 mode: "album",
-                limit: "1000",
+                limit: String(libraryPageSize),
+                offset: String(offset),
             });
             if (this.searchQuery.trim()) {
                 params.set("search", this.searchQuery.trim());
@@ -218,8 +236,84 @@ export default defineComponent({
             if (requestId !== this.libraryRequestId) {
                 return;
             }
-            this.library = LibraryBrowseSchema.parse(libraryData.library);
-            this.tabList = this.flattenLibraryTabs(this.library);
+            const page = LibraryBrowseSchema.parse(libraryData.library);
+            this.library = append && this.library ? this.mergeLibraryPages(this.library, page) : page;
+            this.tabList = append ? [...this.tabList, ...this.flattenLibraryTabs(page)] : this.flattenLibraryTabs(page);
+        },
+
+        async loadMoreLibraryTabs() {
+            if (this.isLoadingMore || !this.hasMoreLibraryTabs) {
+                return;
+            }
+            this.isLoadingMore = true;
+            try {
+                await this.refreshLibrary({ append: true });
+            } catch (error) {
+                notify({
+                    text: error.message,
+                    type: "error",
+                });
+            } finally {
+                this.isLoadingMore = false;
+            }
+        },
+
+        mergeLibraryPages(current, page) {
+            const merged = {
+                ...current,
+                artistCount: current.artistCount + page.artistCount,
+                songCount: current.songCount + page.songCount,
+                versionCount: current.versionCount + page.versionCount,
+                totalVersionCount: page.totalVersionCount,
+                hasMore: page.hasMore,
+                limit: page.limit,
+                artists: current.artists.map((artist) => ({
+                    ...artist,
+                    albums: artist.albums.map((album) => ({ ...album, songs: album.songs.map((song) => ({ ...song, versions: [...song.versions] })) })),
+                    songs: artist.songs.map((song) => ({ ...song, versions: [...song.versions] })),
+                })),
+            };
+
+            for (const pageArtist of page.artists) {
+                const artist = merged.artists.find((candidate) => candidate.id === pageArtist.id);
+                if (!artist) {
+                    merged.artists.push(pageArtist);
+                    continue;
+                }
+                artist.songCount += pageArtist.songCount;
+                artist.versionCount += pageArtist.versionCount;
+                this.mergeAlbumLists(artist.albums, pageArtist.albums);
+                this.mergeSongLists(artist.songs, pageArtist.songs);
+            }
+            return merged;
+        },
+
+        mergeAlbumLists(currentAlbums, pageAlbums) {
+            for (const pageAlbum of pageAlbums) {
+                const album = currentAlbums.find((candidate) => candidate.id === pageAlbum.id);
+                if (!album) {
+                    currentAlbums.push(pageAlbum);
+                    continue;
+                }
+                album.songCount += pageAlbum.songCount;
+                album.versionCount += pageAlbum.versionCount;
+                this.mergeSongLists(album.songs, pageAlbum.songs);
+            }
+        },
+
+        mergeSongLists(currentSongs, pageSongs) {
+            for (const pageSong of pageSongs) {
+                const song = currentSongs.find((candidate) => candidate.id === pageSong.id);
+                if (!song) {
+                    currentSongs.push(pageSong);
+                    continue;
+                }
+                song.versions.push(...pageSong.versions);
+                song.versionCount = song.versions.length;
+                song.publicVersionCount += pageSong.publicVersionCount;
+                song.favVersionCount += pageSong.favVersionCount;
+                song.preferredVersion = song.versions.find((version) => version.preferred) || song.preferredVersion || pageSong.preferredVersion;
+            }
         },
 
         flattenLibraryTabs(library) {
@@ -294,13 +388,10 @@ export default defineComponent({
 
         <div class="mb-4 ms-3" v-if="ready">
             <template v-if="useLibraryGrouping">
-                Total Songs: {{ filteredLibrary.songCount }} / Versions: {{ filteredLibrary.versionCount }}
+                Tabs: {{ loadedVersionCount }} of {{ totalVersionCount }}
             </template>
             <template v-else>
-                Total Tabs: {{ filteredTabList.length }}
-                <span v-if="searchQuery" class="text-muted">
-                    (of {{ tabList.length }})
-                </span>
+                Tabs: {{ loadedVersionCount }} of {{ totalVersionCount }}
             </template>
         </div>
 
@@ -318,7 +409,8 @@ export default defineComponent({
 
                     <div v-for="song in album.songs" v-show="isAlbumExpanded(album)" :key="song.id" class="library-song">
                         <div class="song-row" :class="{ 'song-row-single': song.versionCount <= 1 }">
-                            <button v-if="song.versionCount > 1" class="expand-btn" type="button" @click="toggleSong(song)" :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'">
+                            <button v-if="song.versionCount > 1" class="expand-btn" type="button" @click="toggleSong(song)"
+                                :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'">
                                 <font-awesome-icon :icon='isSongExpanded(song) ? "chevron-down" : "chevron-right"' />
                             </button>
 
@@ -392,6 +484,12 @@ export default defineComponent({
                 @favToggled="handleFavToggled"
             />
         </template>
+
+        <div v-if="ready && hasMoreLibraryTabs" class="load-more-section text-center my-4">
+            <button class="btn btn-outline-secondary" type="button" :disabled="isLoadingMore" @click="loadMoreLibraryTabs">
+                {{ isLoadingMore ? "Loading..." : "Load more" }}
+            </button>
+        </div>
 
         <div
             v-if="ready && filteredTabList.length === 0 && searchQuery"

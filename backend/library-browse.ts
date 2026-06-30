@@ -51,6 +51,10 @@ export interface LibraryBrowseResult {
     artistCount: number;
     songCount: number;
     versionCount: number;
+    totalVersionCount: number;
+    offset: number;
+    limit: number | null;
+    hasMore: boolean;
     artists: LibraryBrowseArtist[];
 }
 
@@ -80,10 +84,13 @@ export interface LibraryBrowseRow {
     updatedAt: string;
 }
 
-export function buildLibraryBrowse(rows: LibraryBrowseRow[], mode: "album" | "flat"): LibraryBrowseResult {
+export function buildLibraryBrowse(rows: LibraryBrowseRow[], mode: "album" | "flat", pagination?: { totalVersionCount?: number; offset?: number; limit?: number | null }): LibraryBrowseResult {
     const artists = buildLibraryBrowseArtists(rows, mode);
     const songIds = new Set<number>();
     let versionCount = 0;
+    const offset = pagination?.offset ?? 0;
+    const limit = pagination?.limit ?? null;
+    const totalVersionCount = pagination?.totalVersionCount ?? rows.length;
 
     for (const artist of artists) {
         versionCount += artist.versionCount;
@@ -102,6 +109,10 @@ export function buildLibraryBrowse(rows: LibraryBrowseRow[], mode: "album" | "fl
         artistCount: artists.length,
         songCount: songIds.size,
         versionCount,
+        totalVersionCount,
+        offset,
+        limit,
+        hasMore: offset + rows.length < totalVersionCount,
         artists,
     };
 }

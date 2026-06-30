@@ -50,7 +50,7 @@ import {
     getLibraryTabStoredPath,
     setPreferredSongTab,
     updateLibraryTabFav,
-    updateLibraryTabVisibility,
+    updateLibraryTabInfo,
 } from "./library.ts";
 import { resolveStoredPath } from "./storage.ts";
 import { migrateLegacyTabsToLibrary } from "./legacy-migration.ts";
@@ -274,7 +274,7 @@ export async function main() {
 
     app.get("/api/library", async (c) => {
         try {
-            const loggedIn = await isLoggedIn(c);
+            await checkLogin(c);
             const query = LibraryBrowseQuerySchema.parse(c.req.query());
             return c.json({
                 ok: true,
@@ -282,8 +282,8 @@ export async function main() {
                     mode: query.mode,
                     search: query.search,
                     limit: query.limit,
-                    includePrivate: loggedIn,
-                    publicOnly: !loggedIn,
+                    offset: query.offset,
+                    includePrivate: true,
                 }),
             });
         } catch (e) {
@@ -348,7 +348,7 @@ export async function main() {
                 if (!getLibraryTab(id)) {
                     throw error;
                 }
-                updateLibraryTabVisibility(id, data.public);
+                updateLibraryTabInfo(id, data);
             }
             return c.json({
                 ok: true,

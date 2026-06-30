@@ -22,6 +22,7 @@ const {
     getLibraryTabInfo,
     getTabFileByHash,
     normalizeLibraryText,
+    updateLibraryTabInfo,
     updateLibraryTabFav,
     updateLibraryTabVisibility,
     upsertAlbum,
@@ -181,6 +182,27 @@ Deno.test("library tabs preserve exact ids, denormalized fields, versions, and v
     assertEquals(favTabs.every((tab) => tab.fav), true);
 });
 
+Deno.test("library tab info update moves songs and allocates the next target version", () => {
+    const artist = upsertArtist("Edit Move Artist");
+    const sourceSong = upsertSong(artist.id, "Old Song");
+    const targetSong = upsertSong(artist.id, "New Song");
+    upsertLibraryTab({ id: "edit-existing-target", songId: targetSong.id, public: true });
+    const movedTab = upsertLibraryTab({ id: "edit-moving-source", songId: sourceSong.id, public: false, fav: true });
+
+    const updated = updateLibraryTabInfo(movedTab.id, {
+        title: "New Song",
+        artist: "Edit Move Artist",
+        public: true,
+    });
+
+    assertEquals(updated.songId, targetSong.id);
+    assertEquals(updated.version, 2);
+    assertEquals(updated.title, "New Song");
+    assertEquals(updated.artist, "Edit Move Artist");
+    assertEquals(updated.public, true);
+    assertEquals(updated.fav, true);
+});
+
 Deno.test("library browse groups artist album song versions and preferred tab", () => {
     const artist = upsertArtist("Browse Artist");
     const album = upsertAlbum(artist.id, "Browse Album");
@@ -266,6 +288,27 @@ Deno.test("library browse groups artist album song versions and preferred tab", 
     const publicSong = getLibrarySongVersionsForTab(firstVersion.id, { publicOnly: true });
     assertExists(publicSong);
     assertEquals(publicSong.versions.map((version) => version.id), [firstVersion.id]);
+});
+
+Deno.test("library browse returns bounded pages with total counts", () => {
+    const artist = upsertArtist("Paged Browse Artist");
+    const song = upsertSong(artist.id, "Paged Browse Song");
+    upsertLibraryTab({ id: "paged-browse-1", songId: song.id });
+    upsertLibraryTab({ id: "paged-browse-2", songId: song.id });
+    upsertLibraryTab({ id: "paged-browse-3", songId: song.id });
+
+    const firstPage = getLibraryBrowse({ mode: "album", includePrivate: true, search: "Paged Browse", limit: 2, offset: 0 });
+    assertEquals(firstPage.versionCount, 2);
+    assertEquals(firstPage.totalVersionCount, 3);
+    assertEquals(firstPage.offset, 0);
+    assertEquals(firstPage.limit, 2);
+    assertEquals(firstPage.hasMore, true);
+
+    const secondPage = getLibraryBrowse({ mode: "album", includePrivate: true, search: "Paged Browse", limit: 2, offset: 2 });
+    assertEquals(secondPage.versionCount, 1);
+    assertEquals(secondPage.totalVersionCount, 3);
+    assertEquals(secondPage.offset, 2);
+    assertEquals(secondPage.hasMore, false);
 });
 
 Deno.test("artist merge preserves aliases, songs, and tab versions", () => {

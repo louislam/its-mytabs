@@ -165,6 +165,10 @@ export const LibraryBrowseSchema = z.object({
     artistCount: z.number(),
     songCount: z.number(),
     versionCount: z.number(),
+    totalVersionCount: z.number(),
+    offset: z.number(),
+    limit: z.number().nullable(),
+    hasMore: ApiBooleanSchema,
     artists: z.array(LibraryBrowseArtistSchema),
 });
 export type LibraryBrowse = z.infer<typeof LibraryBrowseSchema>;
