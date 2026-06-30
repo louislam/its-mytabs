@@ -265,6 +265,38 @@ Deno.test({
         assertEquals(libraryRes.status, 200, JSON.stringify(libraryJson));
         assertEquals(libraryJson.ok, true);
         assertEquals(libraryJson.library.totalVersionCount, 1);
+
+        const pageArtist = upsertArtist("HTTP Page Artist");
+        const pageSongOne = upsertSong(pageArtist.id, "HTTP Page Song 1");
+        const pageSongTwo = upsertSong(pageArtist.id, "HTTP Page Song 2");
+        const pageSongThree = upsertSong(pageArtist.id, "HTTP Page Song 3");
+        upsertLibraryTab({ id: "http-page-1", songId: pageSongOne.id, title: "HTTP Page Song 1", artist: "HTTP Page Artist" });
+        upsertLibraryTab({ id: "http-page-2", songId: pageSongTwo.id, title: "HTTP Page Song 2", artist: "HTTP Page Artist" });
+        upsertLibraryTab({ id: "http-page-3", songId: pageSongThree.id, title: "HTTP Page Song 3", artist: "HTTP Page Artist" });
+
+        const firstPageRes = await fetch(`${baseURL}/api/library?mode=album&limit=2&offset=0&search=${encodeURIComponent("HTTP Page Artist")}`, {
+            method: "GET",
+            headers: { Cookie: cookiePair },
+        });
+        const firstPageJson = await firstPageRes.json();
+        assertEquals(firstPageRes.status, 200, JSON.stringify(firstPageJson));
+        assertEquals(firstPageJson.library.versionCount, 2);
+        assertEquals(firstPageJson.library.totalVersionCount, 3);
+        assertEquals(firstPageJson.library.offset, 0);
+        assertEquals(firstPageJson.library.limit, 2);
+        assertEquals(firstPageJson.library.hasMore, true);
+
+        const secondPageRes = await fetch(`${baseURL}/api/library?mode=album&limit=2&offset=2&search=${encodeURIComponent("HTTP Page Artist")}`, {
+            method: "GET",
+            headers: { Cookie: cookiePair },
+        });
+        const secondPageJson = await secondPageRes.json();
+        assertEquals(secondPageRes.status, 200, JSON.stringify(secondPageJson));
+        assertEquals(secondPageJson.library.versionCount, 1);
+        assertEquals(secondPageJson.library.totalVersionCount, 3);
+        assertEquals(secondPageJson.library.offset, 2);
+        assertEquals(secondPageJson.library.limit, 2);
+        assertEquals(secondPageJson.library.hasMore, false);
     },
 });
 
