@@ -2,7 +2,7 @@ import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, getCurrentSession, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { LibraryBrowseQuerySchema, SetPreferredTabSchema, SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
@@ -36,6 +36,24 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
+import { registerImportRoutes } from "./import-routes.ts";
+import { reconcileInterruptedImportJobs } from "./import.ts";
+import { registerLibraryMaintenanceRoutes } from "./library-maintenance-routes.ts";
+import {
+    canReadLibraryTab,
+    deleteLibraryTab,
+    getLibraryBrowse,
+    getLibraryConfigJSON,
+    getLibrarySongVersionsForTab,
+    getLibraryTab,
+    getLibraryTabInfo,
+    getLibraryTabStoredPath,
+    setPreferredSongTab,
+    updateLibraryTabFav,
+    updateLibraryTabInfo,
+} from "./library.ts";
+import { resolveStoredPath } from "./storage.ts";
+import { migrateLegacyTabsToLibrary } from "./legacy-migration.ts";
 
 let httpServer: ServerType;
 
@@ -47,6 +65,11 @@ export async function main() {
     }
 
     await migrate();
+    await runLegacyLibraryMigration();
+    const interruptedImports = reconcileInterruptedImportJobs();
+    if (interruptedImports > 0) {
+        console.warn(`Marked ${interruptedImports} interrupted import job(s) as failed.`);
+    }
 
     const frontendDir = getFrontendDir();
 
@@ -70,7 +93,7 @@ export async function main() {
 
     // Inject demo mode flag using cheerio
     const $ = cheerio.load(indexHTMLContent);
-    $("head").append(`<script id="app-config" type="application/json">${JSON.stringify({ isDemo: isDemoMode })}</script>`);
+    $("head").append(`<script id="app-config" type="application/json">${JSON.stringify({ isDemo: isDemoMode, defaultImportRoot: getDefaultImportRoot() })}</script>`);
     const indexHTML = $.html();
 
     if (isDemoMode) {
@@ -249,12 +272,35 @@ export async function main() {
         }
     });
 
+    app.get("/api/library", async (c) => {
+        try {
+            await checkLogin(c);
+            const query = LibraryBrowseQuerySchema.parse(c.req.query());
+            return c.json({
+                ok: true,
+                library: getLibraryBrowse({
+                    mode: query.mode,
+                    search: query.search,
+                    limit: query.limit,
+                    offset: query.offset,
+                    includePrivate: true,
+                }),
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     // Get Tab
     app.get("/api/tab/:id", async (c) => {
         try {
             const id = c.req.param("id");
 
             let config = await getConfigJSON(id);
+            const isLegacyTab = config !== null;
+            if (!config) {
+                config = getLibraryConfigJSON(id);
+            }
             if (!config) {
                 throw new Error("Config.json not found");
             }
@@ -263,9 +309,15 @@ export async function main() {
                 await checkLogin(c);
             }
 
-            config = await fixMissingTab(config);
+            if (isLegacyTab) {
+                config = await fixMissingTab(config);
+            }
 
-            const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(config.tab) : "";
+            let filePath = "";
+            if (await isLoggedIn(c)) {
+                const storedPath = getLibraryTabStoredPath(id);
+                filePath = storedPath ? resolveStoredPath(storedPath) : getTabFullFilePath(config.tab);
+            }
 
             return c.json({
                 ok: true,
@@ -289,8 +341,15 @@ export async function main() {
             const body = await c.req.json();
             const data = UpdateTabInfoSchema.parse(body);
 
-            const tab = await getTab(id);
-            await updateTab(tab, data);
+            try {
+                const tab = await getTab(id);
+                await updateTab(tab, data);
+            } catch (error) {
+                if (!getLibraryTab(id)) {
+                    throw error;
+                }
+                updateLibraryTabInfo(id, data);
+            }
             return c.json({
                 ok: true,
             });
@@ -308,10 +367,66 @@ export async function main() {
             const body = await c.req.json();
             const data = UpdateTabFavSchema.parse(body);
 
-            const tab = await getTab(id);
-            await updateTabFav(tab, data);
+            try {
+                const tab = await getTab(id);
+                await updateTabFav(tab, data);
+            } catch (error) {
+                if (!getLibraryTab(id)) {
+                    throw error;
+                }
+                updateLibraryTabFav(id, data.fav);
+            }
             return c.json({
                 ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    app.get("/api/tab/:id/versions", async (c) => {
+        try {
+            const id = c.req.param("id");
+            const loggedIn = await isLoggedIn(c);
+            if (getLibraryTab(id)) {
+                if (!canReadLibraryTab(id, loggedIn)) {
+                    await checkLogin(c);
+                }
+                const song = getLibrarySongVersionsForTab(id, {
+                    includePrivate: loggedIn,
+                    publicOnly: !loggedIn,
+                });
+                return c.json({
+                    ok: true,
+                    song,
+                });
+            } else {
+                const tab = await getTab(id);
+                if (!tab.public) {
+                    await checkLogin(c);
+                }
+                return c.json({
+                    ok: true,
+                    song: null,
+                });
+            }
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    app.post("/api/songs/:songId/preferred-tab", async (c) => {
+        try {
+            await checkLogin(c);
+            const songId = Number.parseInt(c.req.param("songId"), 10);
+            if (!Number.isInteger(songId) || songId <= 0) {
+                throw new Error("Invalid song id");
+            }
+            const body = SetPreferredTabSchema.parse(await c.req.json());
+            const song = setPreferredSongTab(songId, body.tabId);
+            return c.json({
+                ok: true,
+                song,
             });
         } catch (e) {
             return generalError(c, e);
@@ -361,7 +476,14 @@ export async function main() {
             await checkLogin(c);
             const id = c.req.param("id");
 
-            await deleteTab(id);
+            try {
+                await deleteTab(id);
+            } catch (error) {
+                if (!getLibraryTab(id)) {
+                    throw error;
+                }
+                deleteLibraryTab(id);
+            }
 
             return c.json({
                 ok: true,
@@ -574,8 +696,21 @@ export async function main() {
                 await checkLogin(c);
             }
 
-            const tab = await getTab(id);
-            const filePath = getTabFilePath(tab);
+            let originalFilename = "tab.gp";
+            let filePath = "";
+            const storedPath = getLibraryTabStoredPath(id);
+            if (storedPath) {
+                const tab = getLibraryTab(id);
+                if (!tab) {
+                    throw new Error("Tab not found");
+                }
+                filePath = resolveStoredPath(storedPath);
+                originalFilename = tab.originalFilename;
+            } else {
+                const tab = await getTab(id);
+                filePath = getTabFilePath(tab);
+                originalFilename = tab.originalFilename;
+            }
 
             // Check if file exists
             if (!await fs.exists(filePath)) {
@@ -587,7 +722,7 @@ export async function main() {
                 read: true,
             });
 
-            const encodedOriginalFilename = encodeURIComponent(tab.originalFilename);
+            const encodedOriginalFilename = encodeURIComponent(originalFilename);
 
             return c.body(file.readable, 200, {
                 "Content-Type": "application/octet-stream",
@@ -604,8 +739,10 @@ export async function main() {
         try {
             const id = c.req.param("id");
 
-            const tab = await getTab(id);
-
+            const tab = await getTabInfoForAccess(id);
+            if (!tab) {
+                throw new Error("Tab not found");
+            }
             if (!tab.public) {
                 await checkLogin(c);
             }
@@ -688,6 +825,14 @@ export async function main() {
         }
     });
 
+    registerImportRoutes(app);
+    registerLibraryMaintenanceRoutes(app, {
+        musicBrainz: {
+            userAgent: Deno.env.get("MYTABS_MUSICBRAINZ_USER_AGENT") ?? `its-mytabs/${appVersion} (${Deno.env.get("MYTABS_CONTACT_EMAIL") ?? "contact unavailable"})`,
+            timeoutMs: Number(Deno.env.get("MYTABS_MUSICBRAINZ_TIMEOUT_MS") ?? 10_000),
+        },
+    });
+
     app.get("/", (c) => {
         return c.html(indexHTML);
     });
@@ -733,6 +878,22 @@ export async function main() {
     });
 }
 
+async function runLegacyLibraryMigration() {
+    try {
+        const result = await migrateLegacyTabsToLibrary();
+        if (result.scanned > 0) {
+            console.log(`Legacy library migration: ${result.migrated} migrated, ${result.skipped} skipped, ${result.failed} failed.`);
+        }
+        if (result.failed > 0) {
+            for (const detail of result.details.filter((detail) => detail.status === "failed")) {
+                console.warn(`Legacy library migration failed for tab ${detail.id}: ${detail.reason}`);
+            }
+        }
+    } catch (error) {
+        console.error("Legacy library migration failed:", error);
+    }
+}
+
 export function closeServer() {
     if (httpServer) {
         httpServer.close();
@@ -740,6 +901,22 @@ export function closeServer() {
     kv.close();
     db.close();
     console.log("Server closed");
+}
+
+async function getTabInfoForAccess(id: string) {
+    try {
+        return await getTab(id);
+    } catch (error) {
+        const tab = getLibraryTabInfo(id);
+        if (tab) {
+            return tab;
+        }
+        throw error;
+    }
+}
+
+function getDefaultImportRoot(): string {
+    return (Deno.env.get("MYTABS_IMPORT_ROOTS") ?? "").split(path.DELIMITER).map((root) => root.trim()).find(Boolean) ?? "";
 }
 
 function generalError(c: Context, e: unknown) {

@@ -35,6 +35,7 @@ const {
     removeYoutube,
 } = await import("./tab.ts");
 const { db, kv } = await import("./db.ts");
+const { getLibraryConfigJSON, getLibraryTabInfo, getLibraryTabStoredPath } = await import("./library.ts");
 
 Deno.test("tabExists - non-existent tab", async () => {
     console.log("Running test: tabExists - non-existent tab");
@@ -52,6 +53,13 @@ Deno.test("createTab and getTab", async () => {
     assertEquals(tab.artist, "Test Artist");
     assertEquals(tab.filename, "tab.gp");
     assertEquals(tab.originalFilename, "test.gp");
+
+    const libraryTab = getLibraryTabInfo(id);
+    assertExists(libraryTab);
+    assertEquals(libraryTab.title, "Test Title");
+    assertEquals(libraryTab.artist, "Test Artist");
+    assertEquals(libraryTab.originalFilename, "test.gp");
+    assertExists(getLibraryTabStoredPath(id));
 });
 
 Deno.test("getTab - path traversal protection", async () => {
@@ -111,6 +119,7 @@ Deno.test("updateConfigJSON - queuing", async () => {
     // Check that updates were applied sequentially
     const tab = await getTab(id);
     assertEquals(tab.title, "Queue Test0123456789");
+    assertEquals(getLibraryTabInfo(id)?.title, "Queue Test0123456789");
 });
 
 Deno.test("deleteTab", async () => {
@@ -127,6 +136,7 @@ Deno.test("deleteTab", async () => {
     // Verify it no longer exists
     exists = await tabExists(id.toString());
     assertEquals(exists, false);
+    assertEquals(getLibraryTabInfo(id.toString()), null);
 });
 
 Deno.test("getConfigJSONPath", () => {
@@ -230,6 +240,8 @@ Deno.test("replaceTab", async () => {
     tab = await getTab(id);
     assertEquals(tab.filename, "tab.gpx");
     assertEquals(tab.originalFilename, "another.gpx");
+    assertEquals(getLibraryTabInfo(id)?.filename, "tab.gpx");
+    assertEquals(getLibraryTabInfo(id)?.originalFilename, "another.gpx");
 });
 
 Deno.test("updateTab", async () => {
@@ -253,6 +265,9 @@ Deno.test("updateTab", async () => {
     assertEquals(tab.title, "Updated Title");
     assertEquals(tab.artist, "Updated Artist");
     assertEquals(tab.public, true);
+    assertEquals(getLibraryTabInfo(id)?.title, "Updated Title");
+    assertEquals(getLibraryTabInfo(id)?.artist, "Updated Artist");
+    assertEquals(getLibraryTabInfo(id)?.public, true);
 });
 
 Deno.test("updateTabFav", async () => {
@@ -275,6 +290,7 @@ Deno.test("updateTabFav", async () => {
     // Check updated
     tab = await getTab(id);
     assertEquals(tab.fav, false);
+    assertEquals(getLibraryTabInfo(id)?.fav, false);
 });
 
 Deno.test("addAudio", async () => {
@@ -379,6 +395,7 @@ Deno.test("updateAudio", async () => {
     assertEquals(config!.audio[0].filename, "test.mp3");
     assertEquals(config!.audio[0].syncMethod, "advanced");
     assertEquals(config!.audio[0].advancedSync, "adv-sync");
+    assertEquals(getLibraryConfigJSON(id)?.audio.length, 1);
 
     // Update again to change to simple sync
     await updateAudio(tab, "test.mp3", {

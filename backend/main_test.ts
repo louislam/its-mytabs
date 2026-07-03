@@ -21,6 +21,8 @@ await Deno.writeTextFile(indexPath, "<html><head></head><body>test</body></html>
 // Now import functions after env setup
 const { createTab, addAudio, getConfigJSON, updateConfigJSON } = await import("./tab.ts");
 const { main, closeServer } = await import("./main.ts");
+const { getLibraryTab, upsertArtist, upsertLibraryTab, upsertSong, upsertTabFile } = await import("./library.ts");
+const { storeLibraryFile } = await import("./storage.ts");
 
 // Start the server
 await main();
@@ -69,6 +71,12 @@ Deno.test({
         const res3 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file`, { method: "GET" });
         const j3 = await res3.json();
         assertEquals(res3.status, 400);
+
+        // 4) Library browse should require auth even when public tabs exist
+        const res4 = await fetch(`${baseURL}/api/library?mode=album&limit=10`, { method: "GET" });
+        const j4 = await res4.json();
+        assertEquals(res4.status, 400);
+        assertEquals(j4.ok, false);
     },
 });
 
@@ -117,6 +125,35 @@ Deno.test({
         assertEquals(resFile.status, 200);
         // close it
         await resFile.body?.cancel();
+    },
+});
+
+Deno.test({
+    name: "library-backed tab info does not require a legacy tab folder (HTTP)",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    fn: async () => {
+        const stored = await storeLibraryFile(new Uint8Array([210, 211, 212]), "gp");
+        const tabFile = upsertTabFile(stored);
+        const artist = upsertArtist("Imported Artist");
+        const song = upsertSong(artist.id, "Imported Song");
+        const tab = upsertLibraryTab({
+            id: "imported-without-folder",
+            songId: song.id,
+            tabFileId: tabFile.id,
+            title: "Imported Song",
+            artist: "Imported Artist",
+            filename: "tab.gp",
+            originalFilename: "imported.gp",
+            public: true,
+        });
+
+        const res = await fetch(`${baseURL}/api/tab/${encodeURIComponent(tab.id)}`, { method: "GET" });
+        const json = await res.json();
+
+        assertEquals(res.status, 200, JSON.stringify(json));
+        assertEquals(json.ok, true);
+        assertEquals(json.tab.id, tab.id);
     },
 });
 
@@ -189,6 +226,77 @@ Deno.test({
         });
         assertEquals(resFile.status, 200);
         await resFile.body?.cancel();
+
+        const stored = await storeLibraryFile(new Uint8Array([1, 4, 7]), "gp");
+        const tabFile = upsertTabFile(stored);
+        const importedArtist = upsertArtist("HTTP Imported Artist");
+        const importedSong = upsertSong(importedArtist.id, "HTTP Imported Song");
+        const importedTab = upsertLibraryTab({
+            id: "http-imported-edit",
+            songId: importedSong.id,
+            tabFileId: tabFile.id,
+            title: "HTTP Imported Song",
+            artist: "HTTP Imported Artist",
+            filename: "tab.gp",
+            originalFilename: "http-imported.gp",
+            public: false,
+        });
+
+        const editRes = await fetch(`${baseURL}/api/tab/${encodeURIComponent(importedTab.id)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookiePair },
+            body: JSON.stringify({ title: "HTTP Renamed Song", artist: "HTTP Renamed Artist", public: true }),
+        });
+        const editJson = await editRes.json();
+        assertEquals(editRes.status, 200, JSON.stringify(editJson));
+        assertEquals(editJson.ok, true);
+
+        const updatedTab = getLibraryTab(importedTab.id);
+        assertExists(updatedTab);
+        assertEquals(updatedTab.title, "HTTP Renamed Song");
+        assertEquals(updatedTab.artist, "HTTP Renamed Artist");
+        assertEquals(updatedTab.public, true);
+
+        const libraryRes = await fetch(`${baseURL}/api/library?mode=album&limit=1&offset=0&search=${encodeURIComponent("HTTP Renamed")}`, {
+            method: "GET",
+            headers: { Cookie: cookiePair },
+        });
+        const libraryJson = await libraryRes.json();
+        assertEquals(libraryRes.status, 200, JSON.stringify(libraryJson));
+        assertEquals(libraryJson.ok, true);
+        assertEquals(libraryJson.library.totalVersionCount, 1);
+
+        const pageArtist = upsertArtist("HTTP Page Artist");
+        const pageSongOne = upsertSong(pageArtist.id, "HTTP Page Song 1");
+        const pageSongTwo = upsertSong(pageArtist.id, "HTTP Page Song 2");
+        const pageSongThree = upsertSong(pageArtist.id, "HTTP Page Song 3");
+        upsertLibraryTab({ id: "http-page-1", songId: pageSongOne.id, title: "HTTP Page Song 1", artist: "HTTP Page Artist" });
+        upsertLibraryTab({ id: "http-page-2", songId: pageSongTwo.id, title: "HTTP Page Song 2", artist: "HTTP Page Artist" });
+        upsertLibraryTab({ id: "http-page-3", songId: pageSongThree.id, title: "HTTP Page Song 3", artist: "HTTP Page Artist" });
+
+        const firstPageRes = await fetch(`${baseURL}/api/library?mode=album&limit=2&offset=0&search=${encodeURIComponent("HTTP Page Artist")}`, {
+            method: "GET",
+            headers: { Cookie: cookiePair },
+        });
+        const firstPageJson = await firstPageRes.json();
+        assertEquals(firstPageRes.status, 200, JSON.stringify(firstPageJson));
+        assertEquals(firstPageJson.library.versionCount, 2);
+        assertEquals(firstPageJson.library.totalVersionCount, 3);
+        assertEquals(firstPageJson.library.offset, 0);
+        assertEquals(firstPageJson.library.limit, 2);
+        assertEquals(firstPageJson.library.hasMore, true);
+
+        const secondPageRes = await fetch(`${baseURL}/api/library?mode=album&limit=2&offset=2&search=${encodeURIComponent("HTTP Page Artist")}`, {
+            method: "GET",
+            headers: { Cookie: cookiePair },
+        });
+        const secondPageJson = await secondPageRes.json();
+        assertEquals(secondPageRes.status, 200, JSON.stringify(secondPageJson));
+        assertEquals(secondPageJson.library.versionCount, 1);
+        assertEquals(secondPageJson.library.totalVersionCount, 3);
+        assertEquals(secondPageJson.library.offset, 2);
+        assertEquals(secondPageJson.library.limit, 2);
+        assertEquals(secondPageJson.library.hasMore, false);
     },
 });
 
