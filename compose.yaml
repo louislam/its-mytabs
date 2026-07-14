@@ -1,9 +1,10 @@
 services:
     app:
-        image: louislam/its-mytabs:1
+        build: .
+        image: mytabs-dev:local
         ports:
-            # Host Port:Container Port
-            - "47777:47777"
+            # Host Port:Container Port  (dev instance, separate from prod on 7777)
+            - "7778:47777"
         volumes:
             # Host Path:Container Path
             - ./data:/app/data

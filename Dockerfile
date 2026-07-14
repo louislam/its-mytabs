@@ -10,6 +10,7 @@ RUN mkdir -p /app/dist && chown -R deno:deno /app/dist
 
 USER deno
 COPY --chown=deno:deno ./frontend /app/frontend
+COPY --chown=deno:deno ./deno.jsonc /app/deno.jsonc
 COPY --chown=deno:deno ./backend/common.ts /app/backend/common.ts
 WORKDIR /app/frontend
 RUN deno install && \
@@ -34,8 +35,8 @@ COPY --chown=deno:deno ./backend /app/backend
 COPY --chown=deno:deno ./deno.jsonc /app/deno.jsonc
 
 # Extremely slow on multi-arch builds, copy from host instead
-#COPY --chown=deno:deno --from=builder /app/dist /app/dist
-COPY --chown=deno:deno ./dist /app/dist
+COPY --chown=deno:deno --from=builder /app/dist /app/dist
+#COPY --chown=deno:deno ./dist /app/dist
 
 # Install and cache dependencies
 RUN deno install && \
