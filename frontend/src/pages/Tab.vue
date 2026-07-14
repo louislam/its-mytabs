@@ -279,12 +279,26 @@ export default defineComponent({
             // Clamp to a sensible range (one octave up/down)
             let value = Math.max(-12, Math.min(12, newVal));
 
-            // alphaTab's API takes the ABSOLUTE semitone value, not a delta
-            this.api.changeTrackTranspositionPitch(
-                this.api.score.tracks,
-                value
-            );
+            // Use notation.transpositionPitches (NOT displayTranspositionPitches).
+            // displayTranspositionPitches affects only standard notation.
+            // transpositionPitches affects display + playback (incl. tablature).
+            if (!this.api.settings.notation.transpositionPitches) {
+                this.api.settings.notation.transpositionPitches = [];
+            }
+            for (let i = 0; i < this.api.score.tracks.length; i++) {
+                this.api.settings.notation.transpositionPitches[i] = value;
+            }
 
+            this.api.updateSettings();
+            // Re-render only the currently selected track to avoid losing the user's track selection
+            // (renderTracks with all tracks would show the default/guitar track)
+            if (this.selectedTrack < this.api.score.tracks.length) {
+                this.api.renderTracks([this.api.score.tracks[this.selectedTrack]]);
+            } else {
+                this.api.renderTracks(this.api.score.tracks);
+            }
+
+            console.log("Transpose:", value);
             this.setConfig("transpose", value);
         },
 
