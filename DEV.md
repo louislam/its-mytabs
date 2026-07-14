@@ -1,77 +1,78 @@
-# DEV — MyTabs (Entwicklungsinstanz)
+# DEV — MyTabs (Development Instance)
 
-**Projekt:** `2026-07-mytabs-dev`
-**Basis:** Clone von [louislam/its-mytabs](https://github.com/louislam/its-mytabs), Stand **Tag `1.6.2`** (exakt wie Prod).
+**Project:** `2026-07-mytabs-dev`
+**Base:** Clone of [louislam/its-mytabs](https://github.com/louislam/its-mytabs), at **tag `1.6.2`** (exactly like Prod).
 **URL:** <http://openclaw.fritz.box:7778> · <http://localhost:7778>
-**Branch:** `dev` (von Tag `1.6.2` abgezweigt)
-**Remote `upstream`:** `https://github.com/louislam/its-mytabs.git` (nur fetch/PR-Quelle)
+**Branch:** `dev` (branched from tag `1.6.2`)
+**Remote `upstream`:** `https://github.com/louislam/its-mytabs.git` (PR source only)
 
-> **Prod vs Dev (Stand 2026-07-14):**
-> - **mytabs-prod** = alte Produktivinstanz, Port **7777**, Projekt `2026-06-mytabs`, läuft als fertiges Docker-Image `louislam/its-mytabs:1`. Doku: `2026-06-mytabs/onboard.md`.
-> - **mytabs-dev** = diese Instanz, Port **7778**, Projekt `2026-07-mytabs-dev`, wird **aus Quelle gebaut** (Branch `dev`, Tag 1.6.2). Hier entwickeln wir; bei Bedarf wird nach Prod deployt.
+> **Prod vs Dev (as of 2026-07-14):**
+> - **mytabs-prod** = production instance, port **7777**, project `2026-06-mytabs`, runs as a prebuilt Docker image `louislam/its-mytabs:1`. Docs: `2026-06-mytabs/onboard.md`.
+> - **mytabs-dev** = this instance, port **7778**, project `2026-07-mytabs-dev`, **built from source** (branch `dev`, tag 1.6.2). This is where we develop; deploy to Prod when ready.
 
-## Warum aus Quelle gebaut?
-Damit wir den Code ändern, committen, branches machen und PRs gegen Upstream
-öffnen können. Prod nutzt das fertige Image; Dev baut lokal via `docker compose build`.
+## Why built from source?
+So we can modify the code, commit, create branches, and open PRs against
+upstream. Prod uses the prebuilt image; Dev builds locally via `docker compose build`.
 
 ## Setup / Start
 
 ```bash
 cd ~/workspace/projects/2026-07-mytabs-dev
 
-# Erstaufbau (Image bauen + Container starten)
+# First-time setup (build image + start container)
 docker compose build
 docker compose up -d
 
-# Nur Container neu starten (nach Config-Änderungen)
+# Only restart container (after config changes)
 docker compose restart
 
 # Logs
 docker compose logs
 
-# Stoppen
+# Stop
 docker compose down
 ```
 
-**Wichtig:** `data/` ist in `.gitignore` und wurde beim Erstaufbau als
-**Kopie der Prod-Daten** angelegt (sauberer Stop von Prod während des Copys,
-damit die SQLite-WAL nicht zerrissen wird). Dev hat also eine eigene,
-unabhängige Datenkopie — Änderungen in Dev berühren Prod nicht.
+**Important:** `data/` is in `.gitignore` and was created as a **copy of the
+Prod data** on first setup (clean stop of Prod during copy so the SQLite WAL
+would not be torn). Dev thus has its own, independent data copy — changes in
+Dev do not affect Prod.
 
-## Dev-Loop (Code ändern → testen)
+## Dev Loop (change code → test)
 
-1. Code im Repo editieren (Branch `dev`, oder Feature-Branch davon).
-2. `docker compose build && docker compose up -d` (baut Image neu, ~1–2 Min).
-3. Im Browser auf <http://localhost:7778> prüfen.
-4. Committen: `git add -A && git commit -m "..."`
+1. Edit code in the repo (branch `dev`, or a feature branch from it).
+2. `docker compose build && docker compose up -d` (rebuilds the image, ~1–2 min).
+3. Check in browser at <http://localhost:7778>.
+4. Commit: `git add -A && git commit -m "..."`
 
-> Hinweis: Live-Reload (`deno task dev`) braucht Deno auf dem Host — hier
-> nicht vorhanden. Daher der Rebuild-Loop über Docker. Wer es komfortabler
-> will, kann später `./backend` und `./frontend` als Volume mounten und
-> `deno task dev` im Container laufen lassen.
+> Note: Live reload (`deno task dev`) would need Deno on the host — not
+> available here. Hence the rebuild loop via Docker. For a more comfortable
+> setup, `./backend` and `./frontend` could be mounted as volumes and
+> `deno task dev` run inside the container.
 
 ## Branch / Commit / PR Workflow
 
-- `upstream` = louislam/its-mytabs (read-only für uns).
-- Für einen Upstream-PR:
-  1. Fork von louislam/its-mytabs auf GitHub anlegen (einmalig).
-  2. `git remote add fork <dein-fork-url>` (oder `origin` umbenennen).
-  3. Feature-Branch erstellen: `git checkout -b feat/xyz upstream/master`
-     (sauber von Upstream abzweigen, nicht vom Dev-Setup-Branch).
-  4. Änderungen committen, `git push fork feat/xyz`.
-  5. PR auf GitHub von `fork/feat/xyz` → `louislam/its-mytabs:master` öffnen.
-- Der `dev`-Branch hier enthält zusätzlich die Dev-Setup-Änderungen
-  (Dockerfile/compose für Port 7778 + Local-Build), die **nicht** in den
-  Upstream-PR gehören.
+- `upstream` = louislam/its-mytabs (read-only for us).
+- For an upstream PR:
+  1. Create a fork of louislam/its-mytabs on GitHub (once).
+  2. `git remote add fork <your-fork-url>` (or rename `origin`).
+  3. Create a feature branch: `git checkout -b feat/xyz upstream/master`
+     (branched cleanly from upstream, not from the Dev setup branch).
+  4. Commit changes, `git push fork feat/xyz`.
+  5. Open a PR on GitHub from `fork/feat/xyz` → `louislam/its-mytabs:master`.
+- The `dev` branch here additionally contains the Dev setup changes
+  (Dockerfile/compose for port 7778 + local build), which do **not** belong in
+  the upstream PR.
 
-## Credentials (identisch zu Prod, da DB kopiert)
-- **Benutzer:** `fox@home.local`
-- **Passwort:** `foxfoxfox`
+## Credentials (same as Prod, since DB was copied)
+- **User:** `fox@home.local`
+- **Password:** `foxfoxfox`
 - **URL:** <http://localhost:7778>
 
 ## Gotchas
-- Build schlägt fehl, wenn im Builder-Stage `deno.jsonc` fehlt (vite.config
-  liest `../deno.jsonc` für `appVersion`). Ist im Dev-Dockerfile gefixt.
-- Der Cache-Warmup `deno -A main.ts` im Release-Stage wirft einen harmlosen
-  `Module not found "file:///app/main.ts"` (main.ts liegt in /app/backend) —
-  durch `|| exit 0` abgefangen, wie im Upstream.
+- Build fails if the root `deno.jsonc` is missing in the builder stage
+  (vite.config reads `../deno.jsonc` for `appVersion`). Fixed in the Dev
+  Dockerfile.
+- The cache warmup `deno -A main.ts` in the release stage throws a harmless
+  `Module not found "file:///app/main.ts"` (main.ts lives in /app/backend) —
+  caught by `|| exit 0`, same as upstream.
