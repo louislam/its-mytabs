@@ -50,6 +50,7 @@ export default defineComponent({
             enableBackingTrack: true,
             isLooping: false,
             speed: 100,
+            transpose: 0,
             ready: false,
             selectedTrack: 0,
             soloTrackID: -1,
@@ -268,6 +269,23 @@ export default defineComponent({
                 this.api.playbackSpeed = parseFloat((speed / 100).toFixed(2));
                 this.setConfig("speed", speed);
             });
+        },
+
+        transpose(newVal) {
+            if (!this.api || !this.api.score || !this.api.score.tracks) {
+                return;
+            }
+
+            // Clamp to a sensible range (one octave up/down)
+            let value = Math.max(-12, Math.min(12, newVal));
+
+            // alphaTab's API takes the ABSOLUTE semitone value, not a delta
+            this.api.changeTrackTranspositionPitch(
+                this.api.score.tracks,
+                value
+            );
+
+            this.setConfig("transpose", value);
         },
 
         // Switch Audio Source
@@ -683,6 +701,9 @@ export default defineComponent({
                     // Speed
                     this.speed = 100;
                     this.speed = this.getConfig("speed", 100);
+
+                    // Transpose
+                    this.transpose = this.getConfig("transpose", 0);
 
                     // Scroll Mode
                     // Force Smooth from horizontal tab
@@ -1511,6 +1532,12 @@ export default defineComponent({
                     Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
                 </div>
 
+                <div class="select-percentage">
+                    <button class="btn btn-secondary" @click="transpose--">−</button>
+                    <span class="transpose-value" @click="transpose = 0">{{ transpose > 0 ? '+' : '' }}{{ transpose }}</span>
+                    <button class="btn btn-secondary" @click="transpose++">+</button>
+                </div>
+
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
                         Edit
@@ -1820,6 +1847,14 @@ $padding: 20px;
     input {
         min-width: 90px;
         border: 0;
+    }
+
+    .transpose-value {
+        min-width: 2.5rem;
+        text-align: center;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 0 4px;
     }
 }
 
