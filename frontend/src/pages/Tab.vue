@@ -62,6 +62,8 @@ export default defineComponent({
             scrollMode: ScrollMode.Continuous,
             keySignature: "",
             playbackRange: null,
+            lyricsTracks: [],
+            lyricsConfig: { sourceTrackID: -1, enabled: false },
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -451,6 +453,19 @@ export default defineComponent({
                 this.audioList = data.audioList;
             }
 
+            // Load lyrics config
+            try {
+                const lyricsRes = await fetch(baseURL + `/api/tab/${this.tabID}/lyrics`, {
+                    credentials: "include",
+                });
+                if (lyricsRes.ok) {
+                    const lyricsData = await lyricsRes.json();
+                    this.lyricsConfig = lyricsData.lyrics || { sourceTrackID: -1, enabled: false };
+                }
+            } catch (e) {
+                console.error("Failed to load lyrics config:", e);
+            }
+
             const tempToken = await this.getTempToken();
 
             // Requested trackID may be invalid, so we need to get the actual trackID used
@@ -685,6 +700,9 @@ export default defineComponent({
 
                     this.applyColors(score);
 
+                    // Apply lyrics overlay (copy lyrics from source track to all tracks)
+                    this.applyLyricsOverlay();
+
                     // Track
                     if (trackID < 0 || trackID >= score.tracks.length) {
                         trackID = 0;
@@ -737,6 +755,29 @@ export default defineComponent({
                             program: track.playbackInfo.program,
                         });
                     });
+
+                    // Detect which tracks have lyrics
+                    const tracksWithLyrics = [];
+                    score.tracks.forEach((track, trackIndex) => {
+                        let hasLyrics = false;
+                        for (const staff of track.staves) {
+                            if (hasLyrics) break;
+                            for (const bar of staff.bars) {
+                                if (hasLyrics) break;
+                                for (const voice of bar.voices) {
+                                    if (hasLyrics) break;
+                                    for (const beat of voice.beats) {
+                                        if (beat.lyrics && beat.lyrics.length > 0) {
+                                            hasLyrics = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (hasLyrics) tracksWithLyrics.push(trackIndex);
+                    });
+                    this.lyricsTracks = tracksWithLyrics;
 
                     this.selectedTrack = trackID;
 
@@ -878,6 +919,57 @@ export default defineComponent({
                     } else if (this.setting.scoreStyle === "score-tab") {
                         staff.showTablature = true;
                         staff.showStandardNotation = true;
+                    }
+                }
+            }
+        },
+
+        /**
+         * Copy lyrics from source track to all tracks
+         * so they appear regardless of which track is displayed.
+         */
+        applyLyricsOverlay() {
+            if (!this.api?.score) return;
+            
+            // Determine source track
+            let sourceTrackID = this.lyricsConfig.sourceTrackID;
+            if (sourceTrackID === -1) {
+                // Auto-detect: first track with lyrics
+                sourceTrackID = this.lyricsTracks.length > 0 ? this.lyricsTracks[0] : -1;
+            }
+            if (sourceTrackID < 0) return;
+
+            const score = this.api.score;
+            const sourceTrack = score.tracks[sourceTrackID];
+            if (!sourceTrack) return;
+            
+            // Build tick → lyrics map from source track
+            const lyricsMap = new Map();
+            for (const staff of sourceTrack.staves) {
+                for (const bar of staff.bars) {
+                    for (const voice of bar.voices) {
+                        for (const beat of voice.beats) {
+                            if (beat.lyrics && beat.lyrics.length > 0) {
+                                lyricsMap.set(beat.absoluteStart, [...beat.lyrics]);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Copy to all other tracks
+            for (const track of score.tracks) {
+                if (track.index === sourceTrackID) continue;
+                for (const staff of track.staves) {
+                    for (const bar of staff.bars) {
+                        for (const voice of bar.voices) {
+                            for (const beat of voice.beats) {
+                                const lyrics = lyricsMap.get(beat.absoluteStart);
+                                if (lyrics) {
+                                    beat.lyrics = [...lyrics];
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1315,6 +1407,7 @@ export default defineComponent({
             if (fromDrum || isDrum) {
                 await this.load(trackID);
             } else {
+                this.applyLyricsOverlay();
                 this.api.renderTracks([this.api.score.tracks[trackID]]);
                 this.setConfig("trackID", trackID);
             }
@@ -1385,6 +1478,33 @@ export default defineComponent({
             }
             const track = this.api.score.tracks.find(({ index }) => index === trackID);
             this.api.changeTrackVolume(track, volume / 100);
+        },
+
+        async setLyricsSource(trackID) {
+            if (this.lyricsConfig.sourceTrackID === trackID) {
+                // Toggle off if same track clicked
+                this.lyricsConfig.sourceTrackID = -2;
+                this.lyricsConfig.enabled = false;
+            } else {
+                this.lyricsConfig.sourceTrackID = trackID;
+                this.lyricsConfig.enabled = true;
+            }
+            await this.saveLyricsConfig();
+            this.applyLyricsOverlay();
+            this.api.renderTracks([this.api.score.tracks[this.selectedTrack]]);
+        },
+
+        async saveLyricsConfig() {
+            try {
+                await fetch(baseURL + `/api/tab/${this.tabID}/lyrics`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(this.lyricsConfig),
+                });
+            } catch (e) {
+                generalError(e);
+            }
         },
 
         edit() {
@@ -1566,6 +1686,12 @@ export default defineComponent({
 
                 <div class="track item" v-for="track in tracks" :key="track.id" :class="{ active: selectedTrack === track.id }">
                     <div class="name" @click="changeTrack(track.id)">{{ track.name }}</div>
+                    <div class="list-button lyrics" 
+                         v-if="lyricsTracks.includes(track.id)"
+                         :class="{ active: lyricsConfig.sourceTrackID === track.id }"
+                         @click.stop="setLyricsSource(track.id)">
+                        Lyrics
+                    </div>
                     <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
                     <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
                     <div class="list-button select-percentage">

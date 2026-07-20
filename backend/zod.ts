@@ -70,9 +70,16 @@ export const AudioDataSchema = z.object({
 
 export type AudioData = z.infer<typeof AudioDataSchema>;
 
+export const LyricsConfigSchema = z.object({
+    sourceTrackID: z.number().default(-1),
+    enabled: z.boolean().default(false),
+});
+export type LyricsConfig = z.infer<typeof LyricsConfigSchema>;
+
 export const ConfigJSONSchema = z.object({
     tab: TabInfoSchema,
     audio: z.array(AudioDataSchema).default([]),
     youtube: z.array(YoutubeSchema).default([]),
+    lyrics: LyricsConfigSchema.default({ sourceTrackID: -1, enabled: false }),
 });
 export type ConfigJSON = z.infer<typeof ConfigJSONSchema>;

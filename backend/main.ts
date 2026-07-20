@@ -2,7 +2,7 @@ import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, getCurrentSession, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { LyricsConfigSchema, SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
@@ -27,6 +27,7 @@ import {
     replaceTab,
     updateAudio,
     updateConfigJSON,
+    updateLyricsConfig,
     updateTab,
     updateTabFav,
     updateYoutube,
@@ -540,6 +541,49 @@ export async function main() {
 
             await checkTabExists(id);
             await removeYoutube(id, videoID);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Get Lyrics Config
+    app.get("/api/tab/:id/lyrics", async (c) => {
+        try {
+            const id = c.req.param("id");
+
+            let config = await getConfigJSON(id);
+            if (!config) {
+                throw new Error("Config.json not found");
+            }
+
+            if (!config.tab.public) {
+                await checkLogin(c);
+            }
+
+            return c.json({
+                ok: true,
+                lyrics: config.lyrics || { sourceTrackID: -1, enabled: false },
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Update Lyrics Config
+    app.post("/api/tab/:id/lyrics", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+
+            const body = await c.req.json();
+            const data = LyricsConfigSchema.parse(body);
+
+            await checkTabExists(id);
+            await updateLyricsConfig(id, data);
 
             return c.json({
                 ok: true,

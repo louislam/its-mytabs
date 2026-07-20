@@ -1,7 +1,7 @@
 import { checkAudioFormat, checkFilename, flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
 import * as path from "@std/path";
-import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, SyncRequest, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSchema } from "./zod.ts";
+import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, LyricsConfig, LyricsConfigSchema, SyncRequest, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
@@ -160,6 +160,7 @@ export async function createTab(tabFileData: Uint8Array, ext: string, title: str
         tab,
         audio: [],
         youtube: [],
+        lyrics: { sourceTrackID: -1, enabled: false },
     };
 
     await writeConfigJSON(id.toString(), info);
@@ -452,6 +453,12 @@ export async function updateYoutube(id: string, videoID: string, data: SyncReque
         } else {
             config.youtube.push(youtubeData);
         }
+    });
+}
+
+export async function updateLyricsConfig(id: string, data: LyricsConfig) {
+    await updateConfigJSON(id, async (config) => {
+        config.lyrics = LyricsConfigSchema.parse(data);
     });
 }
 
