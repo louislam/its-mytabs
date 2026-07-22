@@ -640,6 +640,7 @@ export default defineComponent({
                     notation: {
                         rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
                         //rhythmHeight: 30,
+                        lyricsPosition: "below",
                         elements: {
                             scoreTitle: false,
                             scoreSubTitle: false,
@@ -949,12 +950,13 @@ export default defineComponent({
                 return;
             }
 
-            // Use absolute tick positions (beat.absoluteStart) to map lyrics
-            // from source to target beats. This is more robust than sequential
-            // 1:1 matching because source and target tracks may have different
-            // numbers of beats per bar (e.g. vocals with quarter notes vs
-            // bass with eighth notes). nearest-neighbor within the same bar
-            // ensures lyrics align to the correct musical time position.
+            // Use absolute tick positions (beat.absoluteDisplayStart) to map
+            // lyrics from source to target beats. This is more robust than
+            // sequential 1:1 matching because source and target tracks may have
+            // different numbers of beats per bar (e.g. vocals with quarter
+            // notes vs bass with eighth notes). nearest-neighbor within the
+            // same bar ensures lyrics align to the correct musical time
+            // position.
             //
             // Reference: alphaTab feature request #2441
             //   "Take the relative tick position of the respective beat.
@@ -983,7 +985,7 @@ export default defineComponent({
                         if (beat.lyrics && beat.lyrics.length > 0) {
                             list.push({
                                 text: beat.lyrics[0],
-                                absoluteStart: beat.absoluteStart ?? 0,
+                                absoluteStart: beat.absoluteDisplayStart ?? 0,
                             });
                             totalSrcLyrics++;
                             voiceHasLyrics = true;
@@ -1020,7 +1022,7 @@ export default defineComponent({
                         for (const beat of voice.beats) {
                             targetBeats.push({
                                 beat,
-                                absoluteStart: beat.absoluteStart ?? 0,
+                                absoluteStart: beat.absoluteDisplayStart ?? 0,
                             });
                         }
                     }
@@ -1031,9 +1033,11 @@ export default defineComponent({
                     }
 
                     // Nearest-neighbor: each source lyric maps to its closest
-                    // target beat. If two source lyrics compete for the same
-                    // target beat, the closer one wins.
-                    const assignment = new Map(); // targetBeat → { text, diff }
+                    // target beat. Multiple source lyrics CAN share the same
+                    // target beat (e.g. when target has fewer beats than source
+                    // has lyrics). This preserves all syllables instead of
+                    // dropping them in a "closest wins" competition.
+                    const assignment = new Map(); // targetBeat → [{ text, diff }]
                     for (const srcLyric of srcLyrics) {
                         let bestBeat = null;
                         let bestDiff = Infinity;
@@ -1045,17 +1049,31 @@ export default defineComponent({
                             }
                         }
                         if (bestBeat) {
-                            const existing = assignment.get(bestBeat);
-                            if (!existing || existing.diff > bestDiff) {
-                                assignment.set(bestBeat, { text: srcLyric.text, diff: bestDiff });
+                            if (!assignment.has(bestBeat)) {
+                                assignment.set(bestBeat, []);
                             }
+                            assignment.get(bestBeat).push({ text: srcLyric.text, diff: bestDiff });
                         }
                     }
 
-                    for (const [beat, { text }] of assignment) {
-                        beat.lyrics = [text];
-                        copiedCount++;
-                        totalCopiedCount++;
+                    for (const [beat, lyrics] of assignment) {
+                        // Sort by diff to keep original order stable
+                        lyrics.sort((a, b) => a.diff - b.diff);
+                        // Concatenate all syllables into a single string.
+                        // alphaTab renders multiple lyrics strings as separate
+                        // verse lines, which looks wrong when many source
+                        // syllables collapse onto one target beat.
+                        const combined = lyrics.map(l => l.text).join(" ");
+                        beat.lyrics = [combined];
+                        copiedCount += lyrics.length;
+                        totalCopiedCount += lyrics.length;
+                    }
+
+                    // Debug: log tick details for this bar
+                    if (targetBeats.length > 0) {
+                        const tgtTicks = targetBeats.map(tb => tb.absoluteStart).join(",");
+                        const srcTicks = srcLyrics.map(s => `${s.text}@${s.absoluteStart}`).join(",");
+                        console.log(`[LyricsOverlay] bar=${mbIdx} tgtBeats=${targetBeats.length} srcLyrics=${srcLyrics.length} | tgtTicks=[${tgtTicks}] src=[${srcTicks}]`);
                     }
                 }
 
