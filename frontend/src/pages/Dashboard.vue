@@ -43,11 +43,9 @@ export default defineComponent({
 
 <template>
     <div
-        :class='
-            {
-                "fixed-navbar": fixedNavbar,
-            }
-        '
+        :class='{
+            "fixed-navbar": fixedNavbar,
+        }'
     >
         <div class="my-navbar">
             <Logo />

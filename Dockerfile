@@ -1,4 +1,4 @@
-ARG DENO_VERSION=2.7.9
+ARG DENO_VERSION=2.7.14
 
 # Build dist
 # Extremely slow on multi-arch builds

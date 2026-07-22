@@ -11,12 +11,10 @@ export default {
 
 <template>
     <router-link
-        :class='
-            {
-                "navbar-brand": true,
-                "inline": inline,
-            }
-        '
+        :class='{
+            "navbar-brand": true,
+            "inline": inline,
+        }'
         to="/"
     >
         <img src="/icon.png" alt="It's MyTabs" />
