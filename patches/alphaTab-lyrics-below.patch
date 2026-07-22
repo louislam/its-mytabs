@@ -1,0 +1,46 @@
+diff --git a/dist/alphaTab.core.mjs b/dist/alphaTab.core.mjs
+--- a/dist/alphaTab.core.mjs
++++ b/dist/alphaTab.core.mjs
+@@ -1533,6 +1533,15 @@
+      */
+     extendLineEffectsToBeatEnd = false;
+     /**
++     * The position where lyrics should be rendered relative to the staff.
++     * @since 1.8.0
++     * @category Notation
++     * @defaultValue `"above"`
++     * @remarks
++     * By default lyrics are rendered above the staff. This setting allows to render them below the staff.
++     */
++    lyricsPosition = "above";
++    /**
+      * The height scale factor for slurs
+      * @since 0.9.6
+      * @category Notation
+@@ -43334,10 +43343,14 @@
+         o.set("extendbendarrowsontiednotes", obj.extendBendArrowsOnTiedNotes);
+         o.set("extendlineeffectstobeatend", obj.extendLineEffectsToBeatEnd);
+         o.set("slurheight", obj.slurHeight);
++        o.set("lyricsposition", obj.lyricsPosition);
+         return o;
+     }
+     static setProperty(obj, property, v) {
+         switch (property) {
++            case "lyricsposition":
++                obj.lyricsPosition = v;
++                return true;
+             case "notationmode":
+                 obj.notationMode = JsonHelper.parseEnum(v, NotationMode);
+                 return true;
+@@ -64941,6 +64954,11 @@
+             if (b.shouldCreate && !b.shouldCreate(staff)) {
+                 continue;
+             }
++            // Lyrics below staff: route LyricsEffectInfo to bottomEffectInfos
++            if (b.effect.notationElement === NotationElement.EffectLyrics && this.system.layout.renderer.settings.notation.lyricsPosition === "below") {
++                this.bottomEffectInfos.push(b);
++                continue;
++            }
+             switch (b.mode) {
+                 case EffectBandMode.OwnedTop:
+                 case EffectBandMode.SharedTop:
