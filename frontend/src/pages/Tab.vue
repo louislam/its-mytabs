@@ -64,7 +64,7 @@ export default defineComponent({
             playbackRange: null,
             lyricsTracks: [],
             lyricsConfig: { sourceTrackID: -1, enabled: false },
-            lyricsDebug: "",
+
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -999,8 +999,7 @@ export default defineComponent({
                 }
             }
 
-            console.log(`[LyricsOverlay] src=${sourceTrackID} srcBars=${srcBarCount} map=${srcLyricsByBar.size} lyrics=${totalSrcLyrics} method=tick-nearest`);
-            this.lyricsDebug = `src=${sourceTrackID} map=${srcLyricsByBar.size} lyrics=${totalSrcLyrics} bars=${srcBarCount} tick`;
+
 
             // Copy to all other tracks using nearest-neighbor by absolute tick
             let totalCopiedCount = 0;
@@ -1069,17 +1068,8 @@ export default defineComponent({
                         totalCopiedCount += lyrics.length;
                     }
 
-                    // Debug: log tick details for this bar
-                    if (targetBeats.length > 0) {
-                        const tgtTicks = targetBeats.map(tb => tb.absoluteStart).join(",");
-                        const srcTicks = srcLyrics.map(s => `${s.text}@${s.absoluteStart}`).join(",");
-                        console.log(`[LyricsOverlay] bar=${mbIdx} tgtBeats=${targetBeats.length} srcLyrics=${srcLyrics.length} | tgtTicks=[${tgtTicks}] src=[${srcTicks}]`);
-                    }
                 }
-
-                console.log(`[LyricsOverlay] copied ${copiedCount} lyrics to track ${track.index} (${track.name})`);
             }
-            this.lyricsDebug += ` | copied:${totalCopiedCount}`;
         },
 
         /**
@@ -1803,10 +1793,7 @@ export default defineComponent({
                     <button class="btn btn-secondary" @click="transpose++">+</button>
                 </div>
 
-                <!-- Lyrics Debug Badge -->
-                <div v-if="lyricsDebug" class="lyrics-debug-badge" :title="lyricsDebug">
-                    🎵 {{ lyricsDebug }}
-                </div>
+
 
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">

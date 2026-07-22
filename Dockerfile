@@ -5,6 +5,10 @@ ARG DENO_VERSION=2.7.9
 FROM denoland/deno:debian-${DENO_VERSION} AS builder
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y patch
+
+RUN mkdir -p /app/data && chown -R deno:deno /app/data
+
 RUN mkdir -p /app/data && chown -R deno:deno /app/data
 RUN mkdir -p /app/dist && chown -R deno:deno /app/dist
 
@@ -12,8 +16,11 @@ USER deno
 COPY --chown=deno:deno ./frontend /app/frontend
 COPY --chown=deno:deno ./deno.jsonc /app/deno.jsonc
 COPY --chown=deno:deno ./backend/common.ts /app/backend/common.ts
+COPY --chown=deno:deno ./patches /app/patches
+COPY --chown=deno:deno ./scripts /app/scripts
 WORKDIR /app/frontend
 RUN deno install && \
+    bash /app/scripts/patch-alphatab.sh && \
     deno task build
 
 # Main image
@@ -25,7 +32,7 @@ EXPOSE 47777
 RUN mkdir -p /app/data && chown -R deno:deno /app/data
 
 RUN apt update && \
-    apt --yes --no-install-recommends install gosu && \
+    apt --yes --no-install-recommends install gosu patch && \
     rm -rf /var/lib/apt/lists/*
 
 USER deno
