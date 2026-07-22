@@ -64,6 +64,7 @@ export default defineComponent({
             playbackRange: null,
             lyricsTracks: [],
             lyricsConfig: { sourceTrackID: -1, enabled: false },
+            lyricsDebug: "",
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -700,7 +701,41 @@ export default defineComponent({
 
                     this.applyColors(score);
 
-                    // Apply lyrics overlay (copy lyrics from source track to all tracks)
+                    // Build track list + detect which tracks have lyrics
+                    // (must happen BEFORE applyLyricsOverlay + initial render)
+                    this.tracks = [];
+                    score.tracks.forEach((track) => {
+                        this.tracks.push({
+                            id: track.index,
+                            name: getInstrumentName(track.playbackInfo.program),
+                            program: track.playbackInfo.program,
+                        });
+                    });
+
+                    const tracksWithLyrics = [];
+                    score.tracks.forEach((track, trackIndex) => {
+                        let hasLyrics = false;
+                        for (const staff of track.staves) {
+                            if (hasLyrics) break;
+                            for (const bar of staff.bars) {
+                                if (hasLyrics) break;
+                                for (const voice of bar.voices) {
+                                    if (hasLyrics) break;
+                                    for (const beat of voice.beats) {
+                                        if (beat.lyrics && beat.lyrics.length > 0) {
+                                            hasLyrics = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (hasLyrics) tracksWithLyrics.push(trackIndex);
+                    });
+                    this.lyricsTracks = tracksWithLyrics;
+
+                    // Apply lyrics overlay BEFORE the initial render so lyrics
+                    // show up immediately on first load
                     this.applyLyricsOverlay();
 
                     // Track
@@ -744,40 +779,6 @@ export default defineComponent({
                     } else {
                         this.scrollMode = this.setting.scrollMode;
                     }
-
-                    this.tracks = [];
-
-                    // List all tracks
-                    score.tracks.forEach((track) => {
-                        this.tracks.push({
-                            id: track.index,
-                            name: getInstrumentName(track.playbackInfo.program),
-                            program: track.playbackInfo.program,
-                        });
-                    });
-
-                    // Detect which tracks have lyrics
-                    const tracksWithLyrics = [];
-                    score.tracks.forEach((track, trackIndex) => {
-                        let hasLyrics = false;
-                        for (const staff of track.staves) {
-                            if (hasLyrics) break;
-                            for (const bar of staff.bars) {
-                                if (hasLyrics) break;
-                                for (const voice of bar.voices) {
-                                    if (hasLyrics) break;
-                                    for (const beat of voice.beats) {
-                                        if (beat.lyrics && beat.lyrics.length > 0) {
-                                            hasLyrics = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (hasLyrics) tracksWithLyrics.push(trackIndex);
-                    });
-                    this.lyricsTracks = tracksWithLyrics;
 
                     this.selectedTrack = trackID;
 
@@ -924,50 +925,162 @@ export default defineComponent({
             }
         },
 
-        /**
-         * Copy lyrics from source track to all tracks
-         * so they appear regardless of which track is displayed.
-         */
         applyLyricsOverlay() {
             if (!this.api?.score) return;
-            
+
+            const score = this.api.score;
+
             // Determine source track
             let sourceTrackID = this.lyricsConfig.sourceTrackID;
             if (sourceTrackID === -1) {
                 // Auto-detect: first track with lyrics
                 sourceTrackID = this.lyricsTracks.length > 0 ? this.lyricsTracks[0] : -1;
             }
-            if (sourceTrackID < 0) return;
 
-            const score = this.api.score;
+            // If disabled or no source: clear any previously copied lyrics and stop
+            if (!this.lyricsConfig.enabled || sourceTrackID < 0) {
+                this.clearLyricsOverlay(score);
+                return;
+            }
+
             const sourceTrack = score.tracks[sourceTrackID];
-            if (!sourceTrack) return;
-            
-            // Build tick → lyrics map from source track
-            const lyricsMap = new Map();
-            for (const staff of sourceTrack.staves) {
-                for (const bar of staff.bars) {
+            if (!sourceTrack) {
+                this.clearLyricsOverlay(score);
+                return;
+            }
+
+            // Use absolute tick positions (beat.absoluteStart) to map lyrics
+            // from source to target beats. This is more robust than sequential
+            // 1:1 matching because source and target tracks may have different
+            // numbers of beats per bar (e.g. vocals with quarter notes vs
+            // bass with eighth notes). nearest-neighbor within the same bar
+            // ensures lyrics align to the correct musical time position.
+            //
+            // Reference: alphaTab feature request #2441
+            //   "Take the relative tick position of the respective beat.
+            //    Render lyrics on the displayed bar aligning with logic:
+            //    If we have a beat at the exact same tick, align there."
+            //
+            // Future: When beat counts differ drastically, interpolate
+            // between the two target beats surrounding the lyric's tick.
+
+            // masterBarIdx → [{ text, absoluteStart }]
+            const srcLyricsByBar = new Map();
+            let srcBarCount = 0;
+            let totalSrcLyrics = 0;
+            for (const bar of sourceTrack.staves[0].bars) {
+                srcBarCount++;
+                const mb = bar.masterBar;
+                if (mb == null) continue;
+                const mbIdx = typeof mb.index === "number" ? mb.index : srcBarCount - 1;
+
+                const list = [];
+
+                // Only collect from the FIRST voice that has lyrics
+                for (const voice of bar.voices) {
+                    let voiceHasLyrics = false;
+                    for (const beat of voice.beats) {
+                        if (beat.lyrics && beat.lyrics.length > 0) {
+                            list.push({
+                                text: beat.lyrics[0],
+                                absoluteStart: beat.absoluteStart ?? 0,
+                            });
+                            totalSrcLyrics++;
+                            voiceHasLyrics = true;
+                        }
+                    }
+                    if (voiceHasLyrics) break;
+                }
+
+                if (list.length > 0) {
+                    srcLyricsByBar.set(mbIdx, list);
+                }
+            }
+
+            console.log(`[LyricsOverlay] src=${sourceTrackID} srcBars=${srcBarCount} map=${srcLyricsByBar.size} lyrics=${totalSrcLyrics} method=tick-nearest`);
+            this.lyricsDebug = `src=${sourceTrackID} map=${srcLyricsByBar.size} lyrics=${totalSrcLyrics} bars=${srcBarCount} tick`;
+
+            // Copy to all other tracks using nearest-neighbor by absolute tick
+            let totalCopiedCount = 0;
+            for (const track of score.tracks) {
+                if (track.index === sourceTrackID) continue;
+                const bars = track.staves[0].bars;
+                let copiedCount = 0;
+
+                for (const bar of bars) {
+                    const mb = bar.masterBar;
+                    if (mb == null) continue;
+                    const mbIdx = typeof mb.index === "number" ? mb.index : -1;
+                    const srcLyrics = srcLyricsByBar.get(mbIdx);
+                    if (!srcLyrics || srcLyrics.length === 0) continue;
+
+                    // Build target beat list with absolute tick positions
+                    const targetBeats = [];
                     for (const voice of bar.voices) {
                         for (const beat of voice.beats) {
-                            if (beat.lyrics && beat.lyrics.length > 0) {
-                                lyricsMap.set(beat.absoluteStart, [...beat.lyrics]);
+                            targetBeats.push({
+                                beat,
+                                absoluteStart: beat.absoluteStart ?? 0,
+                            });
+                        }
+                    }
+
+                    // Clear existing lyrics
+                    for (const tb of targetBeats) {
+                        tb.beat.lyrics = [];
+                    }
+
+                    // Nearest-neighbor: each source lyric maps to its closest
+                    // target beat. If two source lyrics compete for the same
+                    // target beat, the closer one wins.
+                    const assignment = new Map(); // targetBeat → { text, diff }
+                    for (const srcLyric of srcLyrics) {
+                        let bestBeat = null;
+                        let bestDiff = Infinity;
+                        for (const tb of targetBeats) {
+                            const diff = Math.abs(tb.absoluteStart - srcLyric.absoluteStart);
+                            if (diff < bestDiff) {
+                                bestDiff = diff;
+                                bestBeat = tb.beat;
+                            }
+                        }
+                        if (bestBeat) {
+                            const existing = assignment.get(bestBeat);
+                            if (!existing || existing.diff > bestDiff) {
+                                assignment.set(bestBeat, { text: srcLyric.text, diff: bestDiff });
                             }
                         }
                     }
+
+                    for (const [beat, { text }] of assignment) {
+                        beat.lyrics = [text];
+                        copiedCount++;
+                        totalCopiedCount++;
+                    }
                 }
+
+                console.log(`[LyricsOverlay] copied ${copiedCount} lyrics to track ${track.index} (${track.name})`);
             }
-            
-            // Copy to all other tracks
+            this.lyricsDebug += ` | copied:${totalCopiedCount}`;
+        },
+
+        /**
+         * Clear lyrics from all non-source tracks (used when overlay is disabled
+         * or source is invalid). Restores original state.
+         */
+        clearLyricsOverlay(score) {
+            if (!score) return;
+            let sourceTrackID = this.lyricsConfig.sourceTrackID;
+            if (sourceTrackID === -1) {
+                sourceTrackID = this.lyricsTracks.length > 0 ? this.lyricsTracks[0] : -1;
+            }
             for (const track of score.tracks) {
                 if (track.index === sourceTrackID) continue;
                 for (const staff of track.staves) {
                     for (const bar of staff.bars) {
                         for (const voice of bar.voices) {
                             for (const beat of voice.beats) {
-                                const lyrics = lyricsMap.get(beat.absoluteStart);
-                                if (lyrics) {
-                                    beat.lyrics = [...lyrics];
-                                }
+                                beat.lyrics = [];
                             }
                         }
                     }
@@ -1672,6 +1785,11 @@ export default defineComponent({
                     <button class="btn btn-secondary" @click="transpose++">+</button>
                 </div>
 
+                <!-- Lyrics Debug Badge -->
+                <div v-if="lyricsDebug" class="lyrics-debug-badge" :title="lyricsDebug">
+                    🎵 {{ lyricsDebug }}
+                </div>
+
                 <div class="btn-edit" v-if="isLoggedIn">
                     <button class="btn btn-secondary" @click="edit()">
                         Edit
@@ -2034,5 +2152,16 @@ $padding: 20px;
 .key-signature {
     position: absolute;
     margin-left: 30px;
+}
+
+.lyrics-debug-badge {
+    background: #444;
+    color: #0f0;
+    font-family: monospace;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    cursor: help;
 }
 </style>
