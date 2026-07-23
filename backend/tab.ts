@@ -1,6 +1,6 @@
 import { checkAudioFormat, checkFilename, flacToOgg, tabDir } from "./util.ts";
 import * as fs from "@std/fs";
-import * as path from "@std/path";
+import * as path from "jsr:@std/path";
 import { AudioData, AudioDataSchema, ConfigJSON, ConfigJSONSchema, SyncRequest, TabInfo, TabInfoSchema, UpdateTabFav, UpdateTabInfo, Youtube, YoutubeSchema } from "./zod.ts";
 import { kv } from "./db.ts";
 import sanitize from "sanitize-filename";
@@ -54,7 +54,7 @@ async function findTabFile(dirPath: string): Promise<string | null> {
 async function findAudioFiles(dirPath: string): Promise<string[]> {
     const audioFiles: string[] = [];
     for await (const entry of Deno.readDir(dirPath)) {
-        if (!entry.isFile) continue;
+        if (!entry.isFile && !entry.isSymlink) continue;
         const ext = path.extname(entry.name).slice(1).toLowerCase();
         if (supportedAudioFormatList.includes(ext)) {
             audioFiles.push(entry.name);
@@ -372,6 +372,33 @@ export async function addAudio(tab: TabInfo, audioFileData: Uint8Array, original
     }
 
     await Deno.writeFile(filePath, audioFileData);
+}
+
+/**
+ * Attach an audio file from the library to a tab, by adding a symlink in the
+ * tab directory. absLibraryPath is the audio file's full absolute path on disk,
+ * and must already be validated (i.e. actually be inside libraryDir) by the
+ * caller.
+ */
+export async function addLibraryAudio(id: string, absLibraryPath: string) {
+    const stat = await Deno.stat(absLibraryPath);
+    if (!stat.isFile) {
+        throw new Error("Not a file");
+    }
+    checkAudioFormat(absLibraryPath);
+
+    // We don't support linking .flac -- they have to be converted to .ogg
+    if (absLibraryPath.toLowerCase().endsWith(".flac")) {
+	throw new Error("FLAC files must be uploaded to convert to .ogg");
+    }
+
+    const tabDirPath = path.join(tabDir, id);
+    const filePath = path.join(tabDirPath, path.basename(absLibraryPath));
+    if (await fs.exists(filePath)) {
+        throw new Error("Audio file with the same name already exists");
+    }
+
+    await Deno.symlink(absLibraryPath, filePath);
 }
 
 export async function removeAudio(tab: TabInfo, filename: string) {

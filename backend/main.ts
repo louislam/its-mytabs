@@ -1,16 +1,19 @@
+import "@std/dotenv/load";
 import { serve, ServerType } from "@hono/node-server";
 import { Context, Hono } from "@hono/hono";
 import * as fs from "@std/fs";
 import { auth, checkLogin, getCurrentSession, isFinishSetup, isLoggedIn } from "./auth.ts";
-import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema } from "./zod.ts";
+import { SignUpSchema, SyncRequestSchema, UpdateTabFavSchema, UpdateTabInfoSchema, YoutubeAddDataSchema, LibraryAddDataSchema } from "./zod.ts";
 import { db, hasUser, isInitDB, kv, migrate } from "./db.ts";
 import { cors } from "@hono/hono/cors";
 import { serveStatic } from "@hono/hono/deno";
 import { appVersion, checkFilename, dataDir, devOriginList, getFrontendDir, getSourceDir, host, isDemoMode, isDev, port, start, tabDir } from "./util.ts";
-import * as path from "@std/path";
+import * as path from "jsr:@std/path";
 import { supportedAudioFormatList, supportedFormatList } from "./common.ts";
+import { getLibraryStatus, listLibraryDir, resolveLibraryPath } from "./library.ts";
 import {
     addAudio,
+    addLibraryAudio,
     addYoutube,
     checkTabExists,
     createTab,
@@ -33,7 +36,6 @@ import {
 } from "./tab.ts";
 import { ZodError } from "zod";
 import sanitize from "sanitize-filename";
-import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
 
@@ -408,7 +410,10 @@ export async function main() {
     });
 
     // Save Audio (Metadata only)
-    app.post("/api/tab/:id/audio/:filename", async (c) => {
+    // filename is a query param, not a path segment - a library reference is a full absolute
+    // path and always contains "/", and an encoded "/" in a path segment can get unwrapped
+    // by a reverse proxy before it reaches us.
+    app.post("/api/tab/:id/audio/save", async (c) => {
         try {
             await checkLogin(c);
             const id = c.req.param("id");
@@ -417,7 +422,7 @@ export async function main() {
             const data = SyncRequestSchema.parse(body);
 
             const tab = await getTab(id);
-            const filename = c.req.param("filename");
+            const filename = c.req.query("filename") || "";
 
             await updateAudio(tab, filename, data);
 
@@ -430,12 +435,12 @@ export async function main() {
     });
 
     // Remove Audio
-    app.delete("/api/tab/:id/audio/:filename", async (c) => {
+    app.delete("/api/tab/:id/audio", async (c) => {
         try {
             await checkLogin(c);
             const id = c.req.param("id");
             const tab = await getTab(id);
-            const filename = c.req.param("filename");
+            const filename = c.req.query("filename") || "";
             await removeAudio(tab, filename);
 
             return c.json({
@@ -447,7 +452,7 @@ export async function main() {
     });
 
     // Serve audio file
-    app.get("/api/tab/:id/audio/:filename", async (c) => {
+    app.get("/api/tab/:id/audio", async (c) => {
         try {
             const id = c.req.param("id");
             const tab = await getTab(id);
@@ -455,9 +460,10 @@ export async function main() {
                 await checkLogin(c);
             }
 
-            const filename = c.req.param("filename");
-            checkFilename(filename);
-            const filePath = path.join(tabDir, id, filename);
+            const filename = c.req.query("filename") || "";
+
+	    checkFilename(filename);
+	    const filePath = path.join(tabDir, id, filename);
 
             // Check if file exists
             if (!await fs.exists(filePath)) {
@@ -469,14 +475,15 @@ export async function main() {
                 read: true,
             });
 
-            const encodedFilename = encodeURIComponent(filename);
+            const displayName = path.basename(filename);
+            const encodedFilename = encodeURIComponent(displayName);
             let mime = "application/octet-stream";
             let mimeList: Record<string, string> = {
                 "mp3": "audio/mpeg",
                 "ogg": "audio/ogg",
             };
 
-            const ext = filename.split(".").pop()?.toLowerCase();
+            const ext = displayName.split(".").pop()?.toLowerCase();
             if (ext && mimeList[ext]) {
                 mime = mimeList[ext];
             }
@@ -485,6 +492,51 @@ export async function main() {
                 "Content-Type": mime,
                 "Content-Disposition": `attachment; filename="${encodedFilename}"`,
             });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Library status - lets the frontend tell "not configured" apart from "path not found"
+    app.get("/api/library/status", async (c) => {
+        try {
+            await checkLogin(c);
+            const status = await getLibraryStatus();
+            return c.json({ ok: true, ...status });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // List a library directory (folders + supported audio files only) - one level, for lazy loading
+    app.get("/api/library/browse", async (c) => {
+        try {
+            await checkLogin(c);
+            const relPath = c.req.query("path") || "";
+            const entries = await listLibraryDir(relPath);
+            return c.json({ ok: true, path: relPath, entries });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Attach a library song to a tab by symlinking into the library.
+    app.post("/api/tab/:id/audio/from-library", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const body = await c.req.json();
+	    if (!body) {
+		throw new Error("No body?");
+	    }
+            const data = LibraryAddDataSchema.parse(body);
+
+	    await checkTabExists(id);
+
+	    // Make sure the path is absolute, and actually *in* the library...
+	    const absLibraryAudioPath = resolveLibraryPath(data.libraryAudioFile);
+	    await addLibraryAudio(id, absLibraryAudioPath);
+            return c.json({ ok: true });
         } catch (e) {
             return generalError(c, e);
         }

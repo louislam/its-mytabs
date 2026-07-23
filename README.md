@@ -60,6 +60,17 @@ services:
         volumes:
             # Host Path:Container Path
             - ./data:/app/data
+
+            # OPTIONAL: Uncomment to mount a media library of existing audio files.
+            # Note that this should be mounted read-only. 
+            # /path/to/audo/library:/app/library:ro
+
+        environment:
+            # OPTIONAL: Uncomment to specify the location of a media library. Note
+            # that its-mytabs will not automatically search for the library, just
+            # because it's mounted at the above location.
+            # LIBRARY_DIR=/app/library
+
         restart: unless-stopped
 ```
 
@@ -121,6 +132,9 @@ MYTABS_PORT=47777
 
 # (boolean) Whether to launch the browser when starting the app (Desktop only) (Default: true)
 MYTABS_LAUNCH_BROWSER=true
+
+# Location of existing audio library
+LIBRARY_DIR=/app/library
 ```
 
 ## Keyboard Shortcuts

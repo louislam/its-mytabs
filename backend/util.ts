@@ -1,5 +1,5 @@
 import * as fs from "@std/fs";
-import * as path from "@std/path";
+import * as path from "jsr:@std/path";
 import { fileURLToPath } from "node:url";
 import childProcess from "node:child_process";
 import * as jsonc from "@std/jsonc";

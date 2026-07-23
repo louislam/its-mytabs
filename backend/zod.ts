@@ -70,6 +70,12 @@ export const AudioDataSchema = z.object({
 
 export type AudioData = z.infer<typeof AudioDataSchema>;
 
+const libraryAudioFile = z.string().min(5); // 1 letter plus file extension
+export const LibraryAddDataSchema = z.object({
+    libraryAudioFile,
+});
+export type LibraryAddData = z.infer<typeof LibraryAddDataSchema>;
+
 export const ConfigJSONSchema = z.object({
     tab: TabInfoSchema,
     audio: z.array(AudioDataSchema).default([]),
