@@ -64,7 +64,6 @@ async function getSession(): Promise<InferenceSession> {
 
     session = await ort.InferenceSession.create(modelPath, {
         executionProviders: ["cpu"],
-        graphOptimizationLevel: "disabled",
         enableCpuMemArena: false,
     });
 
