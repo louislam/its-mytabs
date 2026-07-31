@@ -1,16 +1,15 @@
-// @ts-nocheck
-//
 // End-to-end test for backend/converter.ts (split).
 //
 // Generates a short synthetic stereo clip, writes it as WAV, runs split(), and
 // asserts the expected outputs (original.ogg, bass.ogg, guitar.ogg, drums.ogg,
 // tab.gp) exist and look valid.
 //
-// Requires the Demucs-ONNX model. Gated behind RUN_SPLIT_TEST so the default
+// Requires the Demucs-ONNX model.
 // `deno test` run does not need the ~136 MB download.
 
 import * as fs from "@std/fs";
 import * as path from "@std/path";
+import { modelPath } from "./converter.ts";
 
 // Must be set before importing converter (it reads DATA_DIR at import time).
 const tempDir = await Deno.makeTempDir();
@@ -22,8 +21,8 @@ Deno.env.set(
 );
 
 Deno.test("split - synthetic input produces stems + tab.gp", async () => {
-    if (!(await fs.exists(Deno.env.get("DEMUCS_MODEL_PATH")!))) {
-        console.warn("SKIP: Demucs model not present, set RUN_SPLIT_TEST with the model downloaded.");
+    if (!(await fs.exists(modelPath))) {
+        console.warn("SKIP: Demucs model not present.");
         return;
     }
 
@@ -50,11 +49,12 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
     await Deno.writeFile(inputPath, encodeWav(L, R, sr));
 
     const outDir = path.join(tempDir, "out");
-    const result = await split(inputPath, outDir);
+    const result = await split(inputPath, outDir, ["drums", "guitar", "bass"]);
 
     console.log("split result:", result);
 
-    for (const f of [result.original, result.stems.bass, result.stems.guitar, result.stems.drums]) {
+    for (const key in result) {
+        const f = result[key];
         if (!(await fs.exists(f))) throw new Error(`Expected output missing: ${f}`);
     }
 

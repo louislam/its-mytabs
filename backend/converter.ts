@@ -13,6 +13,7 @@ import type { InferenceSession } from "onnxruntime-node";
 const resample = waveResampler.resample;
 
 // Types
+export const modelPath = path.join(dataDir, "models", "htdemucs_6s_fp16weights.onnx");
 export type StemType = "bass" | "guitar" | "drums";
 type StemLR = [Float32Array, Float32Array];
 
@@ -53,8 +54,6 @@ async function getSession(): Promise<InferenceSession> {
     if (session) {
         return session;
     }
-
-    const modelPath = path.join(dataDir, "models", "htdemucs_6s_fp16weights.onnx");
 
     if (!(await fs.exists(modelPath))) {
         throw new Error(
