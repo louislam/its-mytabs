@@ -82,7 +82,7 @@ export function start(path: string) {
     }
 }
 
-export async function flacToOgg(audioFileData: Uint8Array) {
+export async function flacToOgg(audioFileData: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
     const decoder = new FLACDecoder();
     try {
         await decoder.ready;
@@ -95,43 +95,8 @@ export async function flacToOgg(audioFileData: Uint8Array) {
         }
 
         const { channelData, sampleRate } = decoded;
-        const channels: 1 | 2 = channelData.length === 2 ? 2 : 1;
 
-        // Create OGG encoder (Note: encoder doesn't require explicit cleanup, managed by GC)
-        const encoder = await createOggEncoder();
-        encoder.configure({
-            sampleRate: sampleRate,
-            channels: channels,
-            // OGG Vorbis quality setting: 8 ≈ 256kbps for stereo
-            vbrQuality: 8,
-        });
-
-        // Collect all encoded OGG data
-        const oggChunks: Uint8Array[] = [];
-
-        // Encode the PCM data
-        const encoded = encoder.encode(channelData);
-        if (encoded.length > 0) {
-            // Copy the data as it's owned by the encoder
-            oggChunks.push(new Uint8Array(encoded));
-        }
-
-        // Finalize encoding
-        const finalChunk = encoder.finalize();
-        if (finalChunk.length > 0) {
-            oggChunks.push(new Uint8Array(finalChunk));
-        }
-
-        // Combine all chunks into single buffer
-        const totalLength = oggChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-        const oggData = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of oggChunks) {
-            oggData.set(chunk, offset);
-            offset += chunk.length;
-        }
-
-        return oggData;
+        return await encodeOgg(channelData, sampleRate);
     } catch (error) {
         console.error("FLAC to OGG conversion failed:", error);
         throw new Error(`Failed to convert FLAC to OGG: ${error instanceof Error ? error.message : String(error)}`);
@@ -139,6 +104,46 @@ export async function flacToOgg(audioFileData: Uint8Array) {
         // Always free decoder resources
         decoder.free();
     }
+}
+
+export async function encodeOgg(channelData: Float32Array[], sampleRate: number): Promise<Uint8Array<ArrayBuffer>> {
+    const channels: 1 | 2 = channelData.length === 2 ? 2 : 1;
+
+    // Create OGG encoder (Note: encoder doesn't require explicit cleanup, managed by GC)
+    const encoder = await createOggEncoder();
+    encoder.configure({
+        sampleRate: sampleRate,
+        channels: channels,
+        // OGG Vorbis quality setting: 8 ≈ 256kbps for stereo
+        vbrQuality: 8,
+    });
+
+    // Collect all encoded OGG data
+    const oggChunks: Uint8Array[] = [];
+
+    // Encode the PCM data
+    const encoded = encoder.encode(channelData);
+    if (encoded.length > 0) {
+        // Copy the data as it's owned by the encoder
+        oggChunks.push(new Uint8Array(encoded));
+    }
+
+    // Finalize encoding
+    const finalChunk = encoder.finalize();
+    if (finalChunk.length > 0) {
+        oggChunks.push(new Uint8Array(finalChunk));
+    }
+
+    // Combine all chunks into single buffer
+    const totalLength = oggChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const oggData = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of oggChunks) {
+        oggData.set(chunk, offset);
+        offset += chunk.length;
+    }
+
+    return oggData;
 }
 
 /**
