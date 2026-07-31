@@ -33,6 +33,7 @@
         "build-mpchc-controller": "deno compile --allow-all --output=mpchc-controller extra/mpchc-controller.ts"
     },
 
+    "nodeModulesDir": "none",
     "lock": false,
 
     "exclude": [
