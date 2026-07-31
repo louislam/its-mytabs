@@ -204,12 +204,10 @@ export async function split(filename: string, outputDir: string, stems: StemType
     for (const stem of stems) {
         let p = path.join(outputDir, `${stem}.ogg`);
 
-        // Avoid overwriting, add a suffix if the file already exists
-        let suffix = 1;
+        // Avoid overwriting, add a "_new" if the file already exists
         while (await fs.exists(p)) {
             const parsed = path.parse(p);
-            p = path.join(parsed.dir, `${parsed.name}_${suffix}${parsed.ext}`);
-            suffix++;
+            p = path.join(parsed.dir, `${parsed.name}_new${parsed.ext}`);
         }
 
         await Deno.writeFile(p, await encodeOgg(separated.bass, sampleRate));
