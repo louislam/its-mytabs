@@ -45,9 +45,13 @@ interface NoteSeg {
     freq: number;
 }
 
+export type { NoteSeg };
+
+export type StemKind = "bass" | "guitar" | "drums";
+
 export interface SplitResult {
     original: string;
-    stems: { bass: string; guitar: string; drums: string };
+    stems: Partial<Record<StemKind, string>>;
     tab: string;
 }
 
@@ -352,7 +356,7 @@ function computeStft(y: Float32Array, nFft: number, hop: number, sr: number) {
     return { mag, nBins, times, nFrames };
 }
 
-function transcribe(y: Float32Array, sr: number): NoteSeg[] {
+export function transcribe(y: Float32Array, sr: number): NoteSeg[] {
     const nFft = 2048;
     const hop = 512;
     const { mag, nBins, times, nFrames } = computeStft(y, nFft, hop, sr);
@@ -475,7 +479,7 @@ function buildTrack(name: string, shortName: string, stringCount: number, progra
     return t;
 }
 
-interface TrackSpec {
+export interface TrackSpec {
     name: string;
     shortName: string;
     type: "bass" | "guitar" | "drums";
@@ -605,9 +609,18 @@ function buildGuitarPro(title: string, artist: string, specs: TrackSpec[]): Uint
  *
  * @param filename Path to the source audio file (flac / ogg / wav).
  * @param outputDir Directory where outputs are written (created if missing).
+ * @param stems Which stems to extract (default: all three).
  */
-export async function split(filename: string, outputDir: string): Promise<SplitResult> {
+export async function split(
+    filename: string,
+    outputDir: string,
+    stems: StemKind[] = ["bass", "guitar", "drums"],
+): Promise<SplitResult> {
     await fs.ensureDir(outputDir);
+
+    const wantBass = stems.includes("bass");
+    const wantGuitar = stems.includes("guitar");
+    const wantDrums = stems.includes("drums");
 
     // 1. decode + resample to 44.1 kHz
     const decoded = await decodeFile(filename);
@@ -625,34 +638,47 @@ export async function split(filename: string, outputDir: string): Promise<SplitR
             `Demucs model not found at ${mp}. Set DEMUCS_MODEL_PATH or download ${MODEL_FILE}.`,
         );
     }
-    const stems = await separate(L, R, mp);
+    const separated = await separate(L, R, mp);
 
     // 4. write stem oggs
-    const bassPath = path.join(outputDir, "bass.ogg");
-    const guitarPath = path.join(outputDir, "guitar.ogg");
-    const drumsPath = path.join(outputDir, "drums.ogg");
-    await Deno.writeFile(bassPath, await encodeOgg(stems.bass, SR));
-    await Deno.writeFile(guitarPath, await encodeOgg(stems.guitar, SR));
-    await Deno.writeFile(drumsPath, await encodeOgg(stems.drums, SR));
+    const stemPaths: Partial<Record<StemKind, string>> = {};
+    if (wantBass) {
+        stemPaths.bass = path.join(outputDir, "bass.ogg");
+        await Deno.writeFile(stemPaths.bass, await encodeOgg(separated.bass, SR));
+    }
+    if (wantGuitar) {
+        stemPaths.guitar = path.join(outputDir, "guitar.ogg");
+        await Deno.writeFile(stemPaths.guitar, await encodeOgg(separated.guitar, SR));
+    }
+    if (wantDrums) {
+        stemPaths.drums = path.join(outputDir, "drums.ogg");
+        await Deno.writeFile(stemPaths.drums, await encodeOgg(separated.drums, SR));
+    }
 
-    // 5. transcribe stems (mono)
-    const bassNotes = transcribe(monoMix(stems.bass[0], stems.bass[1]), SR);
-    const guitarNotes = transcribe(monoMix(stems.guitar[0], stems.guitar[1]), SR);
-    const drumsNotes = transcribe(monoMix(stems.drums[0], stems.drums[1]), SR);
+    // 5. transcribe stems (mono) and collect track specs
+    const specs: TrackSpec[] = [];
 
-    // 6. build Guitar Pro
-    const gp = buildGuitarPro(path.basename(filename), "its-mytabs", [
-        { name: "Bass", shortName: "B", type: "bass", notes: bassNotes },
-        { name: "Guitar", shortName: "G", type: "guitar", notes: guitarNotes },
-        { name: "Drums", shortName: "D", type: "drums", notes: drumsNotes },
-    ]);
+    if (wantBass) {
+        specs.push({ name: "Bass", shortName: "B", type: "bass", notes: transcribe(monoMix(separated.bass[0], separated.bass[1]), SR) });
+    }
+    if (wantGuitar) {
+        specs.push({ name: "Guitar", shortName: "G", type: "guitar", notes: transcribe(monoMix(separated.guitar[0], separated.guitar[1]), SR) });
+    }
+    if (wantDrums) {
+        specs.push({ name: "Drums", shortName: "D", type: "drums", notes: transcribe(monoMix(separated.drums[0], separated.drums[1]), SR) });
+    }
 
     const tabPath = path.join(outputDir, "tab.gp");
-    await Deno.writeFile(tabPath, gp);
+    await audioToGuitarPro(tabPath, specs);
 
     return {
         original: originalPath,
-        stems: { bass: bassPath, guitar: guitarPath, drums: drumsPath },
+        stems: stemPaths,
         tab: tabPath,
     };
+}
+
+export async function audioToGuitarPro(outputFilename: string, specs: TrackSpec[]): Promise<void> {
+    const gp = buildGuitarPro("", "", specs);
+    await Deno.writeFile(outputFilename, gp);
 }
