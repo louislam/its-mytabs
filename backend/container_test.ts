@@ -49,7 +49,10 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
     await Deno.writeFile(inputPath, encodeWav(L, R, sr));
 
     const outDir = path.join(tempDir, "out");
-    const result = await split(inputPath, outDir, ["drums", "guitar", "bass"]);
+    let result: Record<string, string> = {};
+    for await (const p of split(inputPath, outDir, ["drums", "guitar", "bass"])) {
+        if (p.result) result = p.result;
+    }
 
     console.log("split result:", result);
 
@@ -58,8 +61,9 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
         if (!(await fs.exists(f))) throw new Error(`Expected output missing: ${f}`);
     }
 
-    // cleanup
-    await Deno.remove(tempDir, { recursive: true });
+    // cleanup (only this test's own outputs; tempDir is shared with other tests)
+    await Deno.remove(outDir, { recursive: true });
+    await Deno.remove(inputPath);
 });
 
 Deno.test("muteTrack - synthetic input produces muted ogg", async () => {
@@ -88,11 +92,18 @@ Deno.test("muteTrack - synthetic input produces muted ogg", async () => {
     await Deno.writeFile(inputPath, encodeWav(L, R, sr));
 
     const outPath = path.join(tempDir, "no_bass.ogg");
-    const result = await muteTrack(inputPath, outPath, "bass");
+    let result = "";
+    for await (const p of muteTrack(inputPath, outPath, "bass")) {
+        if (p.result) result = p.result;
+    }
 
     console.log("muteTrack result:", result);
 
     if (!(await fs.exists(result))) throw new Error(`Expected output missing: ${result}`);
+
+    // cleanup (only this test's own outputs; tempDir is shared with other tests)
+    await Deno.remove(outPath);
+    await Deno.remove(inputPath);
 });
 
 function encodeWav(L: Float32Array, R: Float32Array, sr: number): Uint8Array {

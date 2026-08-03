@@ -13,9 +13,38 @@ import type { InferenceSession } from "onnxruntime-node";
 const resample = waveResampler.resample;
 
 // Types
-export const modelPath = path.join(dataDir, "models", "htdemucs_6s_fp16weights.onnx");
+// Available models in data/models/:
+//   htdemucs_6s_fp16weights.onnx  (~130 MB, half-precision weights; same speed as fp32 per demucs-onnx)
+//   htdemucs_6s.onnx              (~246 MB, fp32)
+const modelFilename = "htdemucs_6s_fp16weights.onnx";
+export const modelPath = path.join(dataDir, "models", modelFilename);
 export type StemType = "bass" | "guitar" | "drums";
 type StemLR = [Float32Array, Float32Array];
+type Separated = { bass: StemLR; guitar: StemLR; drums: StemLR };
+
+export type ConverterPhase = "decode" | "separate" | "encode" | "done";
+
+interface ConverterProgressBase {
+    phase: ConverterPhase;
+    /** Current step within the phase (0-based when total > 0). */
+    current: number;
+    /** Total steps in the phase. */
+    total: number;
+    /** Milliseconds elapsed since the operation started. */
+    elapsedMs: number;
+    /** Estimated milliseconds remaining in the current phase (0 when done/unknown). */
+    etaMs: number;
+}
+
+export interface SplitProgress extends ConverterProgressBase {
+    /** Set on the final "done" emission. */
+    result?: Record<string, string>;
+}
+
+export interface MuteProgress extends ConverterProgressBase {
+    /** Set on the final "done" emission. */
+    result?: string;
+}
 
 // Some constants for Demucs-ONNX
 
@@ -126,10 +155,19 @@ function resampleToFloat32Array(input: Float32Array, fromSr: number, toSr: numbe
     return new Float32Array(resample(input, fromSr, toSr));
 }
 
-async function separate(leftChannel: Float32Array, rightChannel: Float32Array): Promise<{ bass: StemLR; guitar: StemLR; drums: StemLR }> {
+/**
+ * Estimate remaining time for a phase with roughly equal-duration steps,
+ * based on the average step time measured so far.
+ */
+function estimateEta(phaseStartMs: number, stepsDone: number, totalSteps: number): number {
+    return (performance.now() - phaseStartMs) / stepsDone * (totalSteps - stepsDone);
+}
+
+async function* separate(leftChannel: Float32Array, rightChannel: Float32Array): AsyncGenerator<{ current: number; total: number; etaMs: number }, Separated, void> {
     const session = await getSession();
     const total = leftChannel.length;
     const nChunks = Math.ceil(total / STRIDE);
+    const t0 = performance.now();
 
     const needed = [stemMapping.drums, stemMapping.bass, stemMapping.guitar];
     const acc: Record<number, StemLR> = {};
@@ -168,6 +206,9 @@ async function separate(leftChannel: Float32Array, rightChannel: Float32Array): 
             }
         }
         for (let s = 0; s < clen; s++) weight[start + s] += win[s];
+
+        const done = i + 1;
+        yield { current: done, total: nChunks, etaMs: estimateEta(t0, done, nChunks) };
     }
 
     for (const row of needed) {
@@ -186,20 +227,62 @@ async function separate(leftChannel: Float32Array, rightChannel: Float32Array): 
 }
 
 /**
- * Split an audio file into separated files.
- * @param filename Path to the source audio file (flac / ogg / wav).
- * @param outputDir Directory where outputs are written (created if missing).
- * @param stems Which stems to extract.
+ * Decode + resample the input, then drain the separation generator.
+ * Yields "decode" and "separate" progress; returns the stems plus resampled channels.
  */
-export async function split(filename: string, outputDir: string, stems: StemType[]): Promise<Record<string, string>> {
-    await fs.ensureDir(outputDir);
+async function* decodeAndSeparate(filename: string, startMs: number): AsyncGenerator<ConverterProgressBase, { separated: Separated; left: Float32Array; right: Float32Array }, void> {
+    yield { phase: "decode", current: 0, total: 1, elapsedMs: 0, etaMs: 0 };
     const decoded = await decodeFile(filename);
 
     const L = resampleToFloat32Array(decoded.channelData[0], decoded.sampleRate, sampleRate);
     const R = resampleToFloat32Array(decoded.channelData[Math.min(1, decoded.channelData.length - 1)], decoded.sampleRate, sampleRate);
 
-    const separated = await separate(L, R);
+    const it = separate(L, R);
+    while (true) {
+        const next = await it.next();
+        if (next.done) {
+            return { separated: next.value, left: L, right: R };
+        }
+        yield {
+            phase: "separate",
+            current: next.value.current,
+            total: next.value.total,
+            elapsedMs: performance.now() - startMs,
+            etaMs: next.value.etaMs,
+        };
+    }
+}
+
+/**
+ * Split an audio file into separated files.
+ *
+ * Yields progress updates so callers can show a progress bar, e.g.:
+ *   for await (const p of split(filename, outputDir, ["bass"])) {
+ *       console.log(p.phase, p.current, "/", p.total, `~${(p.etaMs / 1000).toFixed(0)}s left`);
+ *   }
+ *
+ * @param filename Path to the source audio file (flac / ogg / wav).
+ * @param outputDir Directory where outputs are written (created if missing).
+ * @param stems Which stems to extract.
+ */
+export async function* split(filename: string, outputDir: string, stems: StemType[]): AsyncGenerator<SplitProgress, void, void> {
+    await fs.ensureDir(outputDir);
+    const start = performance.now();
+
+    let separated: Separated;
+    const it = decodeAndSeparate(filename, start);
+    while (true) {
+        const next = await it.next();
+        if (next.done) {
+            separated = next.value.separated;
+            break;
+        }
+        yield next.value;
+    }
+
     let result: Record<string, string> = {};
+    const encodeStart = performance.now();
+    let i = 0;
     for (const stem of stems) {
         let p = path.join(outputDir, `${stem}.ogg`);
 
@@ -211,23 +294,38 @@ export async function split(filename: string, outputDir: string, stems: StemType
 
         await Deno.writeFile(p, await encodeOgg(separated[stem], sampleRate));
         result[stem] = p;
+        i++;
+        yield { phase: "encode", current: i, total: stems.length, elapsedMs: performance.now() - start, etaMs: estimateEta(encodeStart, i, stems.length) };
     }
-    return result;
+    yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result };
 }
 
 /**
  * Produce a mix with one stem removed (muted).
+ *
+ * Yields progress updates so callers can show a progress bar, e.g.:
+ *   for await (const p of muteTrack(filename, outputPath, "bass")) {
+ *       console.log(p.phase, p.current, "/", p.total, `~${(p.etaMs / 1000).toFixed(0)}s left`);
+ *   }
+ *
  * @param filename Path to the source audio file (flac / ogg / wav).
  * @param outputPath Path where the muted .ogg is written.
  * @param stem Which stem to mute.
  */
-export async function muteTrack(filename: string, outputPath: string, stem: StemType): Promise<string> {
-    const decoded = await decodeFile(filename);
+export async function* muteTrack(filename: string, outputPath: string, stem: StemType): AsyncGenerator<MuteProgress, void, void> {
+    const start = performance.now();
 
-    const L = resampleToFloat32Array(decoded.channelData[0], decoded.sampleRate, sampleRate);
-    const R = resampleToFloat32Array(decoded.channelData[Math.min(1, decoded.channelData.length - 1)], decoded.sampleRate, sampleRate);
-
-    const separated = await separate(L, R);
+    let res: { separated: Separated; left: Float32Array; right: Float32Array };
+    const it = decodeAndSeparate(filename, start);
+    while (true) {
+        const next = await it.next();
+        if (next.done) {
+            res = next.value;
+            break;
+        }
+        yield next.value;
+    }
+    const { separated, left: L, right: R } = res;
 
     // Demucs stems reconstruct the mix, so subtracting the muted stem
     // removes that instrument from the original.
@@ -239,6 +337,7 @@ export async function muteTrack(filename: string, outputPath: string, stem: Stem
         }
     }
 
+    yield { phase: "encode", current: 0, total: 1, elapsedMs: performance.now() - start, etaMs: 0 };
     await Deno.writeFile(outputPath, await encodeOgg(out, sampleRate));
-    return outputPath;
+    yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result: outputPath };
 }
