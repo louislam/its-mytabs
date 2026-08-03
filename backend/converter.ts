@@ -84,6 +84,34 @@ const stemMapping = {
 
 let session: InferenceSession | null = null;
 
+/**
+ * Abort controller for the currently running split()/muteTrack() operation,
+ * used by stopConverter(). Only one operation can be running at a time.
+ */
+let currentAbort: AbortController | null = null;
+
+/**
+ * Stop the currently running split() / muteTrack() operation, if any.
+ * Takes effect at the next chunk boundary (i.e. within a few seconds),
+ * and the operation then rejects with an AbortError.
+ */
+export function stopConverter(): void {
+    currentAbort?.abort();
+}
+
+/**
+ * Refuse to run a second conversion concurrently. Returns the abort controller
+ * for the new task, or throws if one is already running.
+ */
+function beginConversion(): AbortController {
+    if (currentAbort) {
+        throw new Error("A conversion task is already in progress. Wait for it to finish or call stopConverter().");
+    }
+    const controller = new AbortController();
+    currentAbort = controller;
+    return controller;
+}
+
 async function getSession(): Promise<InferenceSession> {
     if (session) {
         return session;
@@ -168,7 +196,7 @@ function estimateEta(phaseStartMs: number, stepsDone: number, totalSteps: number
     return (performance.now() - phaseStartMs) / stepsDone * (totalSteps - stepsDone);
 }
 
-async function* separate(leftChannel: Float32Array, rightChannel: Float32Array): AsyncGenerator<{ current: number; total: number; etaMs: number }, Separated, void> {
+async function* separate(leftChannel: Float32Array, rightChannel: Float32Array, signal?: AbortSignal): AsyncGenerator<{ current: number; total: number; etaMs: number }, Separated, void> {
     const session = await getSession();
     const total = leftChannel.length;
     const nChunks = Math.ceil(total / STRIDE);
@@ -188,6 +216,9 @@ async function* separate(leftChannel: Float32Array, rightChannel: Float32Array):
     const chunkBuf = new Float32Array(2 * samplesNum);
 
     for (let i = 0; i < nChunks; i++) {
+        if (signal?.aborted) {
+            throw new DOMException("Converter stopped", "AbortError");
+        }
         const start = i * STRIDE;
         const end = Math.min(start + samplesNum, total);
         const clen = end - start;
@@ -235,14 +266,21 @@ async function* separate(leftChannel: Float32Array, rightChannel: Float32Array):
  * Decode + resample the input, then drain the separation generator.
  * Yields "decode" and "separate" progress; returns the stems plus resampled channels.
  */
-async function* decodeAndSeparate(filename: string, startMs: number): AsyncGenerator<ConverterProgressBase, { separated: Separated; left: Float32Array; right: Float32Array }, void> {
+async function* decodeAndSeparate(
+    filename: string,
+    startMs: number,
+    signal?: AbortSignal,
+): AsyncGenerator<ConverterProgressBase, { separated: Separated; left: Float32Array; right: Float32Array }, void> {
     yield { phase: "decode", current: 0, total: 1, elapsedMs: 0, etaMs: 0 };
     const decoded = await decodeFile(filename);
+    if (signal?.aborted) {
+        throw new DOMException("Converter stopped", "AbortError");
+    }
 
     const L = resampleToFloat32Array(decoded.channelData[0], decoded.sampleRate, sampleRate);
     const R = resampleToFloat32Array(decoded.channelData[Math.min(1, decoded.channelData.length - 1)], decoded.sampleRate, sampleRate);
 
-    const it = separate(L, R);
+    const it = separate(L, R, signal);
     while (true) {
         const next = await it.next();
         if (next.done) {
@@ -266,43 +304,57 @@ async function* decodeAndSeparate(filename: string, startMs: number): AsyncGener
  *       console.log(p.phase, p.current, "/", p.total, `~${(p.etaMs / 1000).toFixed(0)}s left`);
  *   }
  *
+ * Call stopConverter() from elsewhere to abort; the generator then rejects
+ * with an AbortError at the next chunk boundary. Only one conversion can run
+ * at a time; starting another while one is in progress throws.
+ *
  * @param filename Path to the source audio file (flac / ogg / wav).
  * @param outputDir Directory where outputs are written (created if missing).
  * @param stems Which stems to extract.
  */
 export async function* split(filename: string, outputDir: string, stems: StemType[]): AsyncGenerator<SplitProgress, void, void> {
-    await fs.ensureDir(outputDir);
-    const start = performance.now();
+    const controller = beginConversion();
+    try {
+        await fs.ensureDir(outputDir);
+        const start = performance.now();
 
-    let separated: Separated;
-    const it = decodeAndSeparate(filename, start);
-    while (true) {
-        const next = await it.next();
-        if (next.done) {
-            separated = next.value.separated;
-            break;
-        }
-        yield next.value;
-    }
-
-    let result: Record<string, string> = {};
-    const encodeStart = performance.now();
-    let i = 0;
-    for (const stem of stems) {
-        let p = path.join(outputDir, `${stem}.ogg`);
-
-        // Avoid overwriting, add a "_new" if the file already exists
-        while (await fs.exists(p)) {
-            const parsed = path.parse(p);
-            p = path.join(parsed.dir, `${parsed.name}_new${parsed.ext}`);
+        let separated: Separated;
+        const it = decodeAndSeparate(filename, start, controller.signal);
+        while (true) {
+            const next = await it.next();
+            if (next.done) {
+                separated = next.value.separated;
+                break;
+            }
+            yield next.value;
         }
 
-        await Deno.writeFile(p, await encodeOgg(separated[stem], sampleRate));
-        result[stem] = p;
-        i++;
-        yield { phase: "encode", current: i, total: stems.length, elapsedMs: performance.now() - start, etaMs: estimateEta(encodeStart, i, stems.length) };
+        let result: Record<string, string> = {};
+        const encodeStart = performance.now();
+        let i = 0;
+        for (const stem of stems) {
+            if (controller.signal.aborted) {
+                throw new DOMException("Converter stopped", "AbortError");
+            }
+            let p = path.join(outputDir, `${stem}.ogg`);
+
+            // Avoid overwriting, add a "_new" if the file already exists
+            while (await fs.exists(p)) {
+                const parsed = path.parse(p);
+                p = path.join(parsed.dir, `${parsed.name}_new${parsed.ext}`);
+            }
+
+            await Deno.writeFile(p, await encodeOgg(separated[stem], sampleRate));
+            result[stem] = p;
+            i++;
+            yield { phase: "encode", current: i, total: stems.length, elapsedMs: performance.now() - start, etaMs: estimateEta(encodeStart, i, stems.length) };
+        }
+        yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result };
+    } finally {
+        if (currentAbort === controller) {
+            currentAbort = null;
+        }
     }
-    yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result };
 }
 
 /**
@@ -313,36 +365,47 @@ export async function* split(filename: string, outputDir: string, stems: StemTyp
  *       console.log(p.phase, p.current, "/", p.total, `~${(p.etaMs / 1000).toFixed(0)}s left`);
  *   }
  *
+ * Call stopConverter() from elsewhere to abort; the generator then rejects
+ * with an AbortError at the next chunk boundary. Only one conversion can run
+ * at a time; starting another while one is in progress throws.
+ *
  * @param filename Path to the source audio file (flac / ogg / wav).
  * @param outputPath Path where the muted .ogg is written.
  * @param stem Which stem to mute.
  */
 export async function* muteTrack(filename: string, outputPath: string, stem: StemType): AsyncGenerator<MuteProgress, void, void> {
-    const start = performance.now();
+    const controller = beginConversion();
+    try {
+        const start = performance.now();
 
-    let res: { separated: Separated; left: Float32Array; right: Float32Array };
-    const it = decodeAndSeparate(filename, start);
-    while (true) {
-        const next = await it.next();
-        if (next.done) {
-            res = next.value;
-            break;
+        let res: { separated: Separated; left: Float32Array; right: Float32Array };
+        const it = decodeAndSeparate(filename, start, controller.signal);
+        while (true) {
+            const next = await it.next();
+            if (next.done) {
+                res = next.value;
+                break;
+            }
+            yield next.value;
         }
-        yield next.value;
-    }
-    const { separated, left: L, right: R } = res;
+        const { separated, left: L, right: R } = res;
 
-    // Demucs stems reconstruct the mix, so subtracting the muted stem
-    // removes that instrument from the original.
-    const muted = separated[stem];
-    const out: StemLR = [new Float32Array(L.length), new Float32Array(R.length)];
-    for (let c = 0; c < 2; c++) {
-        for (let s = 0; s < L.length; s++) {
-            out[c][s] = (c === 0 ? L : R)[s] - muted[c][s];
+        // Demucs stems reconstruct the mix, so subtracting the muted stem
+        // removes that instrument from the original.
+        const muted = separated[stem];
+        const out: StemLR = [new Float32Array(L.length), new Float32Array(R.length)];
+        for (let c = 0; c < 2; c++) {
+            for (let s = 0; s < L.length; s++) {
+                out[c][s] = (c === 0 ? L : R)[s] - muted[c][s];
+            }
+        }
+
+        yield { phase: "encode", current: 0, total: 1, elapsedMs: performance.now() - start, etaMs: 0 };
+        await Deno.writeFile(outputPath, await encodeOgg(out, sampleRate));
+        yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result: outputPath };
+    } finally {
+        if (currentAbort === controller) {
+            currentAbort = null;
         }
     }
-
-    yield { phase: "encode", current: 0, total: 1, elapsedMs: performance.now() - start, etaMs: 0 };
-    await Deno.writeFile(outputPath, await encodeOgg(out, sampleRate));
-    yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result: outputPath };
 }
