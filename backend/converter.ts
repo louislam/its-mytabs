@@ -13,11 +13,16 @@ import type { InferenceSession } from "onnxruntime-node";
 const resample = waveResampler.resample;
 
 // Types
-// Available models in data/models/:
+// Available models in data/:
 //   htdemucs_6s_fp16weights.onnx  (~130 MB, half-precision weights; same speed as fp32 per demucs-onnx)
 //   htdemucs_6s.onnx              (~246 MB, fp32)
 const modelFilename = "htdemucs_6s_fp16weights.onnx";
-export const modelPath = path.join(dataDir, "models", modelFilename);
+export const modelPath = path.join(dataDir, modelFilename);
+
+/** Check whether the Demucs model file exists on disk. */
+export function isModelInstalled(): boolean {
+    return fs.existsSync(modelPath);
+}
 export type StemType = "bass" | "guitar" | "drums";
 type StemLR = [Float32Array, Float32Array];
 type Separated = { bass: StemLR; guitar: StemLR; drums: StemLR };

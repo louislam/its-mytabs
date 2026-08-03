@@ -15,10 +15,6 @@ import { modelPath } from "./converter.ts";
 const tempDir = await Deno.makeTempDir();
 Deno.env.set("DATA_DIR", tempDir);
 Deno.env.set("MYTABS_PORT", "47779");
-Deno.env.set(
-    "DEMUCS_MODEL_PATH",
-    path.resolve(Deno.cwd(), "data", "models", "htdemucs_6s_fp16weights.onnx"),
-);
 
 Deno.test("split - synthetic input produces stems + tab.gp", async () => {
     if (!(await fs.exists(modelPath))) {
