@@ -62,6 +62,39 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
     await Deno.remove(tempDir, { recursive: true });
 });
 
+Deno.test("muteTrack - synthetic input produces muted ogg", async () => {
+    if (!(await fs.exists(modelPath))) {
+        console.warn("SKIP: Demucs model not present.");
+        return;
+    }
+
+    const { muteTrack } = await import("./converter.ts");
+
+    // --- synthetic audio: 2s stereo @44.1k with a constant bass tone ---
+    const sr = 44100;
+    const dur = 2;
+    const n = sr * dur;
+    const L = new Float32Array(n);
+    const R = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        let s = 0.4 * Math.sin(2 * Math.PI * 55 * t);
+        s += 0.2 * Math.sin(2 * Math.PI * 196 * t);
+        L[i] = s;
+        R[i] = s;
+    }
+
+    const inputPath = path.join(tempDir, "mute_input.wav");
+    await Deno.writeFile(inputPath, encodeWav(L, R, sr));
+
+    const outPath = path.join(tempDir, "no_bass.ogg");
+    const result = await muteTrack(inputPath, outPath, "bass");
+
+    console.log("muteTrack result:", result);
+
+    if (!(await fs.exists(result))) throw new Error(`Expected output missing: ${result}`);
+});
+
 function encodeWav(L: Float32Array, R: Float32Array, sr: number): Uint8Array {
     const n = L.length;
     const numCh = 2;

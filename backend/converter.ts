@@ -209,8 +209,36 @@ export async function split(filename: string, outputDir: string, stems: StemType
             p = path.join(parsed.dir, `${parsed.name}_new${parsed.ext}`);
         }
 
-        await Deno.writeFile(p, await encodeOgg(separated.bass, sampleRate));
+        await Deno.writeFile(p, await encodeOgg(separated[stem], sampleRate));
         result[stem] = p;
     }
     return result;
+}
+
+/**
+ * Produce a mix with one stem removed (muted).
+ * @param filename Path to the source audio file (flac / ogg / wav).
+ * @param outputPath Path where the muted .ogg is written.
+ * @param stem Which stem to mute.
+ */
+export async function muteTrack(filename: string, outputPath: string, stem: StemType): Promise<string> {
+    const decoded = await decodeFile(filename);
+
+    const L = resampleToFloat32Array(decoded.channelData[0], decoded.sampleRate, sampleRate);
+    const R = resampleToFloat32Array(decoded.channelData[Math.min(1, decoded.channelData.length - 1)], decoded.sampleRate, sampleRate);
+
+    const separated = await separate(L, R);
+
+    // Demucs stems reconstruct the mix, so subtracting the muted stem
+    // removes that instrument from the original.
+    const muted = separated[stem];
+    const out: StemLR = [new Float32Array(L.length), new Float32Array(R.length)];
+    for (let c = 0; c < 2; c++) {
+        for (let s = 0; s < L.length; s++) {
+            out[c][s] = (c === 0 ? L : R)[s] - muted[c][s];
+        }
+    }
+
+    await Deno.writeFile(outputPath, await encodeOgg(out, sampleRate));
+    return outputPath;
 }
