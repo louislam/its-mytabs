@@ -7,9 +7,6 @@
         "public/font",
         "public/soundfont"
     ],
-    "imports": {
-        "wasm-media-encoders": "npm:wasm-media-encoders@~0.7.0"
-    },
     "fmt": {
         "indentWidth": 4,
         "semiColons": true,
