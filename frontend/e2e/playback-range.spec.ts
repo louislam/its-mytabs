@@ -1,28 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { APIRequestContext } from "@playwright/test";
-
-const TAB_ID = "1";
-const AUDIO_FILENAME = "e2e-silence.ogg";
-
-/**
- * Wait until the demo tab is ready and the e2e audio file is registered.
- * The server helper adds the audio file after the backend starts, so it may
- * not be there on the very first request.
- */
-async function waitForDemoTab(request: APIRequestContext) {
-    const deadline = Date.now() + 60_000;
-    while (Date.now() < deadline) {
-        const res = await request.get(`/api/tab/${TAB_ID}`);
-        if (res.ok()) {
-            const data = await res.json();
-            if (data.audioList?.some((a: { filename: string }) => a.filename === AUDIO_FILENAME)) {
-                return;
-            }
-        }
-        await new Promise((r) => setTimeout(r, 500));
-    }
-    throw new Error(`Demo tab with ${AUDIO_FILENAME} not ready`);
-}
+import { AUDIO_FILENAME, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 test.describe("playback range highlight", () => {
     test("is preserved when switching the audio source", async ({ page, request }) => {

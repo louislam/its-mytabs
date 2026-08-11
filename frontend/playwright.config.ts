@@ -17,6 +17,11 @@ export default defineConfig({
         viewport: { width: 1280, height: 720 },
         trace: "on-first-retry",
         video: "retain-on-failure",
+        launchOptions: {
+            // The count-in delays media playback by ~a bar after the play click,
+            // so allow the audio element to start without a fresh user gesture.
+            args: ["--autoplay-policy=no-user-gesture-required"],
+        },
     },
     webServer: {
         // Build the frontend and start the backend (demo mode) for the tests.
