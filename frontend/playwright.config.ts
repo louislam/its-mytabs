@@ -13,7 +13,7 @@ export default defineConfig({
     reporter: [["list"]],
     use: {
         baseURL: `http://127.0.0.1:${e2ePort}`,
-        headless: false,
+        headless: !!process.env.CI,
         viewport: { width: 1280, height: 720 },
         trace: "on-first-retry",
         video: "retain-on-failure",

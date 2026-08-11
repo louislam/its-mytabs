@@ -20,7 +20,7 @@
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
         "install-frontend-deps": "cd frontend && deno install",
         "test": "deno test --allow-all",
-        "e2e": "cd frontend && npx playwright test",
+        "e2e": "cd frontend && deno run -A npm:@playwright/test test",
         "fmt": "deno fmt && deno lint --fix && cd frontend && deno fmt",
         "check": "deno fmt --check && deno lint && deno check && cd frontend && deno fmt --check",
 

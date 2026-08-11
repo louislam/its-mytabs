@@ -36,6 +36,6 @@
         "socket.io-client": "~4.8.1",
         "bootstrap": "5.3.8",
         "bootstrap-vue-next": "~0.40.4",
-        "@playwright/test": "1.59.1"
+        "@playwright/test": "1.62.1"
     }
 }

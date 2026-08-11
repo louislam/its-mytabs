@@ -20,4 +20,11 @@ jobs:
                   deno-version: v2.x
             - run: deno task check
             - run: deno task test
+
+            - name: Install frontend dependencies
+              run: deno task install-frontend-deps
+
+            - name: Install Playwright browser
+              run: cd frontend && deno run -A npm:@playwright/test install --with-deps chromium
+
             - run: deno task e2e
