@@ -1,6 +1,8 @@
 // Starts the its-mytabs backend (demo mode) for the Playwright E2E tests.
 // Run from the project root. The frontend must already be built (dist/).
 
+import { createOggEncoder } from "wasm-media-encoders";
+
 Deno.env.set("MYTABS_DEMO_MODE", "true");
 Deno.env.set("MYTABS_LAUNCH_BROWSER", "false");
 Deno.env.set("MYTABS_PORT", Deno.env.get("MYTABS_E2E_PORT") ?? "47779");
@@ -13,7 +15,6 @@ console.log("[e2e] DATA_DIR:", e2eDataDir);
 // Import backend modules AFTER env vars are set (they read env at module load).
 const { main } = await import("../../backend/main.ts");
 const { getTab, addAudio, updateConfigJSON } = await import("../../backend/tab.ts");
-const { encodeOgg } = await import("../../backend/util.ts");
 
 await main();
 
@@ -34,7 +35,24 @@ if (!tab) {
 // switch between audio sources. The audio list is built by scanning the tab
 // folder, so writing the file is enough to make it appear in the app.
 const silence = new Float32Array(44100); // 1 second of silence @ 44.1kHz
-const ogg = await encodeOgg([silence], 44100);
+const encoder = await createOggEncoder();
+encoder.configure({ sampleRate: 44100, channels: 1, vbrQuality: 8 });
+const chunks: Uint8Array[] = [];
+const encoded = encoder.encode([silence]);
+if (encoded.length > 0) {
+    chunks.push(new Uint8Array(encoded));
+}
+const finalChunk = encoder.finalize();
+if (finalChunk.length > 0) {
+    chunks.push(new Uint8Array(finalChunk));
+}
+const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+const ogg = new Uint8Array(totalLength);
+let offset = 0;
+for (const c of chunks) {
+    ogg.set(c, offset);
+    offset += c.length;
+}
 await addAudio(tab, ogg, "e2e-silence.ogg");
 
 // Store the sync metadata so the app applies a clean simple sync (offset 0)
