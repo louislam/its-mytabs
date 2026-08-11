@@ -1210,7 +1210,7 @@ export default defineComponent({
                     this.audio = audio;
                     syncMethod = audio.syncMethod;
                     syncData = audio.syncMethod === "advanced" ? audio.advancedSync : audio.simpleSync;
-                    
+
                     if (audio.syncMethod === "advanced") {
                         this.advancedSync(audio.advancedSync);
                     } else {
@@ -1245,7 +1245,7 @@ export default defineComponent({
             audioPlayer.playbackRate = this.api.playbackSpeed;
 
             this.pause();
-            
+
             // Re-apply sync points after pause() completes (pause triggers playing watcher which calls updateSettings)
             await this.$nextTick();
             if (syncMethod === "advanced") {
@@ -1253,7 +1253,7 @@ export default defineComponent({
             } else {
                 this.simpleSync(syncData);
             }
-            
+
             this.isInitializingAudio = false;
         },
 
@@ -1280,7 +1280,7 @@ export default defineComponent({
                     this.youtube = yt;
                     syncMethod = yt.syncMethod;
                     syncData = yt.syncMethod === "advanced" ? yt.advancedSync : yt.simpleSync;
-                    
+
                     if (yt.syncMethod === "advanced") {
                         this.advancedSync(yt.advancedSync);
                     } else {
@@ -1310,7 +1310,7 @@ export default defineComponent({
             this.youtubePlayer.cueVideoById(videoID);
             this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
             this.pause();
-            
+
             // Re-apply sync points after pause() completes (pause triggers playing watcher which calls updateSettings)
             await this.$nextTick();
             if (syncMethod === "advanced") {
@@ -1318,7 +1318,7 @@ export default defineComponent({
             } else {
                 this.simpleSync(syncData);
             }
-            
+
             this.isInitializingAudio = false;
         },
 
