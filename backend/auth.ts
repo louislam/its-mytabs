@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { devOriginList } from "./util.ts";
 import { createAuthMiddleware } from "better-auth/api";
-import * as path from "@std/path";
+import * as path from "jsr:@std/path";
 import { dataDir } from "./util.ts";
 import { Context } from "@hono/hono";
 

@@ -1,6 +1,6 @@
 import { assertEquals, assertExists } from "jsr:@std/assert@^1.0.17";
 import * as fs from "@std/fs";
-import * as path from "@std/path";
+import * as path from "jsr:@std/path";
 
 async function setupTest() {
     // Set up temporary directory for tests

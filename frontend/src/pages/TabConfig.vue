@@ -3,6 +3,7 @@ import { defineComponent } from "vue";
 import { baseURL, checkFetch, convertAlphaTexSyncPoint, generalError } from "../app.js";
 import { notify } from "@kyvg/vue3-notification";
 import Vue3Dropzone from "@jaxtheprime/vue3-dropzone";
+import LibraryAudioSelector from "../components/LibraryAudioSelector.vue";
 import { supportedAudioFormatCommaString, supportedFormatCommaString } from "../../../backend/common.js";
 import SyncOptions from "../components/SyncOptions.vue";
 import { FontAwesomeIcon } from "../icon.ts";
@@ -10,7 +11,7 @@ import { FontAwesomeIcon } from "../icon.ts";
 const alphaTab = await import("@coderline/alphatab");
 
 export default defineComponent({
-    components: { SyncOptions, Vue3Dropzone, FontAwesomeIcon },
+    components: { SyncOptions, Vue3Dropzone, FontAwesomeIcon, LibraryAudioSelector },
     data() {
         return {
             tabID: -1,
@@ -25,6 +26,7 @@ export default defineComponent({
             filePath: "",
             tabFiles: [],
             audioFiles: [],
+	    libraryAudioFile: null,
             isLoading: true,
             isUploading: false,
             showOpenButtons: false,
@@ -257,12 +259,37 @@ export default defineComponent({
             }
         },
 
+	async addAudioFromLibrary() {
+	    try {
+		// Send to api (/tab/:id/from-library)
+		const tabID = this.tab.id;
+		const libraryAudioFile = this.libraryAudioFile;
+		const res = await fetch(baseURL + `/api/tab/${tabID}/audio/from-library`, {
+		    method: "POST",
+		    credentials: "include",
+		    headers: {
+			"Content-Type": "application/json",
+		    },
+		    body: JSON.stringify({
+			libraryAudioFile,
+		    }),
+		});
+
+		await checkFetch(res);
+		this.libraryAudioFile = "";
+
+		await this.load();
+	    } catch (e) {
+		generalError(e);
+	    }
+	},
+
         async saveAudio(audio) {
             let res;
             try {
                 const tabID = this.tab.id;
                 const encoded = encodeURIComponent(audio.filename);
-                res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}`, {
+                res = await fetch(baseURL + `/api/tab/${tabID}/audio/save?filename=${encoded}`, {
                     method: "POST",
                     credentials: "include",
                     headers: {
@@ -295,7 +322,7 @@ export default defineComponent({
                 const tabID = this.tab.id;
                 const encoded = encodeURIComponent(audio.filename);
 
-                const res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}`, {
+                const res = await fetch(baseURL + `/api/tab/${tabID}/audio?filename=${encoded}`, {
                     method: "DELETE",
                     credentials: "include",
                 });
@@ -323,7 +350,7 @@ export default defineComponent({
         },
 
         getAudioURL(tabID, filename) {
-            return baseURL + `/api/tab/${tabID}/audio/${encodeURIComponent(filename)}`;
+            return baseURL + `/api/tab/${tabID}/audio?filename=${encodeURIComponent(filename)}`;
         },
 
         async openFolder() {
@@ -501,6 +528,21 @@ export default defineComponent({
                         </div>
                     </div>
                 </div>
+
+		<div class="mb-4">
+		    <LibraryAudioSelector
+			:tab-id="tabID"
+			@changed="load"
+			@selection="libraryAudioFile = $event"
+		    />
+		    <button
+			@click.prevent="addAudioFromLibrary"
+			class="btn btn-primary w-100 mt-4"
+			:disabled="!libraryAudioFile"
+		    >
+			{{ "Add file from library" }}
+		    </button>
+		</div>
 
                 <Vue3Dropzone
                     ref="audioDropzone"

@@ -1,6 +1,6 @@
 import * as fs from "@std/fs";
 import { DatabaseSync } from "node:sqlite";
-import * as path from "@std/path";
+import * as path from "jsr:@std/path";
 import { dataDir, getSourceDir, isDemoMode, tabDir } from "./util.ts";
 import { getNextTabID } from "./tab.ts";
 import { AudioDataSchema, ConfigJSONSchema, TabInfoSchema, YoutubeSchema } from "./zod.ts";

@@ -1061,7 +1061,7 @@ export default defineComponent({
 
             this.api.player.output.handler = this.audioHandler;
 
-            const path = baseURL + `/api/tab/${this.tabID}/audio/${encodeURIComponent(filename)}`;
+            const path = baseURL + `/api/tab/${this.tabID}/audio?filename=${encodeURIComponent(filename)}`;
 
             audioPlayer.src = path;
             audioPlayer.load();
@@ -1430,7 +1430,8 @@ export default defineComponent({
         async saveAudio() {
             let res;
             try {
-                res = await fetch(baseURL + `/api/tab/${this.tabID}/audio/${this.audio.filename}`, {
+                const encoded = encodeURIComponent(this.audio.filename);
+                res = await fetch(baseURL + `/api/tab/${this.tabID}/audio/save?filename=${encoded}`, {
                     method: "POST",
                     credentials: "include",
                     headers: {
