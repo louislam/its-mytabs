@@ -20,3 +20,4 @@ jobs:
                   deno-version: v2.x
             - run: deno task check
             - run: deno task test
+            - run: deno task e2e
