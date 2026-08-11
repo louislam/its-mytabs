@@ -6,6 +6,7 @@ import { notify } from "@kyvg/vue3-notification";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
 import { getKeySignature } from "../util.ts";
+import { countIn } from "../count-in.ts";
 
 const alphaTab = await import("@coderline/alphatab");
 const { ScrollMode, StaveProfile } = alphaTab;
@@ -187,9 +188,18 @@ export default defineComponent({
             if (this.playing) {
                 this.api.settings.player.scrollMode = this.scrollMode;
                 this.api.updateSettings();
-                this.api.play();
+
+                // alphaTab only supports count-in natively for the synthesizer player.
+                // For external audio sources, play a custom Web Audio count-in first.
+                if (this.enableCountIn && this.needsCustomCountIn()) {
+                    this.startExternalCountIn();
+                } else {
+                    this.api.play();
+                }
+
                 requestWakeLock();
             } else {
+                countIn.cancel();
                 this.api.pause();
                 releaseWakeLock();
             }
@@ -221,11 +231,7 @@ export default defineComponent({
             if (!this.api) {
                 return;
             }
-            if (this.enableCountIn) {
-                this.api.countInVolume = 1;
-            } else {
-                this.api.countInVolume = 0;
-            }
+            this.applyCountInVolume();
             this.setConfig("enableCountIn", this.enableCountIn);
         },
 
@@ -279,6 +285,10 @@ export default defineComponent({
             if (!this.api) {
                 return;
             }
+
+            // alphaTab's native count-in only works on the synthesizer player, so reset
+            // its volume here to avoid a silent count-in running on external media.
+            this.applyCountInVolume();
 
             // Save the playback range before switching audio source.
             const range = this.api.playbackRange;
@@ -486,6 +496,78 @@ export default defineComponent({
             this.api.tickPosition = playbackRange.startTick;
             this.play();
             return true;
+        },
+
+        /**
+         * Whether the current audio source needs our custom Web Audio count-in.
+         * alphaTab only implements count-in natively for the synthesizer player,
+         * for external media the count-in is silent and playback starts instantly.
+         * @returns {boolean}
+         */
+        needsCustomCountIn() {
+            return (
+                this.currentAudio.startsWith("audio-") ||
+                this.currentAudio.startsWith("youtube-") ||
+                this.currentAudio === "backingTrack"
+            );
+        },
+
+        /**
+         * Apply the alphaTab count-in volume according to the current settings.
+         * Native count-in is only enabled on the synthesizer player, so external
+         * media doesn't trigger alphaTab's silent count-in.
+         */
+        applyCountInVolume() {
+            if (!this.api) {
+                return;
+            }
+            this.api.countInVolume = this.enableCountIn && this.currentAudio === "synth" ? 1 : 0;
+        },
+
+        /**
+         * Get the tempo and time signature at the current playback position,
+         * adjusted for the playback speed, to time the count-in beats.
+         * @returns {{ bpm: number, beats: number }}
+         */
+        getCountInInfo() {
+            const masterBars = this.api.score.masterBars;
+            const tick = this.api.tickPosition ?? 0;
+
+            let bar = masterBars[0];
+            for (const masterBar of masterBars) {
+                if (masterBar.start <= tick) {
+                    bar = masterBar;
+                } else {
+                    break;
+                }
+            }
+
+            let bpm = 120;
+            if (bar.tempoAutomations && bar.tempoAutomations.length > 0 && bar.tempoAutomations[0].value) {
+                bpm = bar.tempoAutomations[0].value;
+            }
+
+            const beats = bar.timeSignatureNumerator ?? 4;
+            const playbackSpeed = this.api.playbackSpeed ?? 1;
+            return { bpm: bpm * playbackSpeed, beats };
+        },
+
+        /**
+         * Play a count-in (one bar of metronome beats) via the Web Audio API,
+         * then start the actual playback. Used for external audio sources where
+         * alphaTab does not support count-in.
+         */
+        startExternalCountIn() {
+            const { bpm, beats } = this.getCountInInfo();
+            countIn.start({
+                bpm,
+                beats,
+                onFinished: () => {
+                    if (this.playing) {
+                        this.api.play();
+                    }
+                },
+            });
         },
 
         /**
@@ -779,6 +861,7 @@ export default defineComponent({
             this.savedPlaybackRange = null;
             clearTimeout(this.playbackRangeRestoreTimer);
             this.playbackRangeRestoreTimer = undefined;
+            countIn.cancel();
         },
 
         simpleSync(offset) {
@@ -1531,7 +1614,7 @@ export default defineComponent({
                     <font-awesome-icon :icon='["fas", "check"]' v-if="isLooping" />
                     Loop
                 </button>
-                <button class="btn btn-secondary" @click="countIn()" :class='{ active: enableCountIn, disabled: currentAudio !== "synth" }'>
+                <button class="btn btn-secondary" @click="countIn()" :class='{ active: enableCountIn }'>
                     <font-awesome-icon :icon='["fas", "check"]' v-if="enableCountIn" />
                     Count in
                 </button>
