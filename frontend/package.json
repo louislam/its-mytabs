@@ -5,7 +5,8 @@
         "dev-frontend": "NODE_ENV=development vite",
         "dev": "cd .. && deno task dev",
         "build": "vite build",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "e2e": "playwright test"
     },
     "dependencies": {
         "better-auth": "~1.4.17",
@@ -34,6 +35,7 @@
         "vite-plugin-compression": "~0.5.1",
         "socket.io-client": "~4.8.1",
         "bootstrap": "5.3.8",
-        "bootstrap-vue-next": "~0.40.4"
+        "bootstrap-vue-next": "~0.40.4",
+        "@playwright/test": "1.62.1"
     }
 }
