@@ -570,7 +570,8 @@ export default defineComponent({
     }
 }
 
-.youtube-item, .audio-item {
+.youtube-item,
+.audio-item {
     display: flex;
     gap: 15px;
     align-items: flex-start;
