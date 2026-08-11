@@ -21,6 +21,11 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
         console.warn("SKIP: Demucs model not present.");
         return;
     }
+    const { isOrtInstalled } = await import("./onnxruntime.ts");
+    if (!isOrtInstalled()) {
+        console.warn("SKIP: ONNX Runtime not installed in data dir.");
+        return;
+    }
 
     const { split } = await import("./converter.ts");
 
@@ -55,6 +60,11 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
     for (const key in result) {
         const f = result[key];
         if (!(await fs.exists(f))) throw new Error(`Expected output missing: ${f}`);
+        // Outputs are named {org_name}_{stem}.ogg, e.g. input_bass.ogg
+        const expected = `input_${key}.ogg`;
+        if (path.basename(f) !== expected) {
+            throw new Error(`Unexpected output filename: ${path.basename(f)} (expected ${expected})`);
+        }
     }
 
     // cleanup (only this test's own outputs; tempDir is shared with other tests)
@@ -65,6 +75,11 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
 Deno.test("muteTrack - synthetic input produces muted ogg", async () => {
     if (!(await fs.exists(modelPath))) {
         console.warn("SKIP: Demucs model not present.");
+        return;
+    }
+    const { isOrtInstalled } = await import("./onnxruntime.ts");
+    if (!isOrtInstalled()) {
+        console.warn("SKIP: ONNX Runtime not installed in data dir.");
         return;
     }
 

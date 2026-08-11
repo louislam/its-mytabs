@@ -6,8 +6,7 @@ import { OggVorbisDecoder } from "@wasm-audio-decoders/ogg-vorbis";
 import { MPEGDecoder } from "mpg123-decoder";
 import WavDecoder from "wav-decoder";
 import waveResampler from "wave-resampler";
-import * as ort from "onnxruntime-node";
-import type { InferenceSession } from "onnxruntime-node";
+import { loadOrt, OrtInferenceSession, OrtModule } from "./onnxruntime.ts";
 
 // Not sure why directly importing {resample} doesn't work, need to do this ugly workaround
 const resample = waveResampler.resample;
@@ -82,7 +81,7 @@ const stemMapping = {
     piano: 5,
 };
 
-let session: InferenceSession | null = null;
+let session: OrtInferenceSession | null = null;
 
 /**
  * Abort controller for the currently running split()/muteTrack() operation,
@@ -112,7 +111,7 @@ function beginConversion(): AbortController {
     return controller;
 }
 
-async function getSession(): Promise<InferenceSession> {
+async function getSession(): Promise<OrtInferenceSession> {
     if (session) {
         return session;
     }
@@ -123,6 +122,7 @@ async function getSession(): Promise<InferenceSession> {
         );
     }
 
+    const ort = await loadOrt();
     session = await ort.InferenceSession.create(modelPath, {
         executionProviders: ["cpu"],
         enableCpuMemArena: false,
@@ -227,6 +227,7 @@ async function* separate(leftChannel: Float32Array, rightChannel: Float32Array, 
         chunkBuf.subarray(0, clen).set(leftChannel.subarray(start, end));
         chunkBuf.subarray(samplesNum, samplesNum + clen).set(rightChannel.subarray(start, end));
 
+        const ort = await loadOrt();
         const result = await session.run({
             mix: new ort.Tensor("float32", chunkBuf, [1, 2, samplesNum]),
         });
@@ -299,6 +300,10 @@ async function* decodeAndSeparate(
 /**
  * Split an audio file into separated files.
  *
+ * Outputs are written as `{org_name}_{stem}.ogg` in outputDir, where org_name
+ * is the source filename without its extension, e.g. `song.mp3` produces
+ * `song_bass.ogg`, `song_drums.ogg` and `song_guitar.ogg`.
+ *
  * Yields progress updates so callers can show a progress bar, e.g.:
  *   for await (const p of split(filename, outputDir, ["bass"])) {
  *       console.log(p.phase, p.current, "/", p.total, `~${(p.etaMs / 1000).toFixed(0)}s left`);
@@ -331,12 +336,13 @@ export async function* split(filename: string, outputDir: string, stems: StemTyp
 
         let result: Record<string, string> = {};
         const encodeStart = performance.now();
+        const outputNameBase = path.parse(filename).name;
         let i = 0;
         for (const stem of stems) {
             if (controller.signal.aborted) {
                 throw new DOMException("Converter stopped", "AbortError");
             }
-            let p = path.join(outputDir, `${stem}.ogg`);
+            let p = path.join(outputDir, `${outputNameBase}_${stem}.ogg`);
 
             // Avoid overwriting, add a "_new" if the file already exists
             while (await fs.exists(p)) {

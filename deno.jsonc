@@ -71,6 +71,7 @@
         "@std/fs": "jsr:@std/fs@~1.0.23",
         "@std/jsonc": "jsr:@std/jsonc@~1.0.2",
         "@std/path": "jsr:@std/path@~1.1.4",
+        "@std/tar": "jsr:@std/tar@^0.1.10",
         "@types/sanitize-filename": "npm:@types/sanitize-filename@~1.6.3",
         "@wasm-audio-decoders/flac": "npm:@wasm-audio-decoders/flac@~0.2.10",
         "@wasm-audio-decoders/ogg-vorbis": "npm:@wasm-audio-decoders/ogg-vorbis@~0.1.20",
@@ -82,7 +83,6 @@
         "sanitize-filename": "npm:sanitize-filename@~1.6.3",
         "socket.io": "npm:socket.io@~4.8.3",
         "wasm-media-encoders": "npm:wasm-media-encoders@~0.7.0",
-        "onnxruntime-node": "npm:onnxruntime-node@~1.27.0",
         "zod": "npm:zod@~4.1.13"
     }
 }

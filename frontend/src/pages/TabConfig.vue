@@ -28,6 +28,9 @@ export default defineComponent({
             isLoading: true,
             isUploading: false,
             showOpenButtons: false,
+            separateBusy: false,
+            separateJob: null,
+            separatePollTimer: null,
         };
     },
     async mounted() {
@@ -40,7 +43,20 @@ export default defineComponent({
             generalError(e);
         }
 
+        // Resume polling if a separation job is already running (e.g. page reload)
+        try {
+            const status = await this.getSeparateStatus();
+            if (status.busy) {
+                this.startSeparatePolling();
+            }
+        } catch (e) {
+            // Ignore, the user can still press the button
+        }
+
         //this.isLocalIP = !!isPrivateIP(window.location.hostname);
+    },
+    beforeUnmount() {
+        this.stopSeparatePolling();
     },
     methods: {
         async load() {
@@ -313,6 +329,177 @@ export default defineComponent({
             }
         },
 
+        async getSeparateStatus() {
+            const res = await fetch(baseURL + "/api/separate/status", {
+                credentials: "include",
+            });
+            await checkFetch(res);
+            return await res.json();
+        },
+
+        /**
+         * Whether the filename is already a separated stem (e.g. song_bass.ogg).
+         * Those are outputs of the separation feature and cannot be separated again.
+         */
+        isSeparatedStem(filename) {
+            return /_(bass|guitar|drums)(\.[^.]+)?$/.test(filename);
+        },
+
+        async separateAudio(audio) {
+            if (this.separateBusy) {
+                return;
+            }
+
+            const confirmed = confirm(
+                "Separate this audio into bass, drums and guitar tracks?\n\n" +
+                    "This may take a few minutes and will use high CPU/RAM while running.",
+            );
+            if (!confirmed) {
+                return;
+            }
+
+            let status;
+            try {
+                status = await this.getSeparateStatus();
+            } catch (e) {
+                generalError(e);
+                return;
+            }
+
+            if (status.busy) {
+                notify({
+                    text: "Another separation task is already in progress. Please wait for it to finish.",
+                    type: "error",
+                });
+                return;
+            }
+
+            let downloadModel = false;
+            const missing = [];
+            if (!status.modelInstalled) {
+                missing.push("- htdemucs_6s_fp16weights.onnx (~136 MB)");
+            }
+            if (!status.ortInstalled) {
+                missing.push("- onnxruntime-node v1.27.0 (~96 MB)");
+            }
+            if (missing.length > 0) {
+                const agree = confirm(
+                    "The AI model / runtime is not downloaded yet.\n\n" +
+                        "Files to download:\n" +
+                        missing.join("\n") +
+                        "\n\nDownload them now?",
+                );
+                if (!agree) {
+                    return;
+                }
+                downloadModel = true;
+            }
+
+            try {
+                const tabID = this.tab.id;
+                const encoded = encodeURIComponent(audio.filename);
+                const res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}/separate`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ downloadModel }),
+                });
+                await checkFetch(res);
+                this.startSeparatePolling();
+            } catch (e) {
+                generalError(e);
+            }
+        },
+
+        startSeparatePolling() {
+            this.separateBusy = true;
+            this.separateJob = null;
+
+            const poll = async () => {
+                let status;
+                try {
+                    status = await this.getSeparateStatus();
+                } catch (e) {
+                    this.stopSeparatePolling();
+                    generalError(e);
+                    return;
+                }
+                this.separateJob = status.job;
+                if (status.busy) {
+                    return;
+                }
+                this.stopSeparatePolling();
+
+                const job = status.job;
+                if (job && job.phase === "done") {
+                    const names = Object.values(job.result || {}).map((p) => p.split(/[\\/]/).pop());
+                    notify({
+                        text: "Separation completed: " + names.join(", "),
+                        type: "success",
+                    });
+                    await this.load();
+                } else if (job && job.phase === "error") {
+                    notify({
+                        text: "Separation failed: " + (job.error || "Unknown error"),
+                        type: "error",
+                    });
+                }
+            };
+
+            poll();
+            this.separatePollTimer = setInterval(poll, 5000);
+        },
+
+        stopSeparatePolling() {
+            if (this.separatePollTimer) {
+                clearInterval(this.separatePollTimer);
+                this.separatePollTimer = null;
+            }
+            this.separateBusy = false;
+        },
+
+        separatePhaseLabel() {
+            if (!this.separateJob) {
+                return "";
+            }
+            switch (this.separateJob.phase) {
+                case "download":
+                    return "Downloading AI model";
+                case "decode":
+                    return "Decoding";
+                case "separate":
+                    return "Separating tracks";
+                case "encode":
+                    return "Encoding";
+                case "done":
+                    return "Done";
+                case "error":
+                    return "Failed";
+                default:
+                    return this.separateJob.phase;
+            }
+        },
+
+        separatePercent() {
+            const job = this.separateJob;
+            if (!job || job.total <= 0) {
+                return 100;
+            }
+            return Math.min(100, Math.round((job.current / job.total) * 100));
+        },
+
+        formatEta(ms) {
+            if (!ms || ms <= 0) {
+                return "";
+            }
+            const totalSeconds = Math.round(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        },
+
         dropzoneError(err) {
             console.log(err);
             let error = err.type;
@@ -492,6 +679,33 @@ export default defineComponent({
                                 @update:simpleSync="audio.simpleSync = $event"
                                 @update:advancedSync="audio.advancedSync = $event"
                             />
+                            <div v-if="!isSeparatedStem(audio.filename)">
+                                <button
+                                    class="btn btn-secondary mb-3"
+                                    @click.prevent="separateAudio(audio)"
+                                    :disabled="separateBusy"
+                                >
+                                    Separate Bass/Drums/Guitar
+                                </button>
+
+                                <div
+                                    v-if="separateBusy && separateJob && separateJob.filename === audio.filename"
+                                    class="mb-3 separate-progress"
+                                >
+                                    <div class="mb-1">
+                                        {{ separatePhaseLabel() }}<template v-if="separateJob.total > 0"> ({{ separatePercent() }}%)</template>
+                                    </div>
+                                    <div class="progress">
+                                        <div
+                                            class="progress-bar progress-bar-striped progress-bar-animated"
+                                            :style="{ width: separatePercent() + '%' }"
+                                        ></div>
+                                    </div>
+                                    <div class="text-muted small mt-1" v-if="separateJob.etaMs > 0">
+                                        Estimated time remaining: {{ formatEta(separateJob.etaMs) }}
+                                    </div>
+                                </div>
+                            </div>
                             <button class="btn btn-primary" @click.prevent="saveAudio(audio)">Save</button>
                         </div>
                         <div class="buttons">

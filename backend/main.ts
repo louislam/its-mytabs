@@ -36,6 +36,7 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
+import { getSeparateJob, isModelInstalled, isOrtInstalled, isSeparateBusy, startSeparate } from "./separate.ts";
 
 let httpServer: ServerType;
 
@@ -440,6 +441,54 @@ export async function main() {
 
             return c.json({
                 ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Separate Audio into Stems (bass / drums / guitar)
+    app.post("/api/tab/:id/audio/:filename/separate", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const filename = c.req.param("filename");
+            checkFilename(filename);
+
+            const tab = await getTab(id);
+            const sourcePath = path.join(tabDir, id, filename);
+
+            if (!await fs.exists(sourcePath)) {
+                throw new Error("Audio file not found");
+            }
+
+            let downloadModel = false;
+            const body = await c.req.json().catch(() => ({}));
+            if (typeof body === "object" && body !== null) {
+                downloadModel = (body as { downloadModel?: unknown }).downloadModel === true;
+            }
+
+            startSeparate(tab.id, filename, sourcePath, downloadModel);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Separate Audio Status (used by the UI to poll progress)
+    app.get("/api/separate/status", async (c) => {
+        try {
+            await checkLogin(c);
+            const job = getSeparateJob();
+            return c.json({
+                ok: true,
+                busy: isSeparateBusy(),
+                modelInstalled: isModelInstalled(),
+                ortInstalled: isOrtInstalled(),
+                job,
             });
         } catch (e) {
             return generalError(c, e);

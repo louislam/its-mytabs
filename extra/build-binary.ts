@@ -12,6 +12,9 @@ export function buildWindows() {
             "./deno.jsonc",
             "--include",
             "./extra",
+            // this worker in a worker thread. Deno compile only embeds statically-imported modules, so the worker must be included explicitly.
+            "--include",
+            "./backend/separate_worker.ts",
             //  "--no-check",
             "--allow-all",
             "--output",
