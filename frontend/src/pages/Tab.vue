@@ -61,6 +61,7 @@ export default defineComponent({
             scrollMode: ScrollMode.Continuous,
             keySignature: "",
             playbackRange: null,
+            savedPlaybackRange: null,
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -278,6 +279,12 @@ export default defineComponent({
                 return;
             }
 
+            // Save the playback range before switching audio source.
+            const range = this.api.playbackRange;
+            if (range) {
+                this.savedPlaybackRange = { startTick: range.startTick, endTick: range.endTick };
+            }
+
             this.api.player.masterVolume = 1;
 
             if (this.currentAudio === "synth") {
@@ -481,6 +488,18 @@ export default defineComponent({
         },
 
         /**
+         * Restore the playback range that was saved before switching audio source.
+         */
+        restorePlaybackRange() {
+            if (!this.savedPlaybackRange || !this.api) {
+                return;
+            }
+            const range = this.savedPlaybackRange;
+            this.savedPlaybackRange = null;
+            this.api.playbackRange = range;
+        },
+
+        /**
          * Play from the first bar containing notes in the current track
          * If offset is provided, play from the first bar containing notes after the offset bar
          */
@@ -638,6 +657,11 @@ export default defineComponent({
                     this.playbackRange = this.api.playbackRange;
                 });
 
+                // Restore the saved playback range once the new player is ready
+                this.api.playerReady.on(() => {
+                    this.restorePlaybackRange();
+                });
+
                 // iOS 16.4+: Enable audio playback even when silent switch is ON
                 if ("audioSession" in navigator) {
                     try {
@@ -746,6 +770,7 @@ export default defineComponent({
             this.simpleSyncSecond = -1;
             this.muteTrackList = {};
             this.playbackRange = null;
+            this.savedPlaybackRange = null;
         },
 
         simpleSync(offset) {
