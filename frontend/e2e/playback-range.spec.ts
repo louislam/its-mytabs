@@ -168,6 +168,64 @@ test.describe("selection handles", () => {
         await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
     });
 
+    test("dragging the end handle past the start cannot collapse the range", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await openTab(page, "synth");
+
+        const before = await selectBars(page, 1, 3);
+
+        const endHandle = page.locator(".at-selection-handle-end");
+        const endRect = await endHandle.boundingBox();
+        expect(endRect).toBeTruthy();
+
+        // Drag the end handle far to the left, past the start handle
+        const target = await beatPosition(page, 0, 0);
+        await page.mouse.move(endRect!.x + endRect!.width / 2, endRect!.y + endRect!.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(target.x, target.y, { steps: 10 });
+        await page.mouse.up();
+
+        // The range is clamped to a minimum instead of disappearing
+        const range = await playbackRange(page);
+        expect(range).toBeTruthy();
+        expect(range!.startTick).toBe(before.startTick);
+        expect(range!.endTick).toBeGreaterThan(range!.startTick);
+        expect(range!.endTick).toBeLessThan(before.endTick);
+
+        // Still a visible, locked selection (no "invisible playback" state)
+        await expect(page.locator(".at-selection-handle-start")).toBeVisible();
+        await expect(page.locator(".at-selection-handle-end")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
+    });
+
+    test("dragging the start handle past the end cannot collapse the range", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await openTab(page, "synth");
+
+        const before = await selectBars(page, 1, 3);
+
+        const startHandle = page.locator(".at-selection-handle-start");
+        const startRect = await startHandle.boundingBox();
+        expect(startRect).toBeTruthy();
+
+        // Drag the start handle far to the right, past the end handle
+        const target = await beatPosition(page, 5, 0);
+        await page.mouse.move(startRect!.x + startRect!.width / 2, startRect!.y + startRect!.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(target.x, target.y, { steps: 10 });
+        await page.mouse.up();
+
+        const range = await playbackRange(page);
+        expect(range).toBeTruthy();
+        expect(range!.startTick).toBeLessThan(range!.endTick);
+        expect(range!.startTick).toBeGreaterThan(before.startTick);
+        expect(range!.endTick).toBe(before.endTick);
+
+        await expect(page.locator(".at-selection-handle-start")).toBeVisible();
+        await expect(page.locator(".at-selection-handle-end")).toBeVisible();
+        await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
+    });
+
     test("dragging on the score selects a range", async ({ page, request }) => {
         await waitForDemoTab(request);
         await openTab(page, "synth");

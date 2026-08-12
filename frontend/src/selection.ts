@@ -154,14 +154,10 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
         // Replicate alphaTab's own start/end X logic so the handles line up
         // exactly with the edges of the rendered highlight (bar-edge for the
         // first/last beat of a bar, beat-edge otherwise).
-        const startX =
-            startBounds.beat.index === 0
-                ? startBounds.barBounds.masterBarBounds.realBounds.x
-                : startBounds.realBounds.x;
-        const endX =
-            endBounds.beat.index === endBounds.beat.voice.beats.length - 1
-                ? endBounds.barBounds.masterBarBounds.realBounds.x + endBounds.barBounds.masterBarBounds.realBounds.w
-                : endBounds.realBounds.x + endBounds.realBounds.w;
+        const startX = startBounds.beat.index === 0 ? startBounds.barBounds.masterBarBounds.realBounds.x : startBounds.realBounds.x;
+        const endX = endBounds.beat.index === endBounds.beat.voice.beats.length - 1
+            ? endBounds.barBounds.masterBarBounds.realBounds.x + endBounds.barBounds.masterBarBounds.realBounds.w
+            : endBounds.realBounds.x + endBounds.realBounds.w;
         const barTop = endBounds.barBounds.masterBarBounds.visualBounds.y;
         const barHeight = endBounds.barBounds.masterBarBounds.visualBounds.h;
 
@@ -205,6 +201,12 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
         if (hasSelection) {
             lockSelection(e.startBeat!, e.endBeat!);
         } else {
+            // A zero-width highlight (e.g. a handle dragged onto the other
+            // handle) would otherwise unlock and leave the player range
+            // invisible; during a handle drag keep the last valid selection.
+            if (dragging !== undefined) {
+                return;
+            }
             unlockSelection();
         }
         positionHandles(e);
@@ -292,8 +294,24 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
             return;
         }
         if (dragging === "start") {
+            // The start handle must never reach or pass the end handle
+            if (getBeatTick(api, beat) >= getBeatTick(api, lockedEnd)) {
+                const prev = lockedEnd.previousBeat;
+                if (prev) {
+                    api.highlightPlaybackRange(prev, lockedEnd);
+                }
+                return;
+            }
             api.highlightPlaybackRange(beat, lockedEnd);
         } else {
+            // The end handle must never reach or pass the start handle
+            if (getBeatTick(api, beat) <= getBeatTick(api, lockedStart)) {
+                const next = lockedStart.nextBeat;
+                if (next) {
+                    api.highlightPlaybackRange(lockedStart, next);
+                }
+                return;
+            }
             api.highlightPlaybackRange(lockedStart, beat);
         }
     }
@@ -310,10 +328,12 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
         document.body.classList.remove("at-selection-handle-drag");
     }
 
-    for (const [handle, type] of [
-        [startHandle, "start"],
-        [endHandle, "end"],
-    ] as const) {
+    for (
+        const [handle, type] of [
+            [startHandle, "start"],
+            [endHandle, "end"],
+        ] as const
+    ) {
         handle.addEventListener("pointerdown", (e) => onPointerDown(type, e));
         handle.addEventListener("pointermove", onPointerMove);
         handle.addEventListener("pointerup", onPointerUp);

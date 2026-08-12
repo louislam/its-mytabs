@@ -31,10 +31,12 @@ if (!tab) {
     throw new Error("[e2e] Demo tab not found");
 }
 
-// Generate a short silence OGG and add it to the demo tab so the tests can
-// switch between audio sources. The audio list is built by scanning the tab
-// folder, so writing the file is enough to make it appear in the app.
-const silence = new Float32Array(44100 * 5); // 5 seconds of silence @ 44.1kHz
+// Generate a long silence OGG and add it to the demo tab so the tests can
+// switch between audio sources. It must be long enough to cover the whole
+// score (bar positions map to seconds via the tempo), otherwise seeking fails.
+// The audio list is built by scanning the tab folder, so writing the file is
+// enough to make it appear in the app.
+const silence = new Float32Array(44100 * 120); // 120 seconds of silence @ 44.1kHz
 const encoder = await createOggEncoder();
 encoder.configure({ sampleRate: 44100, channels: 1, vbrQuality: 8 });
 const chunks: Uint8Array[] = [];
