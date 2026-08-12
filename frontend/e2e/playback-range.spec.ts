@@ -248,6 +248,68 @@ test.describe("selection handles", () => {
         await expect(page.locator(".at-selection-handle-start")).toBeVisible();
     });
 
+    test("dragging the score does not replace an existing selection", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await waitForTabReady(page);
+
+        const locked = await selectBars(page, 1, 3);
+
+        // Drag somewhere else on the score (a fresh selection attempt)
+        const start = await beatPosition(page, 0, 0);
+        const end = await beatPosition(page, 5, 0);
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(end.x, end.y, { steps: 10 });
+        await page.mouse.up();
+
+        // The locked range is unchanged
+        const range = await page.evaluate(() => {
+            const r = window.api.playbackRange;
+            if (!r) {
+                return null;
+            }
+            return { startTick: r.startTick, endTick: r.endTick };
+        });
+        expect(range).toEqual(locked);
+        await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
+
+        // The handles still sit on the locked range, and it is only cleared
+        // by the close button
+        await expect(page.locator(".at-selection-handle-start")).toBeVisible();
+        await page.locator(".at-selection-close").click();
+        await expect
+            .poll(() => page.evaluate(() => window.api.playbackRange))
+            .toBeNull();
+    });
+
+    test("only clicks inside the selected range seek", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await waitForTabReady(page);
+
+        await selectBars(page, 1, 3);
+
+        // Click a beat outside the range: nothing should happen
+        const before = await page.evaluate(() => window.api.tickPosition ?? 0);
+        const outside = await beatPosition(page, 0, 0);
+        await page.mouse.click(outside.x, outside.y);
+        await expect.poll(() => page.evaluate(() => window.api.tickPosition ?? 0)).toBe(before);
+
+        // Click a beat inside the range: the cursor seeks there
+        const inside = await beatPosition(page, 2, 0);
+        const insideTick = await page.evaluate(() => {
+            const api = window.api;
+            const bar = api.score.tracks[0].staves[0].bars[2];
+            return bar.voices[0].beats[0].absolutePlaybackStart;
+        });
+        await page.mouse.click(inside.x, inside.y);
+        await expect
+            .poll(() => page.evaluate(() => window.api.tickPosition ?? 0))
+            .toBeGreaterThanOrEqual(insideTick);
+
+        // The range is still locked
+        await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
+    });
+
     test("close button clears the selection", async ({ page, request }) => {
         await waitForDemoTab(request);
         await waitForTabReady(page);

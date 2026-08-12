@@ -814,6 +814,11 @@ export default defineComponent({
                         return;
                     }
 
+                    // When a range is selected, only clicks inside it count
+                    if (this.selectionController && !this.selectionController.isWithinSelection(beat)) {
+                        return;
+                    }
+
                     if (this.playing && this.enableCountIn) {
                         this.startPlayback();
                     }

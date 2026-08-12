@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 /**
  * Custom count-in using the Web Audio API.
  *
@@ -21,6 +22,8 @@ class CountIn {
     private noiseBuffer: AudioBuffer | null = null;
     private timer: ReturnType<typeof setTimeout> | null = null;
     private countingIn = false;
+    /** Source nodes of the currently scheduled count-in clicks, stopped on cancel. */
+    private activeSources: AudioScheduledSourceNode[] = [];
 
     get isCountingIn(): boolean {
         return this.countingIn;
@@ -28,8 +31,11 @@ class CountIn {
 
     private getAudioContext(): AudioContext | null {
         if (!this.audioContext) {
-            const AudioCtx = window.AudioContext ??
-                (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+            const globals = globalThis as unknown as {
+                AudioContext?: typeof AudioContext;
+                webkitAudioContext?: typeof AudioContext;
+            };
+            const AudioCtx = globals.AudioContext ?? globals.webkitAudioContext;
             if (AudioCtx) {
                 this.audioContext = new AudioCtx();
             }
@@ -79,6 +85,7 @@ class CountIn {
         noiseGain.connect(context.destination);
         noise.start(when);
         noise.stop(when + 0.025);
+        this.activeSources.push(noise);
 
         // Body: very short low-frequency knock for woodblock weight
         const knock = context.createOscillator();
@@ -93,6 +100,7 @@ class CountIn {
         knockGain.connect(context.destination);
         knock.start(when);
         knock.stop(when + 0.035);
+        this.activeSources.push(knock);
     }
 
     /**
@@ -116,6 +124,7 @@ class CountIn {
         const now = audioContext.currentTime;
 
         this.countingIn = true;
+        this.activeSources = [];
 
         for (let i = 0; i < options.beats; i++) {
             this.playMetronomeClick(audioContext, now + (i * beatMs) / 1000, i === 0);
@@ -124,18 +133,30 @@ class CountIn {
         this.timer = setTimeout(() => {
             this.timer = null;
             this.countingIn = false;
+            this.activeSources = [];
             options.onFinished();
         }, options.beats * beatMs);
     }
 
     /**
      * Cancel a pending count-in (e.g. the user paused before it finished).
+     * The already-scheduled clicks are stopped too so a quick restart does not
+     * leave the previous count-in sounding on top of the new one.
      */
     cancel(): void {
         if (this.timer !== null) {
             clearTimeout(this.timer);
             this.timer = null;
         }
+        for (const source of this.activeSources) {
+            try {
+                // stop() before the scheduled start time cancels the click
+                source.stop();
+            } catch {
+                // already finished playing
+            }
+        }
+        this.activeSources = [];
         this.countingIn = false;
     }
 }

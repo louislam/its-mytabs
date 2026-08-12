@@ -23,6 +23,8 @@ interface SelectionInternals {
 
 export interface SelectionController {
     clear(): void;
+    /** Whether the beat is inside the locked selection (all beats when unlocked). */
+    isWithinSelection(beat: Beat): boolean;
 }
 
 type DragType = "start" | "end";
@@ -70,11 +72,19 @@ function getBeatTick(api: AlphaTabApi, beat: Beat): number {
     return beat.absolutePlaybackStart;
 }
 
+/** Whether `beat` falls within the selection [startTick, endTick). */
+function isInsideSelection(api: AlphaTabApi, start: Beat, end: Beat, beat: Beat): boolean {
+    const tick = getBeatTick(api, beat);
+    const startTick = getBeatTick(api, start);
+    const endTick = getBeatTick(api, end) + end.playbackDuration;
+    return tick >= startTick && tick < endTick;
+}
+
 /**
  * Selection UI for the AlphaTab score:
- * - Drag-select still works (alphaTab default), but a plain click seeks the
- *   cursor without clearing the selected range.
- * - Start/end drag handles at the highlight edges expand the range.
+ * - Once a range is selected it is locked: dragging the score can no longer
+ *   replace it, and a plain click only seeks the cursor without clearing it.
+ * - Start/end drag handles at the highlight edges expand the locked range.
  * - A close button (top-right of the last bar) is the only way to clear it.
  */
 export function setupSelection(container: HTMLElement, api: AlphaTabApi): SelectionController {
@@ -97,9 +107,34 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
 
     const originalApply = api.applyPlaybackRangeFromHighlight.bind(api);
 
-    let committedStart: Beat | undefined;
-    let committedEnd: Beat | undefined;
+    /** The locked selection that must not be replaced by a new score drag. */
+    let lockedStart: Beat | undefined;
+    let lockedEnd: Beat | undefined;
+    let isLocked = false;
+    /** True while a mouse gesture on the score (down..up) is in progress. */
+    let isScoreDrag = false;
     let dragging: DragType | undefined;
+
+    function sameBeat(a: Beat, b: Beat): boolean {
+        return (
+            a === b ||
+            (a.voice?.bar?.index === b.voice?.bar?.index &&
+                a.index === b.index &&
+                a.absolutePlaybackStart === b.absolutePlaybackStart)
+        );
+    }
+
+    function lockSelection(start: Beat, end: Beat) {
+        lockedStart = start;
+        lockedEnd = end;
+        isLocked = true;
+    }
+
+    function unlockSelection() {
+        lockedStart = undefined;
+        lockedEnd = undefined;
+        isLocked = false;
+    }
 
     function hideHandles() {
         startHandle.classList.remove("active");
@@ -146,21 +181,51 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
     }
 
     function onHighlightChanged(e: PlaybackHighlightChangeEventArgs) {
-        if (e.startBeat && e.endBeat) {
-            committedStart = e.startBeat;
-            committedEnd = e.endBeat;
+        const hasSelection = !!e.startBeat && !!e.endBeat;
+
+        if (isScoreDrag) {
+            if (isLocked) {
+                // A locked selection is frozen: cancel any drag preview so the
+                // committed highlight stays put while dragging over the score.
+                if (!hasSelection || !sameBeat(e.startBeat!, lockedStart!) || !sameBeat(e.endBeat!, lockedEnd!)) {
+                    api.highlightPlaybackRange(lockedStart!, lockedEnd!);
+                }
+                return;
+            }
+            // Fresh (not yet committed) selection preview from a score drag
+            if (hasSelection) {
+                lockedStart = e.startBeat;
+                lockedEnd = e.endBeat;
+            }
+            positionHandles(e);
+            return;
+        }
+
+        // Handle drags, programmatic ranges and commits
+        if (hasSelection) {
+            lockSelection(e.startBeat!, e.endBeat!);
         } else {
-            committedStart = undefined;
-            committedEnd = undefined;
+            unlockSelection();
         }
         positionHandles(e);
     }
 
     api.playbackRangeHighlightChanged.on(onHighlightChanged);
 
+    function onBeatMouseDown() {
+        isScoreDrag = true;
+    }
+    function onBeatMouseUp() {
+        isScoreDrag = false;
+    }
+    api.beatMouseDown.on(onBeatMouseDown);
+    api.beatMouseUp.on(onBeatMouseUp);
+
     /**
-     * Wrap alphaTab's selection commit: a genuine drag still commits the new
-     * range, but a plain click only seeks and keeps the committed selection.
+     * Wrap alphaTab's selection commit:
+     * - A locked selection can never be replaced by dragging the score.
+     * - Dragging the handles still expands the locked range.
+     * - A plain click only seeks and keeps the locked selection.
      */
     api.applyPlaybackRangeFromHighlight = function (this: AlphaTabApi) {
         const internal = this as unknown as SelectionInternals;
@@ -169,12 +234,31 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
         const isDrag = !!start && !!end && start.beat !== end.beat;
 
         if (isDrag) {
+            if (dragging !== undefined) {
+                // Handle drag: commit the expanded range and keep it locked
+                originalApply();
+                lockSelection(internal._selectionStart!.beat, internal._selectionEnd!.beat);
+                return;
+            }
+            if (isLocked) {
+                // Score drag with a locked selection: keep the range, only make
+                // sure the highlight is still the locked one.
+                this.highlightPlaybackRange(lockedStart!, lockedEnd!);
+                return;
+            }
+            // Fresh selection from a score drag
             originalApply();
+            lockSelection(internal._selectionStart!.beat, internal._selectionEnd!.beat);
             return;
         }
 
         // Plain click (or zero-length drag): seek only, never clear.
         if (start?.beat) {
+            if (isLocked && lockedStart && lockedEnd && !isInsideSelection(this, lockedStart, lockedEnd, start.beat)) {
+                // Clicked outside the locked range: ignore it, keep the selection.
+                this.highlightPlaybackRange(lockedStart, lockedEnd);
+                return;
+            }
             internal._currentBeat = null;
             const tickCache = internal._tickCache;
             if (internal._player?.state === PlayerState.Paused && tickCache) {
@@ -183,8 +267,8 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
             }
             this.tickPosition = getBeatTick(this, start.beat);
         }
-        if (committedStart && committedEnd) {
-            this.highlightPlaybackRange(committedStart, committedEnd);
+        if (isLocked && lockedStart && lockedEnd) {
+            this.highlightPlaybackRange(lockedStart, lockedEnd);
         }
     };
 
@@ -200,7 +284,7 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
             return;
         }
         e.preventDefault();
-        if (!committedStart || !committedEnd) {
+        if (!isLocked || !lockedStart || !lockedEnd) {
             return;
         }
         const beat = getBeatFromEvent(container, api, e);
@@ -208,9 +292,9 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
             return;
         }
         if (dragging === "start") {
-            api.highlightPlaybackRange(beat, committedEnd);
+            api.highlightPlaybackRange(beat, lockedEnd);
         } else {
-            api.highlightPlaybackRange(committedStart, beat);
+            api.highlightPlaybackRange(lockedStart, beat);
         }
     }
 
@@ -219,9 +303,11 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
             return;
         }
         e.preventDefault();
+        // Commit before clearing the drag flag so the wrapped
+        // applyPlaybackRangeFromHighlight still sees it as a handle drag.
+        api.applyPlaybackRangeFromHighlight();
         dragging = undefined;
         document.body.classList.remove("at-selection-handle-drag");
-        api.applyPlaybackRangeFromHighlight();
     }
 
     for (const [handle, type] of [
@@ -236,13 +322,22 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
 
     closeButton.addEventListener("pointerdown", (e) => e.preventDefault());
     closeButton.addEventListener("click", () => {
+        unlockSelection();
         api.playbackRange = null;
         api.clearPlaybackRangeHighlight();
     });
 
     return {
+        isWithinSelection(beat: Beat): boolean {
+            if (!isLocked || !lockedStart || !lockedEnd) {
+                return true;
+            }
+            return isInsideSelection(api, lockedStart, lockedEnd, beat);
+        },
         clear() {
             api.playbackRangeHighlightChanged.off(onHighlightChanged);
+            api.beatMouseDown.off(onBeatMouseDown);
+            api.beatMouseUp.off(onBeatMouseUp);
             api.applyPlaybackRangeFromHighlight = originalApply;
             document.body.classList.remove("at-selection-handle-drag");
             wrapper.remove();
