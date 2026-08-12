@@ -14,7 +14,7 @@ console.log("[e2e] DATA_DIR:", e2eDataDir);
 
 // Import backend modules AFTER env vars are set (they read env at module load).
 const { main } = await import("../../backend/main.ts");
-const { getTab, addAudio, updateConfigJSON } = await import("../../backend/tab.ts");
+const { getTab, addAudio, createTab, updateConfigJSON } = await import("../../backend/tab.ts");
 
 await main();
 
@@ -60,3 +60,18 @@ await updateConfigJSON("1", async (config) => {
     config.audio = config.audio.map((a) => a.filename === "e2e-silence.ogg" ? { ...a, syncMethod: "simple", simpleSync: 0 } : a);
 });
 console.log("[e2e] Added e2e-silence.ogg to demo tab");
+
+// Backing-track fixture tab: a GP7 with an embedded OGG backing track.
+// Used to test the "Embedded Backing Track" audio source. Make it public so
+// the unauthenticated e2e tests can open it.
+const backingTabId = await createTab(
+    await Deno.readFile("./extra/backing-track-tab.gp"),
+    "gp",
+    "Backing Track Test",
+    "e2e",
+    "backing-track-tab.gp",
+);
+await updateConfigJSON(backingTabId, async (config) => {
+    config.tab.public = true;
+});
+console.log("[e2e] Created backing-track fixture tab", backingTabId);
