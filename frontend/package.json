@@ -9,6 +9,7 @@
         "e2e": "playwright test"
     },
     "dependencies": {
+        "@foleyjs/core": "~2.7.0",
         "better-auth": "~1.4.17",
         "private-ip": "~3.0.2",
         "rollup-plugin-visualizer": "^6.0.3",

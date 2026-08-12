@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openTab, waitForDemoTab } from "./helpers.ts";
+import { openTab, selectBars, waitForDemoTab } from "./helpers.ts";
 
 test.describe("track controls", () => {
     test("track list opens, lists the tracks and closes", async ({ page, request }) => {
@@ -79,6 +79,23 @@ test.describe("track controls", () => {
         await volumeInput.fill("60");
         await volumeInput.press("Tab");
         await expect(volumeInput).toHaveValue("60");
+    });
+
+    test("switching track clears the highlighted range", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await openTab(page, "synth");
+
+        await selectBars(page, 1, 3);
+        await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
+        await expect(page.locator(".at-selection-handle-start")).toBeVisible();
+
+        await page.click(".track-selector .button");
+        await page.locator(".track-list .track .name").nth(1).click();
+
+        await expect.poll(() => page.evaluate(() => window.api.playbackRange)).toBeNull();
+        await expect(page.getByRole("button", { name: "Restart" })).toBeHidden();
+        await expect(page.locator(".at-selection-handle-start")).toBeHidden();
+        await expect(page.locator(".at-selection-close")).toBeHidden();
     });
 
     test("switching to the drums track re-renders the score", async ({ page, request }) => {

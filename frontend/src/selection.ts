@@ -1,4 +1,5 @@
 import * as alphaTab from "@coderline/alphatab";
+import { play } from "@foleyjs/core";
 
 type Beat = alphaTab.model.Beat;
 type AlphaTabApi = alphaTab.AlphaTabApi;
@@ -257,7 +258,9 @@ export function setupSelection(container: HTMLElement, api: AlphaTabApi): Select
         // Plain click (or zero-length drag): seek only, never clear.
         if (start?.beat) {
             if (isLocked && lockedStart && lockedEnd && !isInsideSelection(this, lockedStart, lockedEnd, start.beat)) {
-                // Clicked outside the locked range: ignore it, keep the selection.
+                // Clicked outside the locked range: ignore it, keep the
+                // selection, and give audible feedback that it's blocked.
+                play("error");
                 this.highlightPlaybackRange(lockedStart, lockedEnd);
                 return;
             }

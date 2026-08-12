@@ -1,7 +1,62 @@
 import { expect, test } from "@playwright/test";
-import { AUDIO_FILENAME, openTab, playbackRange, selectBars, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
+import { createHash } from "node:crypto";
+import { AUDIO_FILENAME, openTab, playbackRange, selectBars, TAB_ID, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
 test.describe("audio source switching", () => {
+    test("audio files are served with HTTP range support (seekable)", async ({ request }) => {
+        await waitForDemoTab(request);
+
+        const res = await request.get(`/api/tab/${TAB_ID}/audio/${AUDIO_FILENAME}`, {
+            headers: { "Range": "bytes=0-99" },
+        });
+        expect(res.status()).toBe(206);
+        const headers = res.headers();
+        expect(headers["accept-ranges"]).toBe("bytes");
+        expect(headers["content-range"]).toMatch(/^bytes 0-99\//);
+        expect((await res.body()).length).toBe(100);
+
+        // An unsatisfiable range must return 416
+        const bad = await request.get(`/api/tab/${TAB_ID}/audio/${AUDIO_FILENAME}`, {
+            headers: { "Range": "bytes=999999999-" },
+        });
+        expect(bad.status()).toBe(416);
+    });
+
+    test("range requests reassemble the audio file correctly", async ({ request }) => {
+        await waitForDemoTab(request);
+        const url = `/api/tab/${TAB_ID}/audio/${AUDIO_FILENAME}`;
+
+        // Reference: the full file
+        const full = await (await request.get(url)).body();
+        const size = full.length;
+        expect(size).toBeGreaterThan(0);
+
+        // Fetch it in 50 parts and glue them back together
+        const PARTS = 50;
+        const partSize = Math.ceil(size / PARTS);
+        const chunks: Buffer[] = [];
+        for (let i = 0; i < PARTS; i++) {
+            const start = i * partSize;
+            if (start >= size) {
+                break;
+            }
+            const end = Math.min(start + partSize - 1, size - 1);
+            const res = await request.get(url, { headers: { "Range": `bytes=${start}-${end}` } });
+            expect(res.status()).toBe(206);
+            expect(res.headers()["content-range"]).toBe(`bytes ${start}-${end}/${size}`);
+            expect(res.headers()["content-length"]).toBe(String(end - start + 1));
+            chunks.push(await res.body());
+        }
+
+        const rebuilt = Buffer.concat(chunks);
+        expect(rebuilt.length).toBe(size);
+
+        // Checksum the rebuilt file against the original to prove no part was
+        // lost, duplicated, or corrupted.
+        const checksum = (buf: Buffer) => createHash("sha256").update(buf).digest("hex");
+        expect(checksum(rebuilt)).toBe(checksum(full));
+    });
+
     test("switches to an audio file and back", async ({ page, request }) => {
         await waitForDemoTab(request);
         await openTab(page, "synth");

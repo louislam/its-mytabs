@@ -31,43 +31,53 @@ if (!tab) {
     throw new Error("[e2e] Demo tab not found");
 }
 
-// Generate a long "silence" OGG and add it to the demo tab so the tests can
-// switch between audio sources. It must be long enough to cover the whole
-// score (bar positions map to seconds via the tempo), otherwise seeking fails.
-// A faint low tone is used instead of pure digital silence because the wasm
-// encoder produces an unseekable file from all-zero samples, which would break
-// the seek/position tests. The audio list is built by scanning the tab folder,
-// so writing the file is enough to make it appear in the app.
-const toneSamples = 44100 * 120; // 120 seconds @ 44.1kHz
-const silence = new Float32Array(toneSamples);
-for (let i = 0; i < toneSamples; i++) {
-    silence[i] = Math.sin((2 * Math.PI * 55 * i) / 44100) * 0.001;
+// Generate long "silence" OGG files and add them to the demo tab so the tests
+// can switch between audio sources (including audio -> audio). They must be
+// long enough to cover the whole score (bar positions map to seconds via the
+// tempo), otherwise seeking fails. A faint low tone is used instead of pure
+// digital silence because the wasm encoder produces an unseekable file from
+// all-zero samples, which would break the seek/position tests. The audio list
+// is built by scanning the tab folder, so writing the files is enough to make
+// them appear in the app.
+function makeTone(seconds: number, freq: number): Float32Array {
+    const n = 44100 * seconds;
+    const data = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        data[i] = Math.sin((2 * Math.PI * freq * i) / 44100) * 0.001;
+    }
+    return data;
 }
-const encoder = await createOggEncoder();
-encoder.configure({ sampleRate: 44100, channels: 1, vbrQuality: 8 });
-const chunks: Uint8Array[] = [];
-const encoded = encoder.encode([silence]);
-if (encoded.length > 0) {
-    chunks.push(new Uint8Array(encoded));
+
+async function encodeOgg(samples: Float32Array): Promise<Uint8Array> {
+    const encoder = await createOggEncoder();
+    encoder.configure({ sampleRate: 44100, channels: 1, vbrQuality: 8 });
+    const chunks: Uint8Array[] = [];
+    const encoded = encoder.encode([samples]);
+    if (encoded.length > 0) {
+        chunks.push(new Uint8Array(encoded));
+    }
+    const finalChunk = encoder.finalize();
+    if (finalChunk.length > 0) {
+        chunks.push(new Uint8Array(finalChunk));
+    }
+    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+    const ogg = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const c of chunks) {
+        ogg.set(c, offset);
+        offset += c.length;
+    }
+    return ogg;
 }
-const finalChunk = encoder.finalize();
-if (finalChunk.length > 0) {
-    chunks.push(new Uint8Array(finalChunk));
-}
-const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
-const ogg = new Uint8Array(totalLength);
-let offset = 0;
-for (const c of chunks) {
-    ogg.set(c, offset);
-    offset += c.length;
-}
-await addAudio(tab, ogg, "e2e-silence.ogg");
+
+await addAudio(tab, await encodeOgg(makeTone(120, 55)), "e2e-silence.ogg");
+await addAudio(tab, await encodeOgg(makeTone(120, 110)), "e2e-silence-2.ogg");
 
 // Store the sync metadata so the app applies a clean simple sync (offset 0)
 await updateConfigJSON("1", async (config) => {
-    config.audio = config.audio.map((a) => a.filename === "e2e-silence.ogg" ? { ...a, syncMethod: "simple", simpleSync: 0 } : a);
+    config.audio = config.audio.map((a) => a.filename === "e2e-silence.ogg" || a.filename === "e2e-silence-2.ogg" ? { ...a, syncMethod: "simple", simpleSync: 0 } : a);
 });
-console.log("[e2e] Added e2e-silence.ogg to demo tab");
+console.log("[e2e] Added e2e-silence.ogg and e2e-silence-2.ogg to demo tab");
 
 // A reliably embeddable YouTube video for the youtube e2e tests. The demo tab's
 // original video (VuKSlOT__9s) is not embeddable and silently fails to cue, so

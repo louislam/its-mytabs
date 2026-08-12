@@ -2,6 +2,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 
 export const TAB_ID = "1";
 export const AUDIO_FILENAME = "e2e-silence.ogg";
+export const AUDIO_FILENAME2 = "e2e-silence-2.ogg";
 
 /**
  * Wait until the demo tab is ready and the e2e audio file is registered.
@@ -144,13 +145,14 @@ export async function playbackRange(page: Page) {
 }
 
 /**
- * Wait until the external audio element is actually loadable. `playerReady`
+ * Wait until the external audio element is actually playable. `playerReady`
  * (and thus `openTab`) resolves before the element finishes loading, and
- * clicking Play on an unloaded element is racy.
+ * clicking Play on an unloaded element is racy (especially on Firefox).
+ * HAVE_FUTURE_DATA (readyState 3) means there is enough data to start playing.
  */
 export async function waitForAudioReady(page: Page): Promise<void> {
     await page.waitForFunction(() => {
         const a = document.querySelector("audio");
-        return !!a && a.readyState >= 1 && a.duration > 0;
+        return !!a && a.readyState >= 3 && a.duration > 0;
     });
 }
