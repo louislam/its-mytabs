@@ -92,13 +92,7 @@ const advancedSyncMeta = {
 await updateConfigJSON("1", async (config) => {
     // e2e-silence.ogg uses the advanced sync points (issue #85 repro); the
     // second audio file keeps a clean simple sync for the seek/cursor tests.
-    config.audio = config.audio.map((a) =>
-        a.filename === "e2e-silence.ogg"
-            ? { ...advancedSyncMeta }
-            : a.filename === "e2e-silence-2.ogg"
-              ? { ...a, syncMethod: "simple", simpleSync: 0 }
-              : a
-    );
+    config.audio = config.audio.map((a) => a.filename === "e2e-silence.ogg" ? { ...advancedSyncMeta } : a.filename === "e2e-silence-2.ogg" ? { ...a, syncMethod: "simple", simpleSync: 0 } : a);
     // addAudio only writes the files; the stored config may not list them yet
     if (!config.audio.some((a) => a.filename === "e2e-silence.ogg")) {
         config.audio.push({ ...advancedSyncMeta });

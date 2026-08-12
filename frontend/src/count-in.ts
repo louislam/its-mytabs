@@ -69,7 +69,7 @@ class CountIn {
                     } catch {
                         // audio errors must not break the count-in timing
                     }
-                }, i * beatMs)
+                }, i * beatMs),
             );
         }
 
