@@ -142,3 +142,15 @@ export async function playbackRange(page: Page) {
         return { startTick: r.startTick, endTick: r.endTick };
     });
 }
+
+/**
+ * Wait until the external audio element is actually loadable. `playerReady`
+ * (and thus `openTab`) resolves before the element finishes loading, and
+ * clicking Play on an unloaded element is racy.
+ */
+export async function waitForAudioReady(page: Page): Promise<void> {
+    await page.waitForFunction(() => {
+        const a = document.querySelector("audio");
+        return !!a && a.readyState >= 1 && a.duration > 0;
+    });
+}

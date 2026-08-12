@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { AUDIO_FILENAME, beatPosition, findBackingTrackTabId, openTab, selectBars, waitForDemoTab } from "./helpers.ts";
+import { AUDIO_FILENAME, beatPosition, findBackingTrackTabId, openTab, selectBars, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
 type Source = "synth" | "audio" | "backing" | "none";
 
@@ -8,6 +8,7 @@ async function openSource(page, request, source: Source) {
         await openTab(page, "synth");
     } else if (source === "audio") {
         await openTab(page, `audio-${AUDIO_FILENAME}`);
+        await waitForAudioReady(page);
     } else if (source === "backing") {
         await openTab(page, "backingTrack", await findBackingTrackTabId(request));
     } else {

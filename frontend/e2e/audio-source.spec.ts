@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { AUDIO_FILENAME, openTab, waitForDemoTab } from "./helpers.ts";
+import { AUDIO_FILENAME, openTab, playbackRange, selectBars, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
 test.describe("audio source switching", () => {
     test("switches to an audio file and back", async ({ page, request }) => {
@@ -45,6 +45,7 @@ test.describe("audio source switching", () => {
     test("plays an audio file source", async ({ page, request }) => {
         await waitForDemoTab(request);
         await openTab(page, `audio-${AUDIO_FILENAME}`);
+        await waitForAudioReady(page);
 
         await page.getByRole("button", { name: "Play" }).click();
         await expect
@@ -55,11 +56,29 @@ test.describe("audio source switching", () => {
                 })
             )
             .toBe(true);
-
         await page.getByRole("button", { name: "Pause" }).click();
         await expect
             .poll(() => page.evaluate(() => document.querySelector("audio")?.paused ?? true))
             .toBe(true);
+    });
+
+    test("cursor stays at the highlighted range start after switching to audio", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await openTab(page, "synth");
+
+        const range = await selectBars(page, 5, 6);
+
+        await page.click(".audio-selector .button");
+        await page.locator(".audio-list .audio.item", { hasText: AUDIO_FILENAME }).click();
+
+        // The range is preserved and the cursor sits at its start, not bar 0
+        await expect
+            .poll(() => page.evaluate(() => window.api.tickPosition ?? 0))
+            .toBeGreaterThanOrEqual(range.startTick);
+        await expect
+            .poll(() => page.evaluate(() => window.api.tickPosition ?? 0))
+            .toBeLessThan(range.startTick + 100);
+        expect(await playbackRange(page)).toEqual(range);
     });
 
     test("backing track item reflects whether the score has one", async ({ page, request }) => {

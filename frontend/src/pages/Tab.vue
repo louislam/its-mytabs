@@ -1244,6 +1244,20 @@ export default defineComponent({
             audioPlayer.load();
             audioPlayer.playbackRate = this.api.playbackSpeed;
 
+            // Switching in an external audio element resets it to position 0,
+            // which drags the cursor to the first bar. If a playback range is
+            // highlighted, seek the cursor back to its start once the audio is
+            // actually loaded (earlier seeks are ignored by the element).
+            const seekToRangeStart = () => {
+                if (this.api?.playbackRange && audioPlayer.readyState >= 1) {
+                    this.api.tickPosition = this.api.playbackRange.startTick;
+                }
+            };
+            audioPlayer.addEventListener("loadeddata", seekToRangeStart, { once: true });
+            if (audioPlayer.readyState >= 1) {
+                seekToRangeStart();
+            }
+
             this.pause();
         },
 

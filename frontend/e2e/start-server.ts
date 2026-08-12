@@ -31,12 +31,18 @@ if (!tab) {
     throw new Error("[e2e] Demo tab not found");
 }
 
-// Generate a long silence OGG and add it to the demo tab so the tests can
+// Generate a long "silence" OGG and add it to the demo tab so the tests can
 // switch between audio sources. It must be long enough to cover the whole
 // score (bar positions map to seconds via the tempo), otherwise seeking fails.
-// The audio list is built by scanning the tab folder, so writing the file is
-// enough to make it appear in the app.
-const silence = new Float32Array(44100 * 120); // 120 seconds of silence @ 44.1kHz
+// A faint low tone is used instead of pure digital silence because the wasm
+// encoder produces an unseekable file from all-zero samples, which would break
+// the seek/position tests. The audio list is built by scanning the tab folder,
+// so writing the file is enough to make it appear in the app.
+const toneSamples = 44100 * 120; // 120 seconds @ 44.1kHz
+const silence = new Float32Array(toneSamples);
+for (let i = 0; i < toneSamples; i++) {
+    silence[i] = Math.sin((2 * Math.PI * 55 * i) / 44100) * 0.001;
+}
 const encoder = await createOggEncoder();
 encoder.configure({ sampleRate: 44100, channels: 1, vbrQuality: 8 });
 const chunks: Uint8Array[] = [];
