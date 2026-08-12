@@ -99,6 +99,7 @@ export default defineComponent({
             setting: {},
             simpleSyncSecond: -1,
             toolbarAutoHide: false,
+            isInitializingAudio: false, // Flag to prevent sync point clearing during audio init
         };
     },
     computed: {
@@ -118,8 +119,14 @@ export default defineComponent({
     },
 
     watch: {
-        simpleSyncSecond(newVal, oldVal) {
+        async simpleSyncSecond(newVal, oldVal) {
             if (!this.api) {
+                return;
+            }
+
+            // Skip if we're in the middle of initializing audio to prevent clearing sync points
+            if (this.isInitializingAudio) {
+                console.log("Skipping simpleSyncSecond watcher during audio initialization");
                 return;
             }
 
@@ -1129,6 +1136,7 @@ export default defineComponent({
                 return;
             }
 
+            this.isInitializingAudio = true;
             this.closeAllList();
 
             const audioPlayer = this.$refs.audioPlayer;
@@ -1226,11 +1234,16 @@ export default defineComponent({
             this.api.updateSettings();
 
             let found = false;
+            let syncMethod = null;
+            let syncData = null;
 
-            // Get offset from youtubeList
+            // Get offset from audioList
             for (const audio of this.audioList) {
                 if (audio.filename === filename) {
                     this.audio = audio;
+                    syncMethod = audio.syncMethod;
+                    syncData = audio.syncMethod === "advanced" ? audio.advancedSync : audio.simpleSync;
+
                     if (audio.syncMethod === "advanced") {
                         this.advancedSync(audio.advancedSync);
                     } else {
@@ -1243,6 +1256,7 @@ export default defineComponent({
 
             // Probably provided an audio file not in the list, switch to synth
             if (!found) {
+                this.isInitializingAudio = false;
                 notify({
                     type: "error",
                     title: "Error",
@@ -1274,9 +1288,20 @@ export default defineComponent({
             }
 
             this.pause();
+
+            // Re-apply sync points after pause() completes (pause triggers playing watcher which calls updateSettings)
+            await this.$nextTick();
+            if (syncMethod === "advanced") {
+                this.advancedSync(syncData);
+            } else {
+                this.simpleSync(syncData);
+            }
+
+            this.isInitializingAudio = false;
         },
 
         async initYoutube(videoID) {
+            this.isInitializingAudio = true;
             this.closeAllList();
 
             if (!this.youtubePlayer) {
@@ -1289,11 +1314,16 @@ export default defineComponent({
             this.api.updateSettings();
 
             let found = false;
+            let syncMethod = null;
+            let syncData = null;
 
             // Get offset from youtubeList
             for (const yt of this.youtubeList) {
                 if (yt.videoID === videoID) {
                     this.youtube = yt;
+                    syncMethod = yt.syncMethod;
+                    syncData = yt.syncMethod === "advanced" ? yt.advancedSync : yt.simpleSync;
+
                     if (yt.syncMethod === "advanced") {
                         this.advancedSync(yt.advancedSync);
                     } else {
@@ -1306,6 +1336,7 @@ export default defineComponent({
 
             // Probably provided a video ID not in the list, switch to synth
             if (!found) {
+                this.isInitializingAudio = false;
                 notify({
                     type: "error",
                     title: "Error",
@@ -1322,6 +1353,16 @@ export default defineComponent({
             this.youtubePlayer.cueVideoById(videoID);
             this.youtubePlayer.setPlaybackRate(this.api.playbackSpeed);
             this.pause();
+
+            // Re-apply sync points after pause() completes (pause triggers playing watcher which calls updateSettings)
+            await this.$nextTick();
+            if (syncMethod === "advanced") {
+                this.advancedSync(syncData);
+            } else {
+                this.simpleSync(syncData);
+            }
+
+            this.isInitializingAudio = false;
         },
 
         async initYoutubePlayer() {

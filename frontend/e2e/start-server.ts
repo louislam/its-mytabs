@@ -14,7 +14,7 @@ console.log("[e2e] DATA_DIR:", e2eDataDir);
 
 // Import backend modules AFTER env vars are set (they read env at module load).
 const { main } = await import("../../backend/main.ts");
-const { getTab, addAudio, createTab, addYoutube, updateConfigJSON } = await import("../../backend/tab.ts");
+const { getTab, addAudio, createTab, addYoutube, getConfigJSON, updateConfigJSON } = await import("../../backend/tab.ts");
 
 await main();
 
@@ -73,9 +73,32 @@ async function encodeOgg(samples: Float32Array): Promise<Uint8Array> {
 await addAudio(tab, await encodeOgg(makeTone(120, 55)), "e2e-silence.ogg");
 await addAudio(tab, await encodeOgg(makeTone(120, 110)), "e2e-silence-2.ogg");
 
-// Store the sync metadata so the app applies a clean simple sync (offset 0)
+// Store the sync metadata so the app applies advanced sync points,
+// mirroring the repro steps of issue #85 (bar 28 should be at 70000 ms).
+// addAudio only writes the file, so scan the directory to get the merged
+// audio list first (getConfigJSON without excludeAudio), then persist the
+// metadata into config.json via updateConfigJSON.
+const configWithAudio = await getConfigJSON("1");
+const audioMeta = configWithAudio?.audio.find((a) => a.filename === "e2e-silence.ogg");
+if (!audioMeta) {
+    throw new Error("[e2e] e2e-silence.ogg metadata not found");
+}
+const advancedSyncMeta = {
+    ...audioMeta,
+    syncMethod: "advanced" as const,
+    simpleSync: 0,
+    advancedSync: "\\sync 0 0 0\n\\sync 28 0 70000\n\\sync 93 0 272000",
+};
 await updateConfigJSON("1", async (config) => {
-    config.audio = config.audio.map((a) => a.filename === "e2e-silence.ogg" || a.filename === "e2e-silence-2.ogg" ? { ...a, syncMethod: "simple", simpleSync: 0 } : a);
+    // e2e-silence.ogg uses the advanced sync points (issue #85 repro); the
+    // second audio file keeps a clean simple sync for the seek/cursor tests.
+    config.audio = config.audio.map((a) =>
+        a.filename === "e2e-silence.ogg"
+            ? { ...advancedSyncMeta }
+            : a.filename === "e2e-silence-2.ogg"
+              ? { ...a, syncMethod: "simple", simpleSync: 0 }
+              : a
+    );
 });
 console.log("[e2e] Added e2e-silence.ogg and e2e-silence-2.ogg to demo tab");
 
