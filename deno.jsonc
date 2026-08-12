@@ -64,6 +64,7 @@
     },
 
     "imports": {
+        "@foleyjs/core": "npm:@foleyjs/core@~2.7.0",
         "@hono/hono": "jsr:@hono/hono@~4.9.12",
         "@hono/node-server": "npm:@hono/node-server@~1.19.9",
         "@std/dotenv": "jsr:@std/dotenv@~0.225.6",
