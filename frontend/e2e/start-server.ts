@@ -99,6 +99,14 @@ await updateConfigJSON("1", async (config) => {
               ? { ...a, syncMethod: "simple", simpleSync: 0 }
               : a
     );
+    // addAudio only writes the files; the stored config may not list them yet
+    if (!config.audio.some((a) => a.filename === "e2e-silence.ogg")) {
+        config.audio.push({ ...advancedSyncMeta });
+    }
+    const audioMeta2 = configWithAudio?.audio.find((a) => a.filename === "e2e-silence-2.ogg");
+    if (audioMeta2 && !config.audio.some((a) => a.filename === "e2e-silence-2.ogg")) {
+        config.audio.push({ ...audioMeta2, syncMethod: "simple", simpleSync: 0 });
+    }
 });
 console.log("[e2e] Added e2e-silence.ogg and e2e-silence-2.ogg to demo tab");
 
