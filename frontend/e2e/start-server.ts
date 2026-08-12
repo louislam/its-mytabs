@@ -14,7 +14,7 @@ console.log("[e2e] DATA_DIR:", e2eDataDir);
 
 // Import backend modules AFTER env vars are set (they read env at module load).
 const { main } = await import("../../backend/main.ts");
-const { getTab, addAudio, createTab, updateConfigJSON } = await import("../../backend/tab.ts");
+const { getTab, addAudio, createTab, addYoutube, updateConfigJSON } = await import("../../backend/tab.ts");
 
 await main();
 
@@ -62,6 +62,12 @@ await updateConfigJSON("1", async (config) => {
     config.audio = config.audio.map((a) => a.filename === "e2e-silence.ogg" ? { ...a, syncMethod: "simple", simpleSync: 0 } : a);
 });
 console.log("[e2e] Added e2e-silence.ogg to demo tab");
+
+// A reliably embeddable YouTube video for the youtube e2e tests. The demo tab's
+// original video (VuKSlOT__9s) is not embeddable and silently fails to cue, so
+// it cannot be used to exercise playback.
+await addYoutube("1", "M7lc1UVf-VE");
+console.log("[e2e] Added youtube fixture video M7lc1UVf-VE to demo tab");
 
 // Backing-track fixture tab: a GP7 with an embedded OGG backing track.
 // Used to test the "Embedded Backing Track" audio source. Make it public so
