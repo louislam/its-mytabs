@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
 import { getKeySignature } from "../util.ts";
 import { countIn } from "../count-in.ts";
+import { setupSelection } from "../selection.ts";
 
 const alphaTab = await import("@coderline/alphatab");
 const { ScrollMode, StaveProfile } = alphaTab;
@@ -66,6 +67,7 @@ export default defineComponent({
             playbackRange: null,
             savedPlaybackRange: null,
             playbackRangeRestoreTimer: undefined,
+            selectionController: null,
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -785,6 +787,9 @@ export default defineComponent({
                 // Exposing api to window for debugging
                 window.api = this.api;
 
+                // Custom selection handles + "click keeps the selection" behavior
+                this.selectionController = setupSelection(this.$refs.bassTabContainer, this.api);
+
                 // Used for showing/hiding the "Restart" button
                 this.api.playbackRangeChanged.on(() => {
                     this.playbackRange = this.api.playbackRange;
@@ -915,6 +920,10 @@ export default defineComponent({
         destroyContainer() {
             this.api?.destroy();
             this.api = undefined;
+
+            // Remove custom selection handles + restore alphaTab's default method
+            this.selectionController?.clear();
+            this.selectionController = null;
 
             // Reset states
             this.ready = false;
