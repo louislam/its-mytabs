@@ -13,8 +13,9 @@ jobs:
             fail-fast: false
             matrix:
                 include:
-                    - { os: ubuntu-latest, browsers: "chromium firefox", projects: "--project=chromium --project=firefox", runChecks: true }
-                    - { os: macos-latest, browsers: "webkit", projects: "--project=webkit", runChecks: false }
+                    - { os: ubuntu-latest, browser: chromium, runChecks: true }
+                    - { os: ubuntu-latest, browser: firefox, runChecks: false }
+                    - { os: macos-latest, browser: webkit, runChecks: false }
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout repository
@@ -25,7 +26,7 @@ jobs:
               with:
                   deno-version: v2.x
 
-            # Format/lint/type-check/unit tests only once (linux), they are OS-agnostic
+            # Format/lint/type-check/unit tests only once (the chromium entry)
             - name: Deno check & test
               if: matrix.runChecks
               run: |
@@ -35,8 +36,10 @@ jobs:
             - name: Install frontend dependencies
               run: deno task install-frontend-deps
 
-            - name: Install Playwright browsers
-              run: cd frontend && deno run -A npm:@playwright/test install --with-deps ${{ matrix.browsers }}
+            - name: Install Playwright browser
+              if: matrix.browser
+              run: cd frontend && deno run -A npm:@playwright/test install --with-deps ${{ matrix.browser }}
 
             - name: Run e2e
-              run: deno task e2e-all -- ${{ matrix.projects }}
+              if: matrix.browser
+              run: deno task e2e-all -- --project=${{ matrix.browser }}
