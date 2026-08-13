@@ -24,7 +24,27 @@ jobs:
             - name: Install frontend dependencies
               run: deno task install-frontend-deps
 
-            - name: Install Playwright browser
-              run: cd frontend && deno run -A npm:@playwright/test install --with-deps chromium
+            - name: Install Playwright browsers (chromium + firefox)
+              run: cd frontend && deno run -A npm:@playwright/test install --with-deps chromium firefox
 
-            - run: deno task e2e
+            - run: deno task e2e-all -- --project=chromium --project=firefox
+
+    e2e-webkit:
+        runs-on: macos-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Set up Deno
+              uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+
+            - name: Install frontend dependencies
+              run: deno task install-frontend-deps
+
+            - name: Install Playwright webkit
+              run: cd frontend && deno run -A npm:@playwright/test install webkit
+
+            - name: Run e2e (webkit)
+              run: deno task e2e-all -- --project=webkit
