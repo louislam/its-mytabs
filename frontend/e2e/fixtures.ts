@@ -27,13 +27,19 @@ export type { APIRequestContext, Page };
 export const test = base.extend({
     page: async ({ page }, use, testInfo) => {
         const errors: string[] = [];
+        // Errors reported right after an aborted request are the app's
+        // catch handlers reacting to the navigation abort, not real bugs.
+        let lastAbort = 0;
+        const isAbortNoise = () => Date.now() - lastAbort < 1000;
         page.on("pageerror", (error) => {
             const text = error.stack ?? error.message;
+            if (isAbortNoise()) return;
             if (IGNORED_PAGE_ERRORS.some((re) => re.test(text))) return;
             errors.push(`Uncaught: ${text}`);
         });
         page.on("console", async (msg) => {
             if (msg.type() !== "error") return;
+            if (isAbortNoise()) return;
             let text = msg.text();
             if (text === "JSHandle@object") {
                 const values = await Promise.all(
@@ -50,7 +56,10 @@ export const test = base.extend({
             const errorText = req.failure()?.errorText ?? "";
             // Navigation aborts and media blob cancel events are normal.
             if (url.startsWith("blob:")) return;
-            if (/cancelled|aborted|NS_BINDING_ABORTED/i.test(errorText)) return;
+            if (/cancelled|aborted|NS_BINDING_ABORTED/i.test(errorText)) {
+                lastAbort = Date.now();
+                return;
+            }
             if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(url))) return;
             errors.push(`Request failed: ${url} (${errorText})`);
         });

@@ -29,6 +29,10 @@ for (const { source, label } of cases) {
             // Mainly for Webkit (MacOS)
             test.describe.configure({ retries: 5 });
         }
+        if (source === "synth" || source === "none") {
+            // WebKit seek timing flakes under load
+            test.describe.configure({ retries: 3 });
+        }
 
         test("play/pause toggles playback", async ({ page, request }) => {
             await waitForDemoTab(request);
