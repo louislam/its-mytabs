@@ -22,8 +22,6 @@ export type { APIRequestContext, Page };
 
 export const test = base.extend({
     page: async ({ page }, use, testInfo) => {
-        // Tests annotated with "expect-errors" trigger errors on purpose.
-        const expectErrors = testInfo.annotations.some((a) => a.type === "expect-errors");
         const errors: string[] = [];
         page.on("pageerror", (error) => {
             const text = error.stack ?? error.message;
@@ -45,10 +43,17 @@ export const test = base.extend({
         });
         page.on("requestfailed", (req) => {
             const url = req.url();
+            const errorText = req.failure()?.errorText ?? "";
+            // Navigation aborts and media blob cancel events are normal.
+            if (url.startsWith("blob:")) return;
+            if (/cancelled|aborted|NS_BINDING_ABORTED/i.test(errorText)) return;
             if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(url))) return;
-            errors.push(`Request failed: ${url} (${req.failure()?.errorText ?? ""})`);
+            errors.push(`Request failed: ${url} (${errorText})`);
         });
         await use(page);
+        // The test may push an "expect-errors" annotation in its body to
+        // tolerate intentionally triggered errors (checked at teardown).
+        const expectErrors = testInfo.annotations.some((a) => a.type === "expect-errors");
         if (!expectErrors && errors.length > 0) {
             throw new Error(`Unexpected browser errors:\n${errors.join("\n")}`);
         }
