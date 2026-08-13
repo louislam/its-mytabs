@@ -10,6 +10,7 @@ export default defineConfig({
     timeout: 90_000,
     expect: { timeout: 15_000 },
     retries: 0,
+    maxFailures: 1,
     reporter: [["list"]],
     use: {
         baseURL: `http://127.0.0.1:${e2ePort}`,
