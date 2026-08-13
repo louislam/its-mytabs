@@ -22,6 +22,7 @@ import {
     getTabFilePath,
     getTabFolderPath,
     getTabFullFilePath,
+    recordTabAccess,
     removeAudio,
     removeYoutube,
     replaceTab,
@@ -273,6 +274,10 @@ export async function main() {
             config = await fixMissingTab(config);
 
             const filePath = (await isLoggedIn(c)) ? getTabFullFilePath(config.tab) : "";
+
+            // Record the last time this tab was opened so the home page can show
+            // a "recent tabs" list.
+            await recordTabAccess(id);
 
             return c.json({
                 ok: true,

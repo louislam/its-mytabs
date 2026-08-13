@@ -27,6 +27,7 @@ const {
     replaceTab,
     updateTab,
     updateTabFav,
+    recordTabAccess,
     addAudio,
     removeAudio,
     updateAudio,
@@ -275,6 +276,26 @@ Deno.test("updateTabFav", async () => {
     // Check updated
     tab = await getTab(id);
     assertEquals(tab.fav, false);
+});
+
+Deno.test("recordTabAccess", async () => {
+    const tabData = new Uint8Array([28, 29, 31]);
+    const id = await createTab(tabData, "gp", "Access Test", "Access Artist", "access.gp");
+
+    // No access recorded yet
+    let tab = await getTab(id);
+    assertEquals(tab.lastAccessAt, undefined);
+
+    // Record access, it persists in config.json
+    const timestamp = "2026-08-13T12:00:00.000Z";
+    await recordTabAccess(id, timestamp);
+
+    tab = await getTab(id);
+    assertEquals(tab.lastAccessAt, timestamp);
+
+    // And it survives a fresh read from disk
+    const config = await getConfigJSON(id);
+    assertEquals(config?.tab.lastAccessAt, timestamp);
 });
 
 Deno.test("addAudio", async () => {

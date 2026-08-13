@@ -60,7 +60,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="tab-item p-3 rounded">
+    <div class="tab-item rounded">
         <button
             class="fav-btn"
             @click="toggleFav"
@@ -92,6 +92,7 @@ export default defineComponent({
 .tab-item {
     display: flex;
     transition: background-color 0.1s;
+    padding: 10px;
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.05);
@@ -100,7 +101,7 @@ export default defineComponent({
     .fav-btn {
         background: none;
         border: none;
-        font-size: 20px;
+        font-size: 14px;
         color: #9e9e9e;
         cursor: pointer;
         padding: 0;
@@ -124,10 +125,11 @@ export default defineComponent({
         justify-content: center;
 
         .title {
-            font-size: 20px;
+            font-size: 16px;
         }
 
         .artist {
+            font-size: 13px;
             color: $color2-dark;
         }
     }
