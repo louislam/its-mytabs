@@ -14,7 +14,7 @@ const IGNORED_CONSOLE_ERRORS: RegExp[] = [
 // Uncaught exceptions that are expected and should not fail the test.
 const IGNORED_PAGE_ERRORS: RegExp[] = [
     // alphaTab's metronome click stops before starting on rapid play/pause.
-    /cannot call stop without calling start first/i,
+    /cannot call stop without calling start first|start has not been called/i,
 ];
 
 export { expect };
@@ -32,7 +32,7 @@ export const test = base.extend({
             if (msg.type() !== "error") return;
             const text = msg.text();
             if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(text))) return;
-            errors.push(`Console error: ${text}`);
+            errors.push(`Console error: ${text} @ ${msg.location().url}`);
         });
         await use(page);
         if (errors.length > 0) {

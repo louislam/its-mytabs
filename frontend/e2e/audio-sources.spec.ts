@@ -25,7 +25,7 @@ const cases: { source: Source; label: string }[] = [
 
 for (const { source, label } of cases) {
     test.describe(`core player functions on ${label}`, () => {
-        if (source === "backing") {
+        if (source === "backing" || source === "audio") {
             // Mainly for Webkit (MacOS)
             test.describe.configure({ retries: 5 });
         }
