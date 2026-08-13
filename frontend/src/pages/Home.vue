@@ -299,4 +299,16 @@ h4 {
 .home-container {
     padding-right: 26px;
 }
+
+// In the 3-column layout: column 1 (tab list) scrolls with the page, while
+// columns 2+3 (recent / fav) stick to the viewport and scroll internally.
+@media (min-width: 992px) {
+    .box {
+        position: sticky;
+        top: 20px;
+        align-self: flex-start;
+        height: calc(100vh - 160px);
+        overflow-y: auto;
+    }
+}
 </style>

@@ -16,9 +16,11 @@ import {
     faGear,
     faMagnifyingGlass,
     faPause,
+    faPen,
     faPlay,
     faPlus,
     faStar,
+    faTrash,
     faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { faStar as faStarRegular } from "@fortawesome/free-regular-svg-icons";
@@ -38,6 +40,8 @@ library.add([
     faStar,
     faStarRegular,
     faArrowLeft,
+    faPen,
+    faTrash,
 ]);
 
 export { FontAwesomeIcon };

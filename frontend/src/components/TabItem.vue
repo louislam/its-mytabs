@@ -76,13 +76,14 @@ export default defineComponent({
             <div class="artist" v-if="showArtist">{{ tab.artist }}</div>
         </router-link>
 
-        <button class="btn btn-secondary me-2" @click="handleEdit">
-            Edit
-        </button>
-
-        <button class="btn btn-danger" @click="handleDelete">
-            Delete
-        </button>
+        <div class="btn-group action-buttons" role="group" aria-label="Tab actions">
+            <button class="btn btn-sm btn-secondary" @click="handleEdit" aria-label="Edit">
+                <font-awesome-icon icon="pen" />
+            </button>
+            <button class="btn btn-sm btn-danger" @click="handleDelete" aria-label="Delete">
+                <font-awesome-icon icon="trash" />
+            </button>
+        </div>
     </div>
 </template>
 
