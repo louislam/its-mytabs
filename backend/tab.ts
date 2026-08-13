@@ -39,7 +39,9 @@ export async function checkTabExists(id: string): Promise<void> {
  */
 async function findTabFile(dirPath: string): Promise<string | null> {
     for await (const entry of Deno.readDir(dirPath)) {
-        if (!entry.isFile) continue;
+        if (!entry.isFile) {
+            continue;
+        }
         const ext = path.extname(entry.name).slice(1).toLowerCase();
         if (supportedFormatList.includes(ext)) {
             return entry.name;
@@ -54,7 +56,9 @@ async function findTabFile(dirPath: string): Promise<string | null> {
 async function findAudioFiles(dirPath: string): Promise<string[]> {
     const audioFiles: string[] = [];
     for await (const entry of Deno.readDir(dirPath)) {
-        if (!entry.isFile) continue;
+        if (!entry.isFile) {
+            continue;
+        }
         const ext = path.extname(entry.name).slice(1).toLowerCase();
         if (supportedAudioFormatList.includes(ext)) {
             audioFiles.push(entry.name);
@@ -300,8 +304,15 @@ async function getNextID(): Promise<number> {
         const current = res.value || new Deno.KvU64(0n);
         const next = new Deno.KvU64(current.value + 1n);
         const commit = await kv.atomic()
-            .check({ key, versionstamp: res.versionstamp })
-            .mutate({ type: "set", key, value: next })
+            .check({
+                key,
+                versionstamp: res.versionstamp,
+            })
+            .mutate({
+                type: "set",
+                key,
+                value: next,
+            })
             .commit();
         if (commit.ok) {
             return Number(next.value);
@@ -421,7 +432,10 @@ export async function updateAudio(tab: TabInfo, filename: string, data: SyncRequ
     await updateConfigJSON(tab.id, async (config) => {
         // Find existing audio entry or create new one
         const existingIndex = config.audio.findIndex((a: AudioData) => a.filename === filename);
-        const audioData = AudioDataSchema.parse({ filename, ...data });
+        const audioData = AudioDataSchema.parse({
+            filename,
+            ...data,
+        });
 
         if (existingIndex >= 0) {
             config.audio[existingIndex] = audioData;
@@ -445,7 +459,10 @@ export async function addYoutube(id: string, videoID: string) {
 export async function updateYoutube(id: string, videoID: string, data: SyncRequest) {
     await updateConfigJSON(id, async (config) => {
         const existingIndex = config.youtube.findIndex((y: Youtube) => y.videoID === videoID);
-        const youtubeData = YoutubeSchema.parse({ videoID, ...data });
+        const youtubeData = YoutubeSchema.parse({
+            videoID,
+            ...data,
+        });
 
         if (existingIndex >= 0) {
             config.youtube[existingIndex] = youtubeData;

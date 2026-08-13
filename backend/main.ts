@@ -36,6 +36,7 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
+import { getSeparateJob, isModelInstalled, isOrtInstalled, isSeparateBusy, startMute, startSeparate } from "./separate.ts";
 
 let httpServer: ServerType;
 
@@ -211,7 +212,10 @@ export async function main() {
             const srcDir = getSourceDir();
             const rel = templateTypeList[type];
             if (!rel) {
-                return c.json({ ok: false, msg: "Template not found" }, 400);
+                return c.json({
+                    ok: false,
+                    msg: "Template not found",
+                }, 400);
             }
 
             const templatePath = path.join(srcDir, rel);
@@ -227,7 +231,10 @@ export async function main() {
                 config.tab.title += " #" + id;
             });
 
-            return c.json({ ok: true, id });
+            return c.json({
+                ok: true,
+                id,
+            });
         } catch (e) {
             return generalError(c, e);
         }
@@ -446,6 +453,94 @@ export async function main() {
         }
     });
 
+    // Separate Audio into Stems (bass / drums / guitar)
+    app.post("/api/tab/:id/audio/:filename/separate", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const filename = c.req.param("filename");
+            checkFilename(filename);
+
+            const tab = await getTab(id);
+            const sourcePath = path.join(tabDir, id, filename);
+
+            if (!await fs.exists(sourcePath)) {
+                throw new Error("Audio file not found");
+            }
+
+            let downloadModel = false;
+            const body = await c.req.json().catch(() => ({}));
+            if (typeof body === "object" && body !== null) {
+                downloadModel = (body as { downloadModel?: unknown }).downloadModel === true;
+            }
+
+            startSeparate(tab.id, filename, sourcePath, downloadModel);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Mute a stem in an audio file (produce a mix with bass / guitar removed)
+    app.post("/api/tab/:id/audio/:filename/mute", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const filename = c.req.param("filename");
+            checkFilename(filename);
+
+            const tab = await getTab(id);
+            const sourcePath = path.join(tabDir, id, filename);
+
+            if (!await fs.exists(sourcePath)) {
+                throw new Error("Audio file not found");
+            }
+
+            const body = await c.req.json().catch(() => ({}));
+            const stem = typeof body === "object" && body !== null ? (body as { stem?: unknown }).stem : undefined;
+            if (stem !== "bass" && stem !== "drums" && stem !== "guitar") {
+                throw new Error("Invalid stem");
+            }
+            const downloadModel = typeof body === "object" && body !== null ? (body as { downloadModel?: unknown }).downloadModel === true : false;
+
+            // Avoid overwriting an existing file, e.g. a previous mute output.
+            const base = path.parse(filename).name;
+            let outputPath = path.join(tabDir, id, `${base}_muted-${stem}.ogg`);
+            while (await fs.exists(outputPath)) {
+                const parsed = path.parse(outputPath);
+                outputPath = path.join(parsed.dir, `new_${parsed.name}${parsed.ext}`);
+            }
+
+            startMute(tab.id, filename, sourcePath, stem, outputPath, downloadModel);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Separate Audio Status (used by the UI to poll progress)
+    app.get("/api/separate/status", async (c) => {
+        try {
+            await checkLogin(c);
+            const job = getSeparateJob();
+            return c.json({
+                ok: true,
+                busy: isSeparateBusy(),
+                modelInstalled: isModelInstalled(),
+                ortInstalled: isOrtInstalled(),
+                job,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
     // Serve audio file
     app.get("/api/tab/:id/audio/:filename", async (c) => {
         try {
@@ -655,7 +750,9 @@ export async function main() {
 
             const token = crypto.randomUUID();
 
-            await kv.set(["temp_token", token], tab.id, { expireIn: 20 });
+            // expireIn 20 seconds
+
+            await kv.set(["temp_token", token], tab.id, { expireIn: 20 * 1000 });
             return c.json({
                 ok: true,
                 token,
@@ -704,7 +801,11 @@ export async function main() {
                 throw new Error("Open folder is only supported on Windows");
             }
             const folder = getTabFolderPath(tab);
-            const child = new Deno.Command("explorer.exe", { args: [folder], stdout: "null", stderr: "null" }).spawn();
+            const child = new Deno.Command("explorer.exe", {
+                args: [folder],
+                stdout: "null",
+                stderr: "null",
+            }).spawn();
             await child.status;
             return c.json({ ok: true });
         } catch (e) {
@@ -723,7 +824,11 @@ export async function main() {
             }
 
             const fullPath = getTabFullFilePath(tab);
-            const child = new Deno.Command("cmd", { args: ["/c", "start", "", fullPath], stdout: "null", stderr: "null" }).spawn();
+            const child = new Deno.Command("cmd", {
+                args: ["/c", "start", "", fullPath],
+                stdout: "null",
+                stderr: "null",
+            }).spawn();
             await child.status;
             return c.json({ ok: true });
         } catch (e) {
