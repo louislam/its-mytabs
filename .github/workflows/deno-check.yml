@@ -50,4 +50,7 @@ jobs:
 
             - name: Run e2e
               if: matrix.browser
+              env:
+                  # YouTube needs real network + the embed player; skip on CI
+                  MYTABS_SKIP_YOUTUBE: 1
               run: cd frontend && deno run -A npm:@playwright/test test --project=${{ matrix.browser }}
