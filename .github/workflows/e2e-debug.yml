@@ -27,4 +27,4 @@ jobs:
             - name: Run e2e
               env:
                   MYTABS_SKIP_YOUTUBE: 1
-              run: cd frontend && deno run -A npm:@playwright/test test --project=webkit frontend/e2e/home.spec.ts frontend/e2e/audio-sources.spec.ts --repeat-each=3
+              run: cd frontend && deno run -A npm:@playwright/test test --project=webkit frontend/e2e/home.spec.ts frontend/e2e/audio-sources.spec.ts frontend/e2e/count-in.spec.ts --repeat-each=3
