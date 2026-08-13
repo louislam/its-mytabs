@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, openTab, playbackRange, selectBars, waitForDemoTab } from "./helpers.ts";
 
 test("synth -> audio: cursor stays inside the range (watched for 10s)", async ({ page, request }) => {

@@ -34,6 +34,35 @@ export function getInstrumentName(midiProgram: number) {
     return midiProgramCodeList[midiProgram] || "Unknown";
 }
 
+/** MIDI program ranges for the preferred instrument auto-selection. */
+export const PREFERRED_INSTRUMENT_PROGRAM_RANGES: Record<"bass" | "guitar", [number, number]> = {
+    bass: [32, 39],
+    guitar: [24, 31],
+};
+
+export type PreferredInstrument = "none" | "bass" | "guitar";
+
+/**
+ * Find the first track matching the preferred instrument (bass/guitar),
+ * matched by track name or MIDI program range. Returns null when none matches.
+ */
+export function findPreferredTrack(
+    tracks: { name?: string; playbackInfo: { program: number } }[],
+    preferred: PreferredInstrument,
+) {
+    if (preferred === "none") {
+        return null;
+    }
+    const [min, max] = PREFERRED_INSTRUMENT_PROGRAM_RANGES[preferred];
+    return (
+        tracks.find(
+            (t) =>
+                (t.name ?? "").toLowerCase().includes(preferred) ||
+                (t.playbackInfo?.program >= min && t.playbackInfo?.program <= max),
+        ) ?? null
+    );
+}
+
 export async function checkFetch(res: Response): Promise<void> {
     let data;
 

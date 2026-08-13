@@ -1,0 +1,37 @@
+name: e2e-debug
+# Fast iteration job for flaky/failing specs, kept for future use.
+#
+# Usage:
+#   - To run on a branch: uncomment the push trigger (or use the web UI
+#     "Run workflow" button - workflow_dispatch works on any branch).
+#   - Adjust the spec list + --repeat-each to target the current flake.
+#   - Browsers: swap webkit for chromium/firefox as needed.
+#   - Main suite lives in deno-check.yml (e2e jobs).
+on:
+    workflow_dispatch:
+    # push:
+    #     branches:
+    #         - dev-default
+
+jobs:
+    e2e-webkit:
+        runs-on: macos-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Set up Deno
+              uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+
+            - name: Install frontend dependencies
+              run: deno task install-deps
+
+            - name: Install Playwright browser
+              run: cd frontend && deno run -A npm:@playwright/test install --with-deps webkit
+
+            - name: Run e2e
+              env:
+                  MYTABS_SKIP_YOUTUBE: 1
+              run: cd frontend && deno run -A npm:@playwright/test test --project=webkit frontend/e2e/home.spec.ts frontend/e2e/audio-sources.spec.ts frontend/e2e/count-in.spec.ts --repeat-each=3

@@ -1,5 +1,17 @@
 <script>
-import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
+import {
+    ActionBuffer,
+    baseURL,
+    checkFetch,
+    connectSocketIO,
+    convertAlphaTexSyncPoint,
+    findPreferredTrack,
+    generalError,
+    getInstrumentName,
+    getSetting,
+    releaseWakeLock,
+    requestWakeLock,
+} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
@@ -365,7 +377,7 @@ export default defineComponent({
                 this.setConfig("audio", audioParam);
             }
 
-            const trackID = this.getConfig("trackID", 0);
+            const trackID = this.getConfig("trackID", -1);
 
             // Load the AlphaTab
             await this.load(trackID);
@@ -866,9 +878,23 @@ export default defineComponent({
                     this.applyColors(score);
 
                     // Track
+                    // -1: never picked; auto-select the preferred instrument track
+                    if (trackID === -1) {
+                        trackID = findPreferredTrack(score.tracks, this.setting.preferredInstrument)?.index ?? 0;
+                    }
                     if (trackID < 0 || trackID >= score.tracks.length) {
                         trackID = 0;
                     }
+
+                    this.selectedTrack = trackID;
+
+                    if (this.isDrum()) {
+                        this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
+                    } else {
+                        // This will break drum score
+                        this.overrideHiddenStaves(score);
+                    }
+
                     this.api.renderTracks([this.api.score.tracks[trackID]]);
 
                     // Always show tempo automation on the master bar
@@ -916,15 +942,6 @@ export default defineComponent({
                     });
 
                     this.selectedTrack = trackID;
-
-                    // Force score+tab if the current track program = 0 (probably drums)
-                    if (this.isDrum()) {
-                        this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
-                        this.api.updateSettings();
-                    } else {
-                        // This will break drum score
-                        this.overrideHiddenStaves(score);
-                    }
 
                     this.enableBackingTrack = this.hasBackingTrack();
 
@@ -1173,7 +1190,8 @@ export default defineComponent({
 
                 let updateTimer = 0;
                 const onTimeUpdate = () => {
-                    this.api?.player?.output?.updatePosition(
+                    // Synth output lacks updatePosition during source switches
+                    this.api?.player?.output?.updatePosition?.(
                         audioPlayer.currentTime * 1000,
                     );
                 };
@@ -1419,7 +1437,7 @@ export default defineComponent({
                         switch (e.data) {
                             case YT.PlayerState.PLAYING:
                                 currentTimeInterval = window.setInterval(() => {
-                                    this.api?.player?.output?.updatePosition(player.getCurrentTime() * 1000);
+                                    this.api?.player?.output?.updatePosition?.(player.getCurrentTime() * 1000);
                                 }, 50);
                                 this.playing = true;
                                 this.api?.play();

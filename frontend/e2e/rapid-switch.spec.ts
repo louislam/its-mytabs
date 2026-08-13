@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, AUDIO_FILENAME2, openTab, selectBars, waitForDemoTab } from "./helpers.ts";
 
 const SOURCES: string[] = [

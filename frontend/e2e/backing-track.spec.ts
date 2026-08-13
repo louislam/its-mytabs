@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { findBackingTrackTabId, openTab, waitForDemoTab } from "./helpers.ts";
 
 test.describe("embedded backing track", () => {

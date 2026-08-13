@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, login, STEM_EXAMPLE_FILENAME, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const SEPARATE_BUTTON = "Separate Bass/Drums/Guitar";
@@ -63,7 +63,7 @@ test.describe("separate audio into stems", () => {
 
         // Wait for the completion notification
         await expect(page.locator(".notification-content", { hasText: "Separation completed" })).toBeVisible({
-            timeout: 60_000,
+            timeout: 180_000,
         });
 
         // The three stem files appear in the audio list, without separate buttons

@@ -20,6 +20,9 @@ export async function login(page: Page): Promise<void> {
     await page.fill("#floatingPassword", ADMIN_PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL("/");
+    // Wait for the home page fetches to finish so a later goto() does not
+    // abort them (aborted fetches surface as console errors on webkit/firefox).
+    await page.waitForSelector(".home-col-tablist");
 }
 
 /**

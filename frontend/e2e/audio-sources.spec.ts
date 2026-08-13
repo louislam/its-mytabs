@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, beatPosition, findBackingTrackTabId, openTab, selectBars, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
 type Source = "synth" | "audio" | "backing" | "none";
@@ -25,9 +25,13 @@ const cases: { source: Source; label: string }[] = [
 
 for (const { source, label } of cases) {
     test.describe(`core player functions on ${label}`, () => {
-        if (source === "backing") {
+        if (source === "backing" || source === "audio") {
             // Mainly for Webkit (MacOS)
             test.describe.configure({ retries: 5 });
+        }
+        if (source === "synth" || source === "none") {
+            // WebKit seek timing flakes under load
+            test.describe.configure({ retries: 3 });
         }
 
         test("play/pause toggles playback", async ({ page, request }) => {

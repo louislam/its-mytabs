@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { createHash } from "node:crypto";
 import { AUDIO_FILENAME, openTab, playbackRange, selectBars, TAB_ID, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
@@ -97,7 +97,7 @@ test.describe("audio source switching", () => {
         await expect.poll(() => page.evaluate(() => window.api.player.masterVolume)).toBe(1);
     });
 
-    // WebKit occasionally swallows the play click while the player is re-initializing
+    // WebKit swallows play clicks while the player re-initializes
     test.describe("plays an audio file source", () => {
         test.describe.configure({ retries: 5 });
 

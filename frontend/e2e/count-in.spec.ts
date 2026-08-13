@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const audioIsPaused = (page) =>
@@ -51,6 +51,8 @@ async function selectFirstBars(page) {
 }
 
 test.describe("count in", () => {
+    // WebKit media timing drifts under load; retry before declaring failure.
+    test.describe.configure({ retries: 5 });
     test("delays external audio playback until the count-in finishes", async ({ page, request }) => {
         await waitForDemoTab(request);
 

@@ -1,4 +1,5 @@
-import { expect, Page, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
+import type { Page } from "./fixtures.ts";
 import { login, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const DEMO_TAB_TITLE = "Hare no Hi ni (Bass Only)";
@@ -28,6 +29,7 @@ async function mockTabs(page: Page, tabs: MockTab[]): Promise<void> {
 
 test.describe("home page columns", () => {
     test("handles a tabs API error without crashing", async ({ page, request }) => {
+        test.info().annotations.push({ type: "expect-errors" });
         await waitForDemoTab(request);
         await login(page);
 
