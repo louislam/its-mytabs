@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { isLoggedIn } from "../auth-client.js";
 import { getKeySignature } from "../util.ts";
 import { countIn } from "../count-in.ts";
+import { setupSelection } from "../selection.ts";
 
 const alphaTab = await import("@coderline/alphatab");
 const { ScrollMode, StaveProfile } = alphaTab;
@@ -66,6 +67,7 @@ export default defineComponent({
             playbackRange: null,
             savedPlaybackRange: null,
             playbackRangeRestoreTimer: undefined,
+            selectionController: null,
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -640,6 +642,18 @@ export default defineComponent({
         },
 
         /**
+         * If a playback range is highlighted, move the cursor to its start.
+         * Switching audio sources re-creates the player / external element at
+         * position 0, which drags the cursor back to the first bar.
+         */
+        seekToHighlightedRangeStart() {
+            const range = this.api?.playbackRange;
+            if (range) {
+                this.api.tickPosition = range.startTick;
+            }
+        },
+
+        /**
          * Play from the first bar containing notes in the current track
          * If offset is provided, play from the first bar containing notes after the offset bar
          */
@@ -792,14 +806,24 @@ export default defineComponent({
                 // Exposing api to window for debugging
                 window.api = this.api;
 
+                // Custom selection handles + "click keeps the selection" behavior
+                this.selectionController = setupSelection(this.$refs.bassTabContainer, this.api);
+
                 // Used for showing/hiding the "Restart" button
                 this.api.playbackRangeChanged.on(() => {
                     this.playbackRange = this.api.playbackRange;
                 });
 
-                // Restore the saved playback range once the new player is ready
+                // Restore the saved playback range once the new player is ready.
+                // A source switch also resets the cursor to the first bar, so
+                // put it back at the highlighted range start as well. Only do
+                // this right after a source switch (while the range is saved),
+                // and on a later tick once the re-initialized player settles.
                 this.api.playerReady.on(() => {
                     this.restorePlaybackRange();
+                    if (this.savedPlaybackRange) {
+                        setTimeout(() => this.seekToHighlightedRangeStart(), 0);
+                    }
                 });
 
                 // Clicking on the score seeks. When already playing with count-in
@@ -813,6 +837,11 @@ export default defineComponent({
 
                     // Only a plain click (same beat down/up), not a drag-selection
                     if (!downKey || downKey !== this.getBeatKey(beat)) {
+                        return;
+                    }
+
+                    // When a range is selected, only clicks inside it count
+                    if (this.selectionController && !this.selectionController.isWithinSelection(beat)) {
                         return;
                     }
 
@@ -922,6 +951,10 @@ export default defineComponent({
         destroyContainer() {
             this.api?.destroy();
             this.api = undefined;
+
+            // Remove custom selection handles + restore alphaTab's default method
+            this.selectionController?.clear();
+            this.selectionController = null;
 
             // Reset states
             this.ready = false;
@@ -1244,6 +1277,16 @@ export default defineComponent({
             audioPlayer.load();
             audioPlayer.playbackRate = this.api.playbackSpeed;
 
+            // Switching in an external audio element resets it to position 0,
+            // which drags the cursor to the first bar. If a playback range is
+            // highlighted, seek the cursor back to its start once the audio is
+            // actually loaded (earlier seeks are ignored by the element).
+            audioPlayer.addEventListener("loadeddata", () => this.seekToHighlightedRangeStart(), { once: true });
+            audioPlayer.addEventListener("canplay", () => this.seekToHighlightedRangeStart(), { once: true });
+            if (audioPlayer.readyState >= 1) {
+                this.seekToHighlightedRangeStart();
+            }
+
             this.pause();
 
             // Re-apply sync points after pause() completes (pause triggers playing watcher which calls updateSettings)
@@ -1525,6 +1568,11 @@ export default defineComponent({
                 this.api.renderTracks([this.api.score.tracks[trackID]]);
                 this.setConfig("trackID", trackID);
             }
+
+            // A practice range is tied to the previous instrument's bars, so it
+            // must not carry over to the newly selected track.
+            this.api.playbackRange = null;
+            this.api.clearPlaybackRangeHighlight();
 
             this.closeAllList();
         },

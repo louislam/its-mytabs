@@ -465,10 +465,13 @@ export async function main() {
             }
 
             // serve the file
-            const file = await Deno.open(filePath, {
-                read: true,
-            });
+            const stat = await Deno.stat(filePath);
+            const size = stat.size;
+            const rangeHeader = c.req.header("range");
 
+            // HTML audio/video needs HTTP range support to seek (e.g. jumping
+            // the cursor to a highlighted bar), so serve partial content when
+            // a Range header is present.
             const encodedFilename = encodeURIComponent(filename);
             let mime = "application/octet-stream";
             let mimeList: Record<string, string> = {
@@ -481,9 +484,49 @@ export async function main() {
                 mime = mimeList[ext];
             }
 
-            return c.body(file.readable, 200, {
+            const baseHeaders = {
                 "Content-Type": mime,
+                "Accept-Ranges": "bytes",
                 "Content-Disposition": `attachment; filename="${encodedFilename}"`,
+            };
+
+            if (rangeHeader) {
+                const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+                if (m) {
+                    let start = m[1] ? parseInt(m[1], 10) : 0;
+                    let end = m[2] ? parseInt(m[2], 10) : size - 1;
+                    if (isNaN(start)) {
+                        start = 0;
+                    }
+                    if (isNaN(end) || end >= size) {
+                        end = size - 1;
+                    }
+                    if (start > end || start >= size) {
+                        return c.body(null, 416, { "Content-Range": `bytes */${size}` });
+                    }
+                    // Read only the requested slice instead of the whole file
+                    const file = await Deno.open(filePath, { read: true });
+                    const length = end - start + 1;
+                    const buf = new Uint8Array(length);
+                    await file.seek(start, Deno.SeekMode.Start);
+                    const bytesRead = await file.read(buf);
+                    file.close();
+                    return c.body(bytesRead !== null ? buf.subarray(0, bytesRead) : buf, 206, {
+                        ...baseHeaders,
+                        "Content-Range": `bytes ${start}-${end}/${size}`,
+                        "Content-Length": String(length),
+                    });
+                }
+            }
+
+            // No Range header: serve the whole file
+            const file = await Deno.open(filePath, {
+                read: true,
+            });
+
+            return c.body(file.readable, 200, {
+                ...baseHeaders,
+                "Content-Length": String(size),
             });
         } catch (e) {
             return generalError(c, e);
