@@ -15,6 +15,8 @@ const IGNORED_CONSOLE_ERRORS: RegExp[] = [
 const IGNORED_PAGE_ERRORS: RegExp[] = [
     // alphaTab's metronome click stops before starting on rapid play/pause.
     /cannot call stop without calling start first|start has not been called/i,
+    // WebKit reports navigation-aborted fetches as CORS failures.
+    /due to access control checks|fetch api cannot load|xmlhttprequest cannot load/i,
 ];
 
 export { expect };
