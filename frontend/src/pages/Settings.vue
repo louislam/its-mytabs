@@ -22,6 +22,7 @@ export default defineComponent({
                 scrollMode: "",
                 scale: 1,
                 toolbarAutoHide: false,
+                preferredInstrument: "none",
             },
             isProcessing: false,
         };
@@ -141,6 +142,16 @@ export default defineComponent({
             <select id="scoreColor" class="form-select" v-model="setting.scoreColor">
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
+            </select>
+        </div>
+
+        <!-- Preferred Instrument -->
+        <div class="mb-3">
+            <label for="preferredInstrument" class="form-label">Preferred Instrument</label>
+            <select id="preferredInstrument" class="form-select" v-model="setting.preferredInstrument">
+                <option value="none">None</option>
+                <option value="bass">Bass</option>
+                <option value="guitar">Guitar</option>
             </select>
         </div>
 

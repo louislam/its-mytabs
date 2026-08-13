@@ -1,5 +1,17 @@
 <script>
-import { ActionBuffer, baseURL, checkFetch, connectSocketIO, convertAlphaTexSyncPoint, generalError, getInstrumentName, getSetting, releaseWakeLock, requestWakeLock } from "../app.js";
+import {
+    ActionBuffer,
+    baseURL,
+    checkFetch,
+    connectSocketIO,
+    convertAlphaTexSyncPoint,
+    findPreferredTrack,
+    generalError,
+    getInstrumentName,
+    getSetting,
+    releaseWakeLock,
+    requestWakeLock,
+} from "../app.js";
 import { defineComponent } from "vue";
 import { BDropdown, BDropdownDivider, BDropdownItem } from "bootstrap-vue-next";
 import { notify } from "@kyvg/vue3-notification";
@@ -365,7 +377,7 @@ export default defineComponent({
                 this.setConfig("audio", audioParam);
             }
 
-            const trackID = this.getConfig("trackID", 0);
+            const trackID = this.getConfig("trackID", -1);
 
             // Load the AlphaTab
             await this.load(trackID);
@@ -866,6 +878,11 @@ export default defineComponent({
                     this.applyColors(score);
 
                     // Track
+                    // -1 means the user never picked a track for this tab, so
+                    // auto-select the first track matching the preferred instrument
+                    if (trackID === -1) {
+                        trackID = findPreferredTrack(score.tracks, this.setting.preferredInstrument)?.index ?? 0;
+                    }
                     if (trackID < 0 || trackID >= score.tracks.length) {
                         trackID = 0;
                     }
