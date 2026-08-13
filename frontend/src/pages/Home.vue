@@ -145,7 +145,7 @@ export default defineComponent({
     <div class="container-fluid home-container">
         <div class="row" v-if="ready">
             <!-- Column 1: Tab List with search -->
-            <div class="col-md-12 col-lg-4 home-col-tablist">
+            <div class="col-md-12 col-lg-4 order-3 order-lg-0 home-col-tablist">
                 <div class="search-section mb-3 pe-3 ps-3">
                     <div class="input-group">
                         <span class="input-group-text">
@@ -219,7 +219,7 @@ export default defineComponent({
             </div>
 
             <!-- Column 2: Recent Tabs -->
-            <div class="col-md-12 col-lg-4 box box-left">
+            <div class="col-md-12 col-lg-4 order-1 order-lg-0 box box-left">
                 <div class="ms-3 mb-2">
                     <h4>Recent Tabs</h4>
                 </div>
@@ -239,7 +239,7 @@ export default defineComponent({
             </div>
 
             <!-- Column 3: Fav Tabs -->
-            <div class="col-md-12 col-lg-4 box box-right">
+            <div class="col-md-12 col-lg-4 order-2 order-lg-0 box box-right">
                 <div class="ms-3 mb-2">
                     <h4>Favorite Tabs</h4>
                 </div>
@@ -279,13 +279,26 @@ h4 {
     background-color: rgba(0, 0, 0, 0.16);
     padding: 25px;
 
-    &.box-left {
-        border-radius: 25px 0 0 25px;
-        border-right: 1px solid rgba(255, 255, 255, 0.04);
+    // Not Mobile
+    .desktop & {
+        position: sticky;
+        top: 20px;
+        align-self: flex-start;
+        height: calc(100vh - 160px);
+        overflow-y: auto;
+
+        &.box-left {
+            border-radius: 25px 0 0 25px;
+            border-right: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        &.box-right {
+            border-radius: 0 25px 25px 0;
+        }
     }
 
-    &.box-right {
-        border-radius: 0 25px 25px 0;
+    .mobile & {
+        margin-bottom: 25px;
     }
 }
 
@@ -296,19 +309,7 @@ h4 {
     margin-top: 20px;
 }
 
-.home-container {
+.desktop .home-container {
     padding-right: 26px;
-}
-
-// In the 3-column layout: column 1 (tab list) scrolls with the page, while
-// columns 2+3 (recent / fav) stick to the viewport and scroll internally.
-@media (min-width: 992px) {
-    .box {
-        position: sticky;
-        top: 20px;
-        align-self: flex-start;
-        height: calc(100vh - 160px);
-        overflow-y: auto;
-    }
 }
 </style>
