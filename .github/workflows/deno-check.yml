@@ -8,14 +8,29 @@ on:
             - master
 
 jobs:
+    deno-check:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Set up Deno
+              uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+
+            - run: deno task check
+            - run: deno task test
+
     e2e:
+        needs: deno-check
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - { os: ubuntu-latest, browser: chromium, runChecks: true }
-                    - { os: ubuntu-latest, browser: firefox, runChecks: false }
-                    - { os: macos-latest, browser: webkit, runChecks: false }
+                    - { os: ubuntu-latest, browser: chromium }
+                    - { os: ubuntu-latest, browser: firefox }
+                    - { os: macos-latest, browser: webkit }
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout repository
@@ -26,13 +41,6 @@ jobs:
               with:
                   deno-version: v2.x
 
-            # Format/lint/type-check/unit tests only once (the chromium entry)
-            - name: Deno check & test
-              if: matrix.runChecks
-              run: |
-                  deno task check
-                  deno task test
-
             - name: Install frontend dependencies
               run: deno task install-frontend-deps
 
@@ -42,4 +50,4 @@ jobs:
 
             - name: Run e2e
               if: matrix.browser
-              run: deno task e2e-all -- --project=${{ matrix.browser }}
+              run: cd frontend && deno run -A npm:@playwright/test test --project=${{ matrix.browser }}

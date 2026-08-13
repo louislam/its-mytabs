@@ -291,6 +291,13 @@ test.describe("selection handles", () => {
 
         await selectBars(page, 1, 3);
 
+        // Wait for the cursor to settle at the range start before capturing
+        // the "before" position (the seek can land a tick late)
+        const range = await playbackRange(page);
+        await expect
+            .poll(() => page.evaluate(() => window.api.tickPosition ?? 0))
+            .toBeGreaterThanOrEqual(range.startTick);
+
         // Click a beat outside the range: nothing should happen
         const before = await page.evaluate(() => window.api.tickPosition ?? 0);
         const outside = await beatPosition(page, 0, 0);
