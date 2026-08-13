@@ -1,4 +1,5 @@
 import * as path from "@std/path";
+import { Piscina } from "piscina";
 import { isModelInstalled } from "./converter.ts";
 import { isOrtInstalled } from "./onnxruntime.ts";
 import { updateConfigJSON } from "./tab.ts";
@@ -27,9 +28,24 @@ export interface SeparateJob {
 }
 
 let currentJob: SeparateJob | null = null;
-let currentWorker: Worker | null = null;
-/** Request waiting to be sent once the worker signals it is ready. */
-let pendingRequest: SeparateWorkerRequest | null = null;
+
+// piscina manages a pool of node:worker_threads; each task runs the default
+// export of separate_worker.ts in a worker thread so the blocking ONNX Runtime
+// inference does not freeze the HTTP server. Only one separation runs at a
+// time (see isSeparateBusy), so a single-thread pool is enough.
+const pool = new Piscina({
+    filename: new URL("./separate_worker.ts", import.meta.url).href,
+    minThreads: 1,
+    maxThreads: 1,
+    idleTimeout: 60_000,
+});
+
+// Progress messages posted by the worker are surfaced here.
+pool.on("message", (msg: SeparateWorkerMessage) => {
+    if (msg.type === "progress") {
+        handleProgress(msg);
+    }
+});
 
 /** Whether a separation job is currently running (not done/error). */
 export function isSeparateBusy(): boolean {
@@ -44,8 +60,8 @@ export function getSeparateJob(): SeparateJob | null {
 /**
  * Start separating `filename` (in the tab's folder) into bass/drums/guitar stems.
  *
- * The actual work runs in a worker thread (see separate_worker.ts) so the
- * blocking ONNX Runtime inference does not freeze the HTTP server. Poll
+ * The actual work runs in a piscina worker thread (see separate_worker.ts) so
+ * the blocking ONNX Runtime inference does not freeze the HTTP server. Poll
  * getSeparateJob() for progress; worker messages update it.
  *
  * If the ONNX Runtime package and/or the Demucs model are missing and
@@ -79,38 +95,35 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
 
     console.log(`[separate] Job started: ${filename} (source: ${sourcePath})`);
 
-    const worker = new Worker(new URL("./separate_worker.ts", import.meta.url), { type: "module" });
-    currentWorker = worker;
-    worker.onmessage = (e: MessageEvent<SeparateWorkerMessage>) => {
-        // The worker signals readiness after its module (with all its
-        // top-level awaits) has been evaluated. Messages posted to a module
-        // worker before that point are silently dropped, so hold the request
-        // until the "ready" handshake completes.
-        if (e.data.type === "ready") {
-            if (pendingRequest) {
-                worker.postMessage(pendingRequest);
-                pendingRequest = null;
+    const request: SeparateWorkerRequest = { sourcePath, tabID, downloadModel };
+    pool.run(request)
+        .then((result) => {
+            const job = currentJob;
+            if (!job) {
+                return;
             }
-            return;
-        }
-        handleWorkerMessage(e.data).catch((err) => {
-            console.error("[separate] Failed to handle worker message:", err);
-        });
-    };
-    worker.onerror = (e) => {
-        const job = currentJob;
-        if (job && !isSeparateBusy()) {
-            return;
-        }
-        if (job) {
+            job.phase = "done";
+            job.result = result;
+            job.elapsedMs = performance.now() - job.startedAt;
+            logJobProgress(job, true);
+            console.log(`[separate] Job done: ${Object.values(result).join(", ")}`);
+            // The separated tracks should play in sync with the source, so
+            // inherit its sync metadata. Run in the background; the result is
+            // already in the job for the UI.
+            inheritSyncMetadata(job.tabID, job.filename, result).catch((e) => {
+                console.error("[separate] Failed to inherit sync metadata:", e);
+            });
+        })
+        .catch((err) => {
+            const job = currentJob;
+            if (!job) {
+                return;
+            }
             job.phase = "error";
-            job.error = e.message || "Separation worker failed";
-        }
-        console.error("[separate] Worker error:", e.message || e);
-        cleanupWorker();
-    };
-
-    pendingRequest = { sourcePath, tabID, downloadModel };
+            job.error = err instanceof Error ? err.message : String(err);
+            job.elapsedMs = performance.now() - job.startedAt;
+            console.error(`[separate] Job failed: ${job.error}`);
+        });
 }
 
 // Log throttling for console progress output
@@ -133,48 +146,18 @@ function logJobProgress(job: SeparateJob, force = false): void {
     console.log(`[separate] ${job.filename}: ${job.phase} ${job.current}/${job.total}${pct}${eta} (${(job.elapsedMs / 1000).toFixed(0)}s)`);
 }
 
-async function handleWorkerMessage(msg: SeparateWorkerMessage): Promise<void> {
+function handleProgress(msg: Extract<SeparateWorkerMessage, { type: "progress" }>): void {
     const job = currentJob;
     if (!job) {
         return;
     }
-    switch (msg.type) {
-        case "progress":
-            job.phase = msg.phase;
-            job.current = msg.current;
-            job.total = msg.total;
-            job.elapsedMs = msg.elapsedMs;
-            job.etaMs = msg.etaMs;
-            job.message = msg.message;
-            logJobProgress(job);
-            break;
-        case "result":
-            job.phase = "done";
-            job.result = msg.result;
-            job.elapsedMs = msg.elapsedMs;
-            logJobProgress(job, true);
-            console.log(`[separate] Job done: ${Object.values(msg.result).join(", ")}`);
-            cleanupWorker();
-            // The separated tracks should play in sync with the source, so
-            // inherit its sync metadata. Run in the background; the result
-            // message already told the UI the job finished.
-            inheritSyncMetadata(job.tabID, job.filename, msg.result).catch((e) => {
-                console.error("[separate] Failed to inherit sync metadata:", e);
-            });
-            break;
-        case "error":
-            job.phase = "error";
-            job.error = msg.error;
-            job.elapsedMs = msg.elapsedMs;
-            console.error(`[separate] Job failed: ${msg.error}`);
-            cleanupWorker();
-            break;
-    }
-}
-
-function cleanupWorker(): void {
-    currentWorker?.terminate();
-    currentWorker = null;
+    job.phase = msg.phase;
+    job.current = msg.current;
+    job.total = msg.total;
+    job.elapsedMs = msg.elapsedMs;
+    job.etaMs = msg.etaMs;
+    job.message = msg.message;
+    logJobProgress(job);
 }
 
 /**

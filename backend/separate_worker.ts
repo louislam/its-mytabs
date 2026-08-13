@@ -1,10 +1,4 @@
-/// <reference lib="deno.worker" />
-// Worker thread that runs the actual separation job.
-//
-// onnxruntime's native session.run() is a blocking Node-API call that freezes
-// the JavaScript event loop of the thread it runs on. Running the whole job
-// (downloads + inference) in this worker keeps the main process (HTTP server,
-// sockets, polling) responsive while a long song is being separated.
+import { parentPort } from "node:worker_threads";
 import * as path from "@std/path";
 import { installOrt, isOrtInstalled, ortDownloadSizeMB, ortVersionLabel } from "./onnxruntime.ts";
 import { isModelInstalled, modelPath, split } from "./converter.ts";
@@ -31,35 +25,36 @@ interface SeparateWorkerProgressBase {
 }
 
 export type SeparateWorkerMessage =
-    | { type: "ready" }
     | (SeparateWorkerProgressBase & { elapsedMs: number })
     | { type: "result"; result: Record<string, string>; elapsedMs: number }
     | { type: "error"; error: string; elapsedMs: number };
 
-self.onmessage = async (e: MessageEvent<SeparateWorkerRequest>): Promise<void> => {
-    const { sourcePath, tabID, downloadModel } = e.data;
+/** Post a progress/message back to the piscina pool (null when not a worker). */
+function post(msg: SeparateWorkerMessage): void {
+    parentPort?.postMessage(msg);
+}
+
+export default async function separate(request: SeparateWorkerRequest): Promise<Record<string, string>> {
+    const { sourcePath, tabID, downloadModel } = request;
     const startedAt = performance.now();
-    const post = (msg: SeparateWorkerProgressBase) => {
-        self.postMessage({ ...msg, elapsedMs: performance.now() - startedAt });
-    };
-    const postResult = (result: Record<string, string>) => {
-        self.postMessage({ type: "result", result, elapsedMs: performance.now() - startedAt });
+    const postProgress = (msg: SeparateWorkerProgressBase) => {
+        post({ ...msg, elapsedMs: performance.now() - startedAt });
     };
 
     try {
         if (!isOrtInstalled()) {
             const message = `Downloading ${ortVersionLabel} (~${ortDownloadSizeMB} MB)...`;
-            post({ type: "progress", phase: "download", current: 0, total: 0, etaMs: 0, message });
+            postProgress({ type: "progress", phase: "download", current: 0, total: 0, etaMs: 0, message });
             await installOrt((p) => {
-                post({ type: "progress", phase: "download", current: p.current, total: p.total, etaMs: 0, message });
+                postProgress({ type: "progress", phase: "download", current: p.current, total: p.total, etaMs: 0, message });
             });
         }
 
         if (!isModelInstalled()) {
             const message = `Downloading ${path.basename(modelPath)} (~136 MB)...`;
-            post({ type: "progress", phase: "download", current: 0, total: 0, etaMs: 0, message });
+            postProgress({ type: "progress", phase: "download", current: 0, total: 0, etaMs: 0, message });
             await downloadDemucsModel((p) => {
-                post({ type: "progress", phase: "download", current: p.current, total: p.total, etaMs: 0, message });
+                postProgress({ type: "progress", phase: "download", current: p.current, total: p.total, etaMs: 0, message });
             });
         }
 
@@ -69,24 +64,20 @@ self.onmessage = async (e: MessageEvent<SeparateWorkerRequest>): Promise<void> =
             if (p.phase === "done" && p.result) {
                 result = p.result;
             } else {
-                post({ type: "progress", phase: p.phase, current: p.current, total: p.total, etaMs: p.etaMs, message: "" });
+                postProgress({ type: "progress", phase: p.phase, current: p.current, total: p.total, etaMs: p.etaMs, message: "" });
             }
         }
-        if (result) {
-            postResult(result);
+        if (!result) {
+            throw new Error("Separation finished without producing a result");
         }
+        return result;
     } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         console.error(`[separate] Job failed in worker: ${error}`);
-        self.postMessage({ type: "error", error, elapsedMs: performance.now() - startedAt });
+        post({ type: "error", error, elapsedMs: performance.now() - startedAt });
+        throw err;
     }
-};
-
-// Posting a request from the main thread before this handler is registered is
-// silently dropped (module workers evaluate top-level awaits before the
-// handler exists). Signal readiness so the main thread knows it is safe to
-// send the job request.
-self.postMessage({ type: "ready" });
+}
 
 interface DownloadProgress {
     current: number;
