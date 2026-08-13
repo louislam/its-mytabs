@@ -22,6 +22,8 @@ export type { APIRequestContext, Page };
 
 export const test = base.extend({
     page: async ({ page }, use, testInfo) => {
+        // Tests annotated with "expect-errors" trigger errors on purpose.
+        const expectErrors = testInfo.annotations.some((a) => a.type === "expect-errors");
         const errors: string[] = [];
         page.on("pageerror", (error) => {
             const text = error.stack ?? error.message;
@@ -31,11 +33,12 @@ export const test = base.extend({
         page.on("console", (msg) => {
             if (msg.type() !== "error") return;
             const text = msg.text();
-            if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(text))) return;
-            errors.push(`Console error: ${text} @ ${msg.location().url}`);
+            const url = msg.location().url;
+            if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(text) || re.test(url))) return;
+            errors.push(`Console error: ${text} @ ${url}`);
         });
         await use(page);
-        if (errors.length > 0) {
+        if (!expectErrors && errors.length > 0) {
             throw new Error(`Unexpected browser errors:\n${errors.join("\n")}`);
         }
     },

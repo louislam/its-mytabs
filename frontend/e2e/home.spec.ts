@@ -29,6 +29,7 @@ async function mockTabs(page: Page, tabs: MockTab[]): Promise<void> {
 
 test.describe("home page columns", () => {
     test("handles a tabs API error without crashing", async ({ page, request }) => {
+        test.info().annotations.push({ type: "expect-errors" });
         await waitForDemoTab(request);
         await login(page);
 
