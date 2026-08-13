@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { openTab, waitForDemoTab } from "./helpers.ts";
 
 async function savedTrackID(page): Promise<string | null> {

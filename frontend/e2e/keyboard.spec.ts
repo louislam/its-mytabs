@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { currentBarIndex, openTab, selectBars, tickPosition, waitForDemoTab } from "./helpers.ts";
 
 test.describe("keyboard shortcuts", () => {

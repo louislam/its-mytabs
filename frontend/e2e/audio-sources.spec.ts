@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, beatPosition, findBackingTrackTabId, openTab, selectBars, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
 type Source = "synth" | "audio" | "backing" | "none";

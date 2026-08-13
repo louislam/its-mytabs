@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, openTab, playbackRange, selectBars, tickPosition, waitForDemoTab } from "./helpers.ts";
 
 test.describe("toolbar playback controls", () => {

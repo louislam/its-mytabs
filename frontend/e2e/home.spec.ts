@@ -1,4 +1,5 @@
-import { expect, Page, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
+import type { Page } from "./fixtures.ts";
 import { login, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const DEMO_TAB_TITLE = "Hare no Hi ni (Bass Only)";

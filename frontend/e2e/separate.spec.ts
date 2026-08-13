@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, login, STEM_EXAMPLE_FILENAME, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const SEPARATE_BUTTON = "Separate Bass/Drums/Guitar";

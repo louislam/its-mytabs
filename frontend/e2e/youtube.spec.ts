@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 // "Me at the zoo" - the official, reliably embeddable YouTube test video added

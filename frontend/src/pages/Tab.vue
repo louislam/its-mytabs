@@ -878,8 +878,7 @@ export default defineComponent({
                     this.applyColors(score);
 
                     // Track
-                    // -1 means the user never picked a track for this tab, so
-                    // auto-select the first track matching the preferred instrument
+                    // -1: never picked; auto-select the preferred instrument track
                     if (trackID === -1) {
                         trackID = findPreferredTrack(score.tracks, this.setting.preferredInstrument)?.index ?? 0;
                     }
@@ -888,7 +887,7 @@ export default defineComponent({
                     }
 
                     this.selectedTrack = trackID;
-                    
+
                     if (this.isDrum()) {
                         this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
                     } else {
@@ -1191,7 +1190,8 @@ export default defineComponent({
 
                 let updateTimer = 0;
                 const onTimeUpdate = () => {
-                    this.api?.player?.output?.updatePosition(
+                    // Synth output lacks updatePosition during source switches
+                    this.api?.player?.output?.updatePosition?.(
                         audioPlayer.currentTime * 1000,
                     );
                 };
@@ -1437,7 +1437,7 @@ export default defineComponent({
                         switch (e.data) {
                             case YT.PlayerState.PLAYING:
                                 currentTimeInterval = window.setInterval(() => {
-                                    this.api?.player?.output?.updatePosition(player.getCurrentTime() * 1000);
+                                    this.api?.player?.output?.updatePosition?.(player.getCurrentTime() * 1000);
                                 }, 50);
                                 this.playing = true;
                                 this.api?.play();

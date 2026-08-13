@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { openTab, selectBars, waitForDemoTab } from "./helpers.ts";
 
 test.describe("track controls", () => {

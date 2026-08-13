@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, AUDIO_FILENAME2, findBackingTrackTabId, openTab, playbackRange, selectBars, waitForAudioReady, waitForDemoTab } from "./helpers.ts";
 
 // Every audio source available on the demo tab, with the URL param used to

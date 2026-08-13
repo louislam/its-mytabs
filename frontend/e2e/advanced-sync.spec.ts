@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
 import { AUDIO_FILENAME, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 test.describe("advanced sync", () => {
