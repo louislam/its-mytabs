@@ -710,9 +710,9 @@ export async function main() {
 
             const token = crypto.randomUUID();
 
-            // expireIn is in milliseconds; 20 seconds gives the frontend plenty
-            // of time to request the file (the token is still deleted after use).
-            await kv.set(["temp_token", token], tab.id, { expireIn: 20_000 });
+            // expireIn 20 seconds
+
+            await kv.set(["temp_token", token], tab.id, { expireIn: 20 * 1000 });
             return c.json({
                 ok: true,
                 token,
