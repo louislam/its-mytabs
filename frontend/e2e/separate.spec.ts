@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { AUDIO_FILENAME, login, STEM_EXAMPLE_FILENAME, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const SEPARATE_BUTTON = "Separate Bass/Drums/Guitar";
+const MUTE_BASS_BUTTON = "Mute Bass";
+const MUTE_GUITAR_BUTTON = "Mute Guitar";
 
 test.describe("separate audio into stems", () => {
     test("separate button is hidden for already-separated stem files", async ({ page, request }) => {
@@ -20,6 +22,19 @@ test.describe("separate audio into stems", () => {
         const stemItem = items.filter({ hasText: STEM_EXAMPLE_FILENAME });
         await expect(stemItem).toBeVisible();
         await expect(stemItem.getByRole("button", { name: SEPARATE_BUTTON })).toHaveCount(0);
+        await expect(stemItem.getByRole("button", { name: MUTE_BASS_BUTTON })).toHaveCount(0);
+        await expect(stemItem.getByRole("button", { name: MUTE_GUITAR_BUTTON })).toHaveCount(0);
+    });
+
+    test("mute buttons appear on non-stem audio files", async ({ page, request }) => {
+        await waitForDemoTab(request);
+        await login(page);
+        await page.goto(`/tab/${TAB_ID}/edit/audio`);
+
+        const item = page.locator(".audio-item").filter({ hasText: AUDIO_FILENAME });
+        await expect(item).toBeVisible();
+        await expect(item.getByRole("button", { name: MUTE_BASS_BUTTON })).toBeVisible();
+        await expect(item.getByRole("button", { name: MUTE_GUITAR_BUTTON })).toBeVisible();
     });
 
     test("runs the full separation flow with progress", async ({ page, request }) => {

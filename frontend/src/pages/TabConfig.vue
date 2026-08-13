@@ -338,21 +338,44 @@ export default defineComponent({
         },
 
         /**
-         * Whether the filename is already a separated stem (e.g. song_bass.ogg).
-         * Those are outputs of the separation feature and cannot be separated again.
+         * Whether the filename is already a separated stem (e.g. song_bass.ogg)
+         * or a muted mix (e.g. song_muted-bass.ogg). Those are outputs of the
+         * separation feature and cannot be separated again.
          */
         isSeparatedStem(filename) {
-            return /_(bass|guitar|drums)(\.[^.]+)?$/.test(filename);
+            return /_(bass|guitar|drums|muted-(bass|guitar|drums))(\.[^.]+)?$/.test(filename);
         },
 
         async separateAudio(audio) {
+            await this.startSeparationJob(
+                audio,
+                "Separate this audio into bass, drums and guitar tracks?",
+                "separate",
+                {},
+            );
+        },
+
+        async muteAudio(audio, stem) {
+            await this.startSeparationJob(
+                audio,
+                `Mute the ${stem} track? This creates a new audio file without it.`,
+                "mute",
+                { stem },
+            );
+        },
+
+        /**
+         * Common flow for starting a separation (or mute) job: confirm, check
+         * the server is not busy, ask for the AI model download consent, then
+         * POST to the matching endpoint and begin polling.
+         */
+        async startSeparationJob(audio, confirmText, operation, extraBody) {
             if (this.separateBusy) {
                 return;
             }
 
             const confirmed = confirm(
-                "Separate this audio into bass, drums and guitar tracks?\n\n" +
-                    "This may take a few minutes and will use high CPU/RAM while running.",
+                confirmText + "\n\nThis may take a few minutes and will use high CPU/RAM while running.",
             );
             if (!confirmed) {
                 return;
@@ -398,13 +421,13 @@ export default defineComponent({
             try {
                 const tabID = this.tab.id;
                 const encoded = encodeURIComponent(audio.filename);
-                const res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}/separate`, {
+                const res = await fetch(baseURL + `/api/tab/${tabID}/audio/${encoded}/${operation}`, {
                     method: "POST",
                     credentials: "include",
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ downloadModel }),
+                    body: JSON.stringify({ downloadModel, ...extraBody }),
                 });
                 await checkFetch(res);
                 this.startSeparatePolling();
@@ -435,14 +458,15 @@ export default defineComponent({
                 const job = status.job;
                 if (job && job.phase === "done") {
                     const names = Object.values(job.result || {}).map((p) => p.split(/[\\/]/).pop());
+                    const isMute = job.operation === "mute";
                     notify({
-                        text: "Separation completed: " + names.join(", "),
+                        text: (isMute ? "Mute completed: " : "Separation completed: ") + names.join(", "),
                         type: "success",
                     });
                     await this.load();
                 } else if (job && job.phase === "error") {
                     notify({
-                        text: "Separation failed: " + (job.error || "Unknown error"),
+                        text: (job.operation === "mute" ? "Mute failed: " : "Separation failed: ") + (job.error || "Unknown error"),
                         type: "error",
                     });
                 }
@@ -464,13 +488,14 @@ export default defineComponent({
             if (!this.separateJob) {
                 return "";
             }
+            const isMute = this.separateJob.operation === "mute";
             switch (this.separateJob.phase) {
                 case "download":
                     return "Downloading AI model";
                 case "decode":
                     return "Decoding";
                 case "separate":
-                    return "Separating tracks";
+                    return isMute ? `Muting ${this.separateJob.stem} track` : "Separating tracks";
                 case "encode":
                     return "Encoding";
                 case "done":
@@ -686,13 +711,29 @@ export default defineComponent({
                                 @update:advancedSync="audio.advancedSync = $event"
                             />
                             <div v-if="!isSeparatedStem(audio.filename)">
-                                <button
-                                    class="btn btn-secondary mb-3"
-                                    @click.prevent="separateAudio(audio)"
-                                    :disabled="separateBusy"
-                                >
-                                    Separate Bass/Drums/Guitar
-                                </button>
+                                <div class="btn-group mb-3">
+                                    <button
+                                        class="btn btn-secondary"
+                                        @click.prevent="separateAudio(audio)"
+                                        :disabled="separateBusy"
+                                    >
+                                        Separate Bass/Drums/Guitar
+                                    </button>
+                                    <button
+                                        class="btn btn-secondary"
+                                        @click.prevent="muteAudio(audio, 'bass')"
+                                        :disabled="separateBusy"
+                                    >
+                                        Mute Bass
+                                    </button>
+                                    <button
+                                        class="btn btn-secondary"
+                                        @click.prevent="muteAudio(audio, 'guitar')"
+                                        :disabled="separateBusy"
+                                    >
+                                        Mute Guitar
+                                    </button>
+                                </div>
 
                                 <div
                                     v-if="separateBusy && separateJob && separateJob.filename === audio.filename"

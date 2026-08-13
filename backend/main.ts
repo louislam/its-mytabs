@@ -36,7 +36,7 @@ import sanitize from "sanitize-filename";
 import "@std/dotenv/load";
 import { socketIO } from "./socket.ts";
 import * as cheerio from "cheerio";
-import { getSeparateJob, isModelInstalled, isOrtInstalled, isSeparateBusy, startSeparate } from "./separate.ts";
+import { getSeparateJob, isModelInstalled, isOrtInstalled, isSeparateBusy, startMute, startSeparate } from "./separate.ts";
 
 let httpServer: ServerType;
 
@@ -475,6 +475,46 @@ export async function main() {
             }
 
             startSeparate(tab.id, filename, sourcePath, downloadModel);
+
+            return c.json({
+                ok: true,
+            });
+        } catch (e) {
+            return generalError(c, e);
+        }
+    });
+
+    // Mute a stem in an audio file (produce a mix with bass / guitar removed)
+    app.post("/api/tab/:id/audio/:filename/mute", async (c) => {
+        try {
+            await checkLogin(c);
+            const id = c.req.param("id");
+            const filename = c.req.param("filename");
+            checkFilename(filename);
+
+            const tab = await getTab(id);
+            const sourcePath = path.join(tabDir, id, filename);
+
+            if (!await fs.exists(sourcePath)) {
+                throw new Error("Audio file not found");
+            }
+
+            const body = await c.req.json().catch(() => ({}));
+            const stem = typeof body === "object" && body !== null ? (body as { stem?: unknown }).stem : undefined;
+            if (stem !== "bass" && stem !== "drums" && stem !== "guitar") {
+                throw new Error("Invalid stem");
+            }
+            const downloadModel = typeof body === "object" && body !== null ? (body as { downloadModel?: unknown }).downloadModel === true : false;
+
+            // Avoid overwriting an existing file, e.g. a previous mute output.
+            const base = path.parse(filename).name;
+            let outputPath = path.join(tabDir, id, `${base}_muted-${stem}.ogg`);
+            while (await fs.exists(outputPath)) {
+                const parsed = path.parse(outputPath);
+                outputPath = path.join(parsed.dir, `new_${parsed.name}${parsed.ext}`);
+            }
+
+            startMute(tab.id, filename, sourcePath, stem, outputPath, downloadModel);
 
             return c.json({
                 ok: true,

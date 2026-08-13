@@ -17,7 +17,7 @@ const tempDir = await Deno.makeTempDir();
 Deno.env.set("DATA_DIR", tempDir);
 Deno.env.set("MYTABS_PORT", "47778");
 
-const { startSeparate, isSeparateBusy, getSeparateJob } = await import("./separate.ts");
+const { startMute, startSeparate, isSeparateBusy, getSeparateJob } = await import("./separate.ts");
 
 const modelPath = path.join(tempDir, "htdemucs_6s_fp16weights.onnx");
 const ortIndex = path.join(tempDir, "onnxruntime-node", "node_modules", "onnxruntime-node", "dist", "index.js");
@@ -80,6 +80,32 @@ Deno.test("separate - spawns a worker; busy lock held and worker errors are surf
     assertExists(job.error);
 });
 
+Deno.test("separate - mute job runs in a worker and errors are surfaced", async () => {
+    await fakeInstalled();
+
+    const sourcePath = path.join(tempDir, "song.wav");
+    const outputPath = path.join(tempDir, "song_muted-bass.ogg");
+    startMute("1", "song.wav", sourcePath, "bass", outputPath, false);
+
+    // The mute job uses the same busy lock as separation.
+    assertEquals(isSeparateBusy(), true);
+    assertThrows(
+        () => startMute("1", "song.wav", sourcePath, "bass", outputPath, false),
+        Error,
+        "already in progress",
+    );
+
+    // The source does not exist, so the worker fails at decode time and the
+    // failure lands in the job, releasing the busy lock.
+    const job = await waitForJobSettle();
+    assertExists(job);
+    assertEquals(job.operation, "mute");
+    assertEquals(job.stem, "bass");
+    assertEquals(job.phase, "error");
+    assertEquals(isSeparateBusy(), false);
+    assertExists(job.error);
+});
+
 Deno.test("separate - full worker job completes and writes stems", async () => {
     // Only run when the repo data dir actually has the model + runtime
     // (mirrors container_test.ts / the e2e start-server helper).
@@ -122,6 +148,47 @@ Deno.test("separate - full worker job completes and writes stems", async () => {
         assertEquals(await fs.exists(outPath), true);
         assertEquals(path.basename(outPath), `song_${stem}.ogg`);
     }
+});
+
+Deno.test("separate - full mute job completes and writes the muted mix", async () => {
+    // Only run when the repo data dir actually has the model + runtime
+    // (mirrors container_test.ts / the e2e start-server helper).
+    const repoModel = "./data/htdemucs_6s_fp16weights.onnx";
+    const repoOrt = "./data/onnxruntime-node";
+    if (!(await fs.exists(repoModel)) || !(await fs.exists(path.join(repoOrt, "node_modules", "onnxruntime-node", "dist", "index.js")))) {
+        console.warn("SKIP: Demucs model / ONNX Runtime not present in ./data");
+        return;
+    }
+    await Deno.copyFile(repoModel, modelPath);
+    await fs.copy(repoOrt, path.join(tempDir, "onnxruntime-node"), { overwrite: true });
+
+    // Synthetic stereo clip: 2s @44.1k with alternating bass + guitar tones.
+    const sr = 44100;
+    const dur = 2;
+    const n = sr * dur;
+    const L = new Float32Array(n);
+    const R = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        const t = i / sr;
+        const s = 0.4 * Math.sin(2 * Math.PI * 110 * t) + 0.2 * Math.sin(2 * Math.PI * 220 * t);
+        L[i] = s;
+        R[i] = s;
+    }
+    const sourcePath = path.join(tempDir, "song.wav");
+    await Deno.writeFile(sourcePath, encodeWav(L, R, sr));
+    const outputPath = path.join(tempDir, "song_muted-bass.ogg");
+
+    startMute("1", "song.wav", sourcePath, "bass", outputPath, false);
+
+    const job = await waitForJobSettle(180_000);
+    assertExists(job);
+    assertEquals(job.phase, "done", `job failed: ${job.error ?? "no error"}`);
+    assertEquals(isSeparateBusy(), false);
+
+    // The muted mix is written to the requested output path.
+    assertExists(job.result);
+    assertEquals(job.result.muted, outputPath);
+    assertEquals(await fs.exists(outputPath), true);
 });
 
 function encodeWav(L: Float32Array, R: Float32Array, sr: number): Uint8Array {

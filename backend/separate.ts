@@ -1,9 +1,9 @@
 import * as path from "@std/path";
 import { Piscina } from "piscina";
-import { isModelInstalled } from "./converter.ts";
+import { isModelInstalled, StemType } from "./converter.ts";
 import { isOrtInstalled } from "./onnxruntime.ts";
 import { updateConfigJSON } from "./tab.ts";
-import type { SeparateWorkerMessage, SeparateWorkerRequest } from "./separate_worker.ts";
+import type { SeparateOperation, SeparateWorkerMessage, SeparateWorkerRequest } from "./separate_worker.ts";
 
 export { isModelInstalled, isOrtInstalled };
 
@@ -14,6 +14,10 @@ export interface SeparateJob {
     tabID: string;
     /** Source audio filename. */
     filename: string;
+    /** Which operation this job runs (separate into stems, or mute a stem). */
+    operation: SeparateOperation;
+    /** Stem being muted (only when operation === "mute"). */
+    stem?: StemType;
     phase: SeparatePhase;
     current: number;
     total: number;
@@ -103,6 +107,59 @@ export function getSeparateJob(): SeparateJob | null {
  * @param downloadModel Allow downloading the AI model + runtime if they are missing.
  */
 export function startSeparate(tabID: string, filename: string, sourcePath: string, downloadModel: boolean): void {
+    startJob({
+        operation: "separate",
+        tabID,
+        filename,
+        sourcePath,
+        downloadModel,
+    });
+}
+
+/**
+ * Start producing a mix of `filename` with one stem muted (e.g. remove the bass
+ * so it can be practiced over). Same worker/pool/progress machinery as
+ * startSeparate; the output file is written to `outputPath`.
+ *
+ * @param tabID Tab id (folder name).
+ * @param filename Source audio filename in the tab folder.
+ * @param sourcePath Absolute path to the source audio file.
+ * @param stem Stem to mute (bass / drums / guitar).
+ * @param outputPath Absolute path where the muted mix is written.
+ * @param downloadModel Allow downloading the AI model + runtime if they are missing.
+ */
+export function startMute(
+    tabID: string,
+    filename: string,
+    sourcePath: string,
+    stem: StemType,
+    outputPath: string,
+    downloadModel: boolean,
+): void {
+    startJob({
+        operation: "mute",
+        stem,
+        outputPath,
+        tabID,
+        filename,
+        sourcePath,
+        downloadModel,
+    });
+}
+
+interface StartJobOptions {
+    operation: SeparateOperation;
+    stem?: StemType;
+    outputPath?: string;
+    tabID: string;
+    filename: string;
+    sourcePath: string;
+    downloadModel: boolean;
+}
+
+function startJob(opts: StartJobOptions): void {
+    const { operation, tabID, filename, sourcePath, downloadModel } = opts;
+
     if (isSeparateBusy()) {
         throw new Error("A separation task is already in progress. Please wait for it to finish.");
     }
@@ -113,6 +170,8 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
     currentJob = {
         tabID,
         filename,
+        operation,
+        stem: opts.stem,
         phase: isModelInstalled() && isOrtInstalled() ? "decode" : "download",
         current: 0,
         total: 0,
@@ -123,12 +182,15 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
         startedAt: performance.now(),
     };
 
-    console.log(`[separate] Job started: ${filename} (source: ${sourcePath})`);
+    console.log(`[separate] Job started: ${operation} ${filename} (source: ${sourcePath})`);
 
     const request: SeparateWorkerRequest = {
+        type: operation,
         sourcePath,
         tabID,
         downloadModel,
+        stem: opts.stem,
+        outputPath: opts.outputPath,
     };
     pool.run(request)
         .then((result) => {
@@ -142,7 +204,7 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
             job.elapsedMs = performance.now() - job.startedAt;
             logJobProgress(job, true);
             console.log(`[separate] Job done: ${Object.values(result).join(", ")}`);
-            // The separated tracks should play in sync with the source, so
+            // The output file(s) should play in sync with the source, so
             // inherit its sync metadata. Run in the background; the result is
             // already in the job for the UI.
             inheritSyncMetadata(job.tabID, job.filename, result).catch((e) => {
