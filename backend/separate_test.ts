@@ -132,7 +132,9 @@ function encodeWav(L: Float32Array, R: Float32Array, sr: number): Uint8Array {
     const buf = new Uint8Array(44 + dataLen);
     const dv = new DataView(buf.buffer);
     const wr = (off: number, str: string) => {
-        for (let i = 0; i < str.length; i++) buf[off + i] = str.charCodeAt(i);
+        for (let i = 0; i < str.length; i++) {
+            buf[off + i] = str.charCodeAt(i);
+        }
     };
     wr(0, "RIFF");
     dv.setUint32(4, 36 + dataLen, true);

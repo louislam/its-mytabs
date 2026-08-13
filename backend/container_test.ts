@@ -41,7 +41,9 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
         let s = 0.4 * Math.sin(2 * Math.PI * bassFreq * t);
         s += 0.2 * Math.sin(2 * Math.PI * 196.0 * t);
         const beatPhase = t % 0.5;
-        if (beatPhase < 0.02) s += 0.6 * Math.exp(-beatPhase * 200) * Math.sin(2 * Math.PI * 120 * t);
+        if (beatPhase < 0.02) {
+            s += 0.6 * Math.exp(-beatPhase * 200) * Math.sin(2 * Math.PI * 120 * t);
+        }
         L[i] = s;
         R[i] = s;
     }
@@ -52,14 +54,18 @@ Deno.test("split - synthetic input produces stems + tab.gp", async () => {
     const outDir = path.join(tempDir, "out");
     let result: Record<string, string> = {};
     for await (const p of split(inputPath, outDir, ["drums", "guitar", "bass"])) {
-        if (p.result) result = p.result;
+        if (p.result) {
+            result = p.result;
+        }
     }
 
     console.log("split result:", result);
 
     for (const key in result) {
         const f = result[key];
-        if (!(await fs.exists(f))) throw new Error(`Expected output missing: ${f}`);
+        if (!(await fs.exists(f))) {
+            throw new Error(`Expected output missing: ${f}`);
+        }
         // Outputs are named {org_name}_{stem}.ogg, e.g. input_bass.ogg
         const expected = `input_${key}.ogg`;
         if (path.basename(f) !== expected) {
@@ -105,12 +111,16 @@ Deno.test("muteTrack - synthetic input produces muted ogg", async () => {
     const outPath = path.join(tempDir, "no_bass.ogg");
     let result = "";
     for await (const p of muteTrack(inputPath, outPath, "bass")) {
-        if (p.result) result = p.result;
+        if (p.result) {
+            result = p.result;
+        }
     }
 
     console.log("muteTrack result:", result);
 
-    if (!(await fs.exists(result))) throw new Error(`Expected output missing: ${result}`);
+    if (!(await fs.exists(result))) {
+        throw new Error(`Expected output missing: ${result}`);
+    }
 
     // cleanup (only this test's own outputs; tempDir is shared with other tests)
     await Deno.remove(outPath);
@@ -125,7 +135,9 @@ function encodeWav(L: Float32Array, R: Float32Array, sr: number): Uint8Array {
     const buf = new Uint8Array(44 + dataLen);
     const dv = new DataView(buf.buffer);
     const wr = (off: number, str: string) => {
-        for (let i = 0; i < str.length; i++) buf[off + i] = str.charCodeAt(i);
+        for (let i = 0; i < str.length; i++) {
+            buf[off + i] = str.charCodeAt(i);
+        }
     };
     wr(0, "RIFF");
     dv.setUint32(4, 36 + dataLen, true);

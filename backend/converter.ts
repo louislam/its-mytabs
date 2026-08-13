@@ -143,7 +143,10 @@ async function decodeFile(filename: string): Promise<{ channelData: Float32Array
             if (!r || !r.channelData || r.channelData.length === 0) {
                 throw new Error("FLAC decode returned no data");
             }
-            return { channelData: r.channelData, sampleRate: r.sampleRate };
+            return {
+                channelData: r.channelData,
+                sampleRate: r.sampleRate,
+            };
         } finally {
             decoder.free();
         }
@@ -157,7 +160,10 @@ async function decodeFile(filename: string): Promise<{ channelData: Float32Array
             if (!r || !r.channelData || r.channelData.length === 0) {
                 throw new Error("OGG decode returned no data");
             }
-            return { channelData: r.channelData, sampleRate: r.sampleRate };
+            return {
+                channelData: r.channelData,
+                sampleRate: r.sampleRate,
+            };
         } finally {
             decoder.free();
         }
@@ -171,7 +177,10 @@ async function decodeFile(filename: string): Promise<{ channelData: Float32Array
             if (!r || !r.channelData || r.channelData.length === 0) {
                 throw new Error("MPEG decode returned no data");
             }
-            return { channelData: r.channelData, sampleRate: r.sampleRate };
+            return {
+                channelData: r.channelData,
+                sampleRate: r.sampleRate,
+            };
         } finally {
             decoder.free();
         }
@@ -242,10 +251,16 @@ async function* separate(leftChannel: Float32Array, rightChannel: Float32Array, 
                 }
             }
         }
-        for (let s = 0; s < clen; s++) weight[start + s] += win[s];
+        for (let s = 0; s < clen; s++) {
+            weight[start + s] += win[s];
+        }
 
         const done = i + 1;
-        yield { current: done, total: nChunks, etaMs: estimateEta(t0, done, nChunks) };
+        yield {
+            current: done,
+            total: nChunks,
+            etaMs: estimateEta(t0, done, nChunks),
+        };
     }
 
     for (const row of needed) {
@@ -272,7 +287,13 @@ async function* decodeAndSeparate(
     startMs: number,
     signal?: AbortSignal,
 ): AsyncGenerator<ConverterProgressBase, { separated: Separated; left: Float32Array; right: Float32Array }, void> {
-    yield { phase: "decode", current: 0, total: 1, elapsedMs: 0, etaMs: 0 };
+    yield {
+        phase: "decode",
+        current: 0,
+        total: 1,
+        elapsedMs: 0,
+        etaMs: 0,
+    };
     const decoded = await decodeFile(filename);
     if (signal?.aborted) {
         throw new DOMException("Converter stopped", "AbortError");
@@ -285,7 +306,11 @@ async function* decodeAndSeparate(
     while (true) {
         const next = await it.next();
         if (next.done) {
-            return { separated: next.value, left: L, right: R };
+            return {
+                separated: next.value,
+                left: L,
+                right: R,
+            };
         }
         yield {
             phase: "separate",
@@ -353,9 +378,22 @@ export async function* split(filename: string, outputDir: string, stems: StemTyp
             await Deno.writeFile(p, await encodeOgg(separated[stem], sampleRate));
             result[stem] = p;
             i++;
-            yield { phase: "encode", current: i, total: stems.length, elapsedMs: performance.now() - start, etaMs: estimateEta(encodeStart, i, stems.length) };
+            yield {
+                phase: "encode",
+                current: i,
+                total: stems.length,
+                elapsedMs: performance.now() - start,
+                etaMs: estimateEta(encodeStart, i, stems.length),
+            };
         }
-        yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result };
+        yield {
+            phase: "done",
+            current: 1,
+            total: 1,
+            elapsedMs: performance.now() - start,
+            etaMs: 0,
+            result,
+        };
     } finally {
         if (currentAbort === controller) {
             currentAbort = null;
@@ -406,9 +444,22 @@ export async function* muteTrack(filename: string, outputPath: string, stem: Ste
             }
         }
 
-        yield { phase: "encode", current: 0, total: 1, elapsedMs: performance.now() - start, etaMs: 0 };
+        yield {
+            phase: "encode",
+            current: 0,
+            total: 1,
+            elapsedMs: performance.now() - start,
+            etaMs: 0,
+        };
         await Deno.writeFile(outputPath, await encodeOgg(out, sampleRate));
-        yield { phase: "done", current: 1, total: 1, elapsedMs: performance.now() - start, etaMs: 0, result: outputPath };
+        yield {
+            phase: "done",
+            current: 1,
+            total: 1,
+            elapsedMs: performance.now() - start,
+            etaMs: 0,
+            result: outputPath,
+        };
     } finally {
         if (currentAbort === controller) {
             currentAbort = null;

@@ -54,6 +54,9 @@
 
     // Lint
     "lint": {
+        "plugins": [
+            "jsr:@aireone/deno-lint-curly@0.2.0"
+        ],
         "rules": {
             "tags": ["recommended"],
             "exclude": [

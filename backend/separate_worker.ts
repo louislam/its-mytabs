@@ -38,23 +38,54 @@ export default async function separate(request: SeparateWorkerRequest): Promise<
     const { sourcePath, tabID, downloadModel } = request;
     const startedAt = performance.now();
     const postProgress = (msg: SeparateWorkerProgressBase) => {
-        post({ ...msg, elapsedMs: performance.now() - startedAt });
+        post({
+            ...msg,
+            elapsedMs: performance.now() - startedAt,
+        });
     };
 
     try {
         if (!isOrtInstalled()) {
             const message = `Downloading ${ortVersionLabel} (~${ortDownloadSizeMB} MB)...`;
-            postProgress({ type: "progress", phase: "download", current: 0, total: 0, etaMs: 0, message });
+            postProgress({
+                type: "progress",
+                phase: "download",
+                current: 0,
+                total: 0,
+                etaMs: 0,
+                message,
+            });
             await installOrt((p) => {
-                postProgress({ type: "progress", phase: "download", current: p.current, total: p.total, etaMs: 0, message });
+                postProgress({
+                    type: "progress",
+                    phase: "download",
+                    current: p.current,
+                    total: p.total,
+                    etaMs: 0,
+                    message,
+                });
             });
         }
 
         if (!isModelInstalled()) {
             const message = `Downloading ${path.basename(modelPath)} (~136 MB)...`;
-            postProgress({ type: "progress", phase: "download", current: 0, total: 0, etaMs: 0, message });
+            postProgress({
+                type: "progress",
+                phase: "download",
+                current: 0,
+                total: 0,
+                etaMs: 0,
+                message,
+            });
             await downloadDemucsModel((p) => {
-                postProgress({ type: "progress", phase: "download", current: p.current, total: p.total, etaMs: 0, message });
+                postProgress({
+                    type: "progress",
+                    phase: "download",
+                    current: p.current,
+                    total: p.total,
+                    etaMs: 0,
+                    message,
+                });
             });
         }
 
@@ -64,7 +95,14 @@ export default async function separate(request: SeparateWorkerRequest): Promise<
             if (p.phase === "done" && p.result) {
                 result = p.result;
             } else {
-                postProgress({ type: "progress", phase: p.phase, current: p.current, total: p.total, etaMs: p.etaMs, message: "" });
+                postProgress({
+                    type: "progress",
+                    phase: p.phase,
+                    current: p.current,
+                    total: p.total,
+                    etaMs: p.etaMs,
+                    message: "",
+                });
             }
         }
         if (!result) {
@@ -74,7 +112,11 @@ export default async function separate(request: SeparateWorkerRequest): Promise<
     } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         console.error(`[separate] Job failed in worker: ${error}`);
-        post({ type: "error", error, elapsedMs: performance.now() - startedAt });
+        post({
+            type: "error",
+            error,
+            elapsedMs: performance.now() - startedAt,
+        });
         throw err;
     }
 }
@@ -95,7 +137,11 @@ async function downloadDemucsModel(onProgress: (p: DownloadProgress) => void): P
     let downloaded = 0;
 
     const partPath = `${modelPath}.part`;
-    const file = await Deno.open(partPath, { write: true, create: true, truncate: true });
+    const file = await Deno.open(partPath, {
+        write: true,
+        create: true,
+        truncate: true,
+    });
     try {
         const reader = res.body.getReader();
         while (true) {
@@ -106,12 +152,18 @@ async function downloadDemucsModel(onProgress: (p: DownloadProgress) => void): P
             if (value) {
                 await file.write(value);
                 downloaded += value.length;
-                onProgress({ current: downloaded, total });
+                onProgress({
+                    current: downloaded,
+                    total,
+                });
             }
         }
     } finally {
         file.close();
     }
     await Deno.rename(partPath, modelPath);
-    onProgress({ current: total || downloaded, total });
+    onProgress({
+        current: total || downloaded,
+        total,
+    });
 }

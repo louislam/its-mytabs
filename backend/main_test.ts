@@ -129,7 +129,11 @@ Deno.test({
         const signupRes = await fetch(`${baseURL}/api/auth/sign-up/email`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: "test+ci@example.com", name: "CI Test", password: "password123" }),
+            body: JSON.stringify({
+                email: "test+ci@example.com",
+                name: "CI Test",
+                password: "password123",
+            }),
         });
         const signupJson = await signupRes.json();
         // sign up should succeed
@@ -139,7 +143,10 @@ Deno.test({
         const signInRes = await fetch(`${baseURL}/api/auth/sign-in/email`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: "test+ci@example.com", password: "password123" }),
+            body: JSON.stringify({
+                email: "test+ci@example.com",
+                password: "password123",
+            }),
         });
 
         console.log("Sign-in response status:", signInRes.status);

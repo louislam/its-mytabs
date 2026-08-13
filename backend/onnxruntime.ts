@@ -134,11 +134,16 @@ async function downloadAndExtract(
     const chunks: Uint8Array[] = [];
     while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            break;
+        }
         if (value) {
             chunks.push(value);
             downloaded += value.length;
-            onProgress?.({ current: downloaded, total });
+            onProgress?.({
+                current: downloaded,
+                total,
+            });
         }
     }
     const bytes = new Uint8Array(downloaded);

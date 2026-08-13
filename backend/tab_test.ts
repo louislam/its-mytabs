@@ -396,7 +396,11 @@ Deno.test("updateAudio", async () => {
     // Try to update non-existent file, should throw
     await assertRejects(
         async () => {
-            await updateAudio(tab, "nonexistent.mp3", { syncMethod: "simple", simpleSync: 0, advancedSync: "" });
+            await updateAudio(tab, "nonexistent.mp3", {
+                syncMethod: "simple",
+                simpleSync: 0,
+                advancedSync: "",
+            });
         },
         Error,
         "Audio file not found",
@@ -405,7 +409,11 @@ Deno.test("updateAudio", async () => {
     // Test path traversal protection
     await assertRejects(
         async () => {
-            await updateAudio(tab, "../invalid.mp3", { syncMethod: "simple", simpleSync: 0, advancedSync: "" });
+            await updateAudio(tab, "../invalid.mp3", {
+                syncMethod: "simple",
+                simpleSync: 0,
+                advancedSync: "",
+            });
         },
         Error,
         "Invalid filename",

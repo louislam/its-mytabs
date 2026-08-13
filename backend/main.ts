@@ -212,7 +212,10 @@ export async function main() {
             const srcDir = getSourceDir();
             const rel = templateTypeList[type];
             if (!rel) {
-                return c.json({ ok: false, msg: "Template not found" }, 400);
+                return c.json({
+                    ok: false,
+                    msg: "Template not found",
+                }, 400);
             }
 
             const templatePath = path.join(srcDir, rel);
@@ -228,7 +231,10 @@ export async function main() {
                 config.tab.title += " #" + id;
             });
 
-            return c.json({ ok: true, id });
+            return c.json({
+                ok: true,
+                id,
+            });
         } catch (e) {
             return generalError(c, e);
         }
@@ -753,7 +759,11 @@ export async function main() {
                 throw new Error("Open folder is only supported on Windows");
             }
             const folder = getTabFolderPath(tab);
-            const child = new Deno.Command("explorer.exe", { args: [folder], stdout: "null", stderr: "null" }).spawn();
+            const child = new Deno.Command("explorer.exe", {
+                args: [folder],
+                stdout: "null",
+                stderr: "null",
+            }).spawn();
             await child.status;
             return c.json({ ok: true });
         } catch (e) {
@@ -772,7 +782,11 @@ export async function main() {
             }
 
             const fullPath = getTabFullFilePath(tab);
-            const child = new Deno.Command("cmd", { args: ["/c", "start", "", fullPath], stdout: "null", stderr: "null" }).spawn();
+            const child = new Deno.Command("cmd", {
+                args: ["/c", "start", "", fullPath],
+                stdout: "null",
+                stderr: "null",
+            }).spawn();
             await child.status;
             return c.json({ ok: true });
         } catch (e) {

@@ -95,7 +95,11 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
 
     console.log(`[separate] Job started: ${filename} (source: ${sourcePath})`);
 
-    const request: SeparateWorkerRequest = { sourcePath, tabID, downloadModel };
+    const request: SeparateWorkerRequest = {
+        sourcePath,
+        tabID,
+        downloadModel,
+    };
     pool.run(request)
         .then((result) => {
             const job = currentJob;
@@ -182,7 +186,10 @@ async function inheritSyncMetadata(tabID: string, sourceFilename: string, result
             if (existing) {
                 Object.assign(existing, meta);
             } else {
-                config.audio.push({ filename, ...meta });
+                config.audio.push({
+                    filename,
+                    ...meta,
+                });
             }
         }
     });

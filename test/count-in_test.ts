@@ -23,9 +23,18 @@ async function settle(ms = 100): Promise<void> {
 
 Deno.test("schedules one ping per beat in order", async () => {
     const calls: BeatCall[] = [];
-    const countIn = createCountIn((beatIndex, totalBeats) => calls.push({ beatIndex, totalBeats }));
+    const countIn = createCountIn((beatIndex, totalBeats) =>
+        calls.push({
+            beatIndex,
+            totalBeats,
+        })
+    );
 
-    await countIn.start({ bpm: FAST_BPM, beats: 4, onFinished: () => {} });
+    await countIn.start({
+        bpm: FAST_BPM,
+        beats: 4,
+        onFinished: () => {},
+    });
     await settle();
 
     assert(calls.length === 4, `expected 4 pings, got ${calls.length}`);
@@ -37,9 +46,18 @@ Deno.test("schedules one ping per beat in order", async () => {
 
 Deno.test("cancel() clears the scheduled pings", async () => {
     const calls: BeatCall[] = [];
-    const countIn = createCountIn((beatIndex, totalBeats) => calls.push({ beatIndex, totalBeats }));
+    const countIn = createCountIn((beatIndex, totalBeats) =>
+        calls.push({
+            beatIndex,
+            totalBeats,
+        })
+    );
 
-    await countIn.start({ bpm: FAST_BPM, beats: 4, onFinished: () => {} });
+    await countIn.start({
+        bpm: FAST_BPM,
+        beats: 4,
+        onFinished: () => {},
+    });
     countIn.cancel();
     await settle();
 
@@ -48,11 +66,24 @@ Deno.test("cancel() clears the scheduled pings", async () => {
 
 Deno.test("cancel() then restart does not play the cancelled pings", async () => {
     const calls: BeatCall[] = [];
-    const countIn = createCountIn((beatIndex, totalBeats) => calls.push({ beatIndex, totalBeats }));
+    const countIn = createCountIn((beatIndex, totalBeats) =>
+        calls.push({
+            beatIndex,
+            totalBeats,
+        })
+    );
 
-    await countIn.start({ bpm: FAST_BPM, beats: 4, onFinished: () => {} });
+    await countIn.start({
+        bpm: FAST_BPM,
+        beats: 4,
+        onFinished: () => {},
+    });
     countIn.cancel();
-    await countIn.start({ bpm: FAST_BPM, beats: 4, onFinished: () => {} });
+    await countIn.start({
+        bpm: FAST_BPM,
+        beats: 4,
+        onFinished: () => {},
+    });
     countIn.cancel();
     await settle();
 
@@ -61,10 +92,23 @@ Deno.test("cancel() then restart does not play the cancelled pings", async () =>
 
 Deno.test("start() is a no-op while a count-in is already running", async () => {
     const calls: BeatCall[] = [];
-    const countIn = createCountIn((beatIndex, totalBeats) => calls.push({ beatIndex, totalBeats }));
+    const countIn = createCountIn((beatIndex, totalBeats) =>
+        calls.push({
+            beatIndex,
+            totalBeats,
+        })
+    );
 
-    await countIn.start({ bpm: FAST_BPM, beats: 4, onFinished: () => {} });
-    await countIn.start({ bpm: FAST_BPM, beats: 4, onFinished: () => {} });
+    await countIn.start({
+        bpm: FAST_BPM,
+        beats: 4,
+        onFinished: () => {},
+    });
+    await countIn.start({
+        bpm: FAST_BPM,
+        beats: 4,
+        onFinished: () => {},
+    });
     await settle();
 
     assert(calls.length === 4, `second start() must not add more pings, got ${calls.length}`);
