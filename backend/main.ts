@@ -666,8 +666,10 @@ export async function main() {
                     throw new Error("Temp token does not match tab ID");
                 }
 
-                // Delete the token after use
-                await kv.delete(["temp_token", tempToken]);
+                // Not single-use: alphaTab (especially on WebKit) may re-request
+                // the file URL, and deleting the token after the first request
+                // would break those. The token's short expireIn (20s) already
+                // bounds how long it can be used.
             } else {
                 await checkLogin(c);
             }
