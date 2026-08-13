@@ -484,7 +484,13 @@ export default defineComponent({
 
         separatePercent() {
             const job = this.separateJob;
-            if (!job || job.total <= 0) {
+            if (!job) {
+                return 100;
+            }
+            if (typeof job.overall === "number") {
+                return Math.min(100, Math.max(0, Math.round(job.overall)));
+            }
+            if (job.total <= 0) {
                 return 100;
             }
             return Math.min(100, Math.round((job.current / job.total) * 100));
@@ -693,7 +699,7 @@ export default defineComponent({
                                     class="mb-3 separate-progress"
                                 >
                                     <div class="mb-1">
-                                        {{ separatePhaseLabel() }}<template v-if="separateJob.total > 0"> ({{ separatePercent() }}%)</template>
+                                        {{ separatePhaseLabel() }}<template v-if="typeof separateJob.overall === 'number'"> ({{ separatePercent() }}%)</template>
                                     </div>
                                     <div class="progress">
                                         <div

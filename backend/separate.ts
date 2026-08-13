@@ -17,6 +17,8 @@ export interface SeparateJob {
     phase: SeparatePhase;
     current: number;
     total: number;
+    /** Combined progress 0-100 across all phases (see overallPercent). */
+    overall: number;
     elapsedMs: number;
     etaMs: number;
     message: string;
@@ -25,6 +27,33 @@ export interface SeparateJob {
     /** Set when phase === "error". */
     error?: string;
     startedAt: number;
+}
+
+/**
+ * Map a phase's progress onto a single overall 0-100 scale:
+ *   download/decode ->  0 - 10
+ *   separate        -> 10 - 90
+ *   encode          -> 90 - 100
+ *
+ * Phases with a single atomic step (decode, or a 1-chunk separation) report the
+ * end of their band, so the bar reflects the completed phase instead of 0%.
+ */
+function overallPercent(phase: SeparatePhase, current: number, total: number): number {
+    if (phase === "done") {
+        return 100;
+    }
+    const frac = total > 1 ? current / total : 1;
+    switch (phase) {
+        case "download":
+        case "decode":
+            return Math.round(frac * 10);
+        case "separate":
+            return Math.round(10 + frac * 80);
+        case "encode":
+            return Math.round(90 + frac * 10);
+        default:
+            return 0;
+    }
 }
 
 let currentJob: SeparateJob | null = null;
@@ -87,6 +116,7 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
         phase: isModelInstalled() && isOrtInstalled() ? "decode" : "download",
         current: 0,
         total: 0,
+        overall: 0,
         elapsedMs: 0,
         etaMs: 0,
         message: "",
@@ -108,6 +138,7 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
             }
             job.phase = "done";
             job.result = result;
+            job.overall = 100;
             job.elapsedMs = performance.now() - job.startedAt;
             logJobProgress(job, true);
             console.log(`[separate] Job done: ${Object.values(result).join(", ")}`);
@@ -158,6 +189,7 @@ function handleProgress(msg: Extract<SeparateWorkerMessage, { type: "progress" }
     job.phase = msg.phase;
     job.current = msg.current;
     job.total = msg.total;
+    job.overall = overallPercent(msg.phase, msg.current, msg.total);
     job.elapsedMs = msg.elapsedMs;
     job.etaMs = msg.etaMs;
     job.message = msg.message;
