@@ -42,7 +42,7 @@ jobs:
                   deno-version: v2.x
 
             - name: Install frontend dependencies
-              run: deno task install-frontend-deps
+              run: deno task install-deps
 
             - name: Install Playwright browser
               if: matrix.browser

@@ -9,7 +9,7 @@
     "tasks": {
         // Production
         "start": "deno run --allow-all backend/main.ts",
-        "setup": "deno task install-frontend-deps && deno task build-frontend",
+        "setup": "deno task install-deps && deno task build-frontend",
 
         // Addons
         "mpchc-controller": "deno run --allow-all extra/mpchc-controller.ts",
@@ -18,7 +18,7 @@
         "dev": "deno task build-frontend && deno run -A npm:concurrently -k -r \"deno run -A npm:wait-on tcp:47777 && deno task frontend-dev\" \"deno task backend-dev\"",
         "frontend-dev": "cd frontend && deno run dev-frontend",
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch backend/main.ts",
-        "install-frontend-deps": "cd frontend && deno install",
+        "install-deps": "cd frontend && deno install",
         "test": "deno test --allow-all",
         "e2e": "cd frontend && deno run -A npm:@playwright/test test --project=chromium",
         "e2e-all": "cd frontend && deno run -A npm:@playwright/test test",
