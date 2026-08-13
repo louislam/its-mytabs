@@ -713,21 +713,21 @@ export default defineComponent({
                             <div v-if="!isSeparatedStem(audio.filename)">
                                 <div class="btn-group mb-3">
                                     <button
-                                        class="btn btn-secondary"
+                                        class="btn btn-outline-secondary"
                                         @click.prevent="separateAudio(audio)"
                                         :disabled="separateBusy"
                                     >
                                         Separate Bass/Drums/Guitar
                                     </button>
                                     <button
-                                        class="btn btn-secondary"
+                                        class="btn btn-outline-secondary"
                                         @click.prevent="muteAudio(audio, 'bass')"
                                         :disabled="separateBusy"
                                     >
                                         Mute Bass
                                     </button>
                                     <button
-                                        class="btn btn-secondary"
+                                        class="btn btn-outline-secondary"
                                         @click.prevent="muteAudio(audio, 'guitar')"
                                         :disabled="separateBusy"
                                     >

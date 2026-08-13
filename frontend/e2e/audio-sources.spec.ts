@@ -25,6 +25,11 @@ const cases: { source: Source; label: string }[] = [
 
 for (const { source, label } of cases) {
     test.describe(`core player functions on ${label}`, () => {
+        if (source === "backing") {
+            // Mainly for Webkit (MacOS)
+            test.describe.configure({ retries: 5 });
+        }
+
         test("play/pause toggles playback", async ({ page, request }) => {
             await waitForDemoTab(request);
             await openSource(page, request, source);

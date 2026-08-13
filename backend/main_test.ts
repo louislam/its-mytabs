@@ -29,6 +29,50 @@ await new Promise((res) => setTimeout(res, 5000));
 
 const baseURL = `http://127.0.0.1:47778`;
 
+/**
+ * Ensure a user exists and sign in, returning the session cookie header pair
+ * (e.g. `{ Cookie: "..." }`) for use in authed requests. Sign-up is disabled
+ * after the first user is created, so sign in first and only register when the
+ * user does not exist yet.
+ */
+async function registerAndSignIn(email: string): Promise<Record<string, string>> {
+    const credentials = {
+        email,
+        password: "password123",
+    };
+
+    let signInRes = await fetch(`${baseURL}/api/auth/sign-in/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+    });
+
+    if (signInRes.status !== 200) {
+        const signupRes = await fetch(`${baseURL}/api/auth/sign-up/email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email,
+                name: email.split("@")[0],
+                password: "password123",
+            }),
+        });
+        assertEquals(signupRes.ok, true, "signup failed: " + await signupRes.text());
+
+        signInRes = await fetch(`${baseURL}/api/auth/sign-in/email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(credentials),
+        });
+    }
+    assertEquals(signInRes.status, 200, "sign-in failed");
+
+    const setCookie = signInRes.headers.get("set-cookie");
+    assertExists(setCookie, "No set-cookie header from sign-in");
+    const cookiePair = setCookie!.split(";", 1)[0];
+    return { Cookie: cookiePair };
+}
+
 Deno.test({
     name: "private tab endpoints require authentication (HTTP)",
     sanitizeOps: false,
@@ -121,44 +165,82 @@ Deno.test({
 });
 
 Deno.test({
+    name: "opening a tab records last access and it appears in the tab list (HTTP)",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    fn: async () => {
+        // The /api/tabs list requires login
+        const authed = await registerAndSignIn("test+ci@example.com");
+
+        // Create a tab, make it public so it can also be opened without auth
+        const tabData = new Uint8Array([230, 231, 232]);
+        const id = await createTab(tabData, "gp", "Recent Test", "Recent Artist", "recent.gp");
+        await updateConfigJSON(id, async (config) => {
+            config.tab.public = true;
+        });
+
+        // No last access yet (kv.list leaves missing keys undefined)
+        let tabs = await (await fetch(`${baseURL}/api/tabs`, { headers: authed })).json();
+        let tab = tabs.tabs.find((t: { id: string }) => t.id === id);
+        assertExists(tab);
+        assertEquals(tab.lastAccessAt, undefined);
+
+        // Open the tab
+        const res1 = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: "GET" });
+        assertEquals(res1.status, 200);
+
+        // lastAccessAt is now present on the tab in the list
+        tabs = await (await fetch(`${baseURL}/api/tabs`, { headers: authed })).json();
+        tab = tabs.tabs.find((t: { id: string }) => t.id === id);
+        assertExists(tab);
+        assertExists(tab.lastAccessAt);
+        assertEquals(typeof tab.lastAccessAt, "string");
+        assertEquals(Number.isNaN(new Date(tab.lastAccessAt).getTime()), false, "lastAccessAt is a valid date");
+    },
+});
+
+Deno.test({
+    name: "tab list with more than 10 tabs still returns last access times (HTTP)",
+    sanitizeOps: false,
+    sanitizeResources: false,
+    fn: async () => {
+        // The /api/tabs list requires login
+        const authed = await registerAndSignIn("test+ci@example.com");
+
+        // Create 12 tabs (one more than the kv.getMany 10-key limit)
+        const ids: string[] = [];
+        for (let i = 0; i < 12; i++) {
+            const tabData = new Uint8Array([200 + i, 100, 50]);
+            const id = await createTab(tabData, "gp", `Bulk ${i}`, "Bulk Artist", `bulk-${i}.gp`);
+            ids.push(id);
+            await updateConfigJSON(id, async (config) => {
+                config.tab.public = true;
+            });
+        }
+
+        // Open a handful of them so they get last access times
+        for (const id of ids.slice(0, 5)) {
+            const res = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, { method: "GET" });
+            assertEquals(res.status, 200);
+        }
+
+        // The list endpoint must not 400 even with >10 tabs; the opened tabs
+        // carry a lastAccessAt.
+        const tabs = await (await fetch(`${baseURL}/api/tabs`, { headers: authed })).json();
+        assertEquals(Array.isArray(tabs.tabs), true);
+        assertEquals(tabs.tabs.length >= 12, true, `expected >= 12 tabs, got ${tabs.tabs.length}`);
+
+        const opened = tabs.tabs.filter((t: { lastAccessAt: unknown }) => t.lastAccessAt);
+        assertEquals(opened.length >= 5, true, `expected >= 5 tabs with lastAccessAt, got ${opened.length}`);
+    },
+});
+
+Deno.test({
     name: "logged-in user can access private resources (HTTP)",
     sanitizeOps: false,
     sanitizeResources: false,
     fn: async () => {
-        // Register a new user
-        const signupRes = await fetch(`${baseURL}/api/auth/sign-up/email`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                email: "test+ci@example.com",
-                name: "CI Test",
-                password: "password123",
-            }),
-        });
-        const signupJson = await signupRes.json();
-        // sign up should succeed
-        assertEquals(signupRes.ok, true, "signup failed: " + JSON.stringify(signupJson));
-
-        // Sign in via auth handler
-        const signInRes = await fetch(`${baseURL}/api/auth/sign-in/email`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                email: "test+ci@example.com",
-                password: "password123",
-            }),
-        });
-
-        console.log("Sign-in response status:", signInRes.status);
-        assertEquals(signInRes.status, 200, "sign-in failed");
-        const signInJson = await signInRes.json();
-        console.log("Sign-in response JSON:", signInJson);
-
-        // Extract Set-Cookie
-        const setCookie = signInRes.headers.get("set-cookie");
-        assertExists(setCookie, "No set-cookie header from sign-in");
-        // Use only the cookie pair before the first semicolon
-        const cookiePair = setCookie!.split(";", 1)[0];
+        const authed = await registerAndSignIn("test+ci@example.com");
 
         // Create a private tab
         const tabData = new Uint8Array([240, 241, 242]);
@@ -171,7 +253,7 @@ Deno.test({
         // Access protected /api/tab/:id with cookie
         const resTab = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}`, {
             method: "GET",
-            headers: { Cookie: cookiePair },
+            headers: authed,
         });
         assertEquals(resTab.status, 200);
         const tabJson = await resTab.json();
@@ -184,7 +266,7 @@ Deno.test({
 
         const resAudio = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/audio/${encodeURIComponent("auth.mp3")}`, {
             method: "GET",
-            headers: { Cookie: cookiePair },
+            headers: authed,
         });
         assertEquals(resAudio.status, 200);
         await resAudio.body?.cancel();
@@ -192,7 +274,7 @@ Deno.test({
         // Fetch the tab file with cookie
         const resFile = await fetch(`${baseURL}/api/tab/${encodeURIComponent(id)}/file`, {
             method: "GET",
-            headers: { Cookie: cookiePair },
+            headers: authed,
         });
         assertEquals(resFile.status, 200);
         await resFile.body?.cancel();

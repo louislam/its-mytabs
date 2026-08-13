@@ -23,8 +23,10 @@ app.mount("#app");
 function checkMobile() {
     if (window.innerWidth <= 768) {
         document.documentElement.classList.add("mobile");
+        document.documentElement.classList.remove("desktop");
     } else {
         document.documentElement.classList.remove("mobile");
+        document.documentElement.classList.add("desktop");
     }
 }
 window.addEventListener("resize", checkMobile);

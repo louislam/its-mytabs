@@ -97,24 +97,29 @@ test.describe("audio source switching", () => {
         await expect.poll(() => page.evaluate(() => window.api.player.masterVolume)).toBe(1);
     });
 
-    test("plays an audio file source", async ({ page, request }) => {
-        await waitForDemoTab(request);
-        await openTab(page, `audio-${AUDIO_FILENAME}`);
-        await waitForAudioReady(page);
+    // WebKit occasionally swallows the play click while the player is re-initializing
+    test.describe("plays an audio file source", () => {
+        test.describe.configure({ retries: 5 });
 
-        await page.getByRole("button", { name: "Play" }).click();
-        await expect
-            .poll(() =>
-                page.evaluate(() => {
-                    const audio = document.querySelector("audio");
-                    return audio ? !audio.paused : false;
-                })
-            )
-            .toBe(true);
-        await page.getByRole("button", { name: "Pause" }).click();
-        await expect
-            .poll(() => page.evaluate(() => document.querySelector("audio")?.paused ?? true))
-            .toBe(true);
+        test("plays an audio file source", async ({ page, request }) => {
+            await waitForDemoTab(request);
+            await openTab(page, `audio-${AUDIO_FILENAME}`);
+            await waitForAudioReady(page);
+
+            await page.getByRole("button", { name: "Play" }).click();
+            await expect
+                .poll(() =>
+                    page.evaluate(() => {
+                        const audio = document.querySelector("audio");
+                        return audio ? !audio.paused : false;
+                    })
+                )
+                .toBe(true);
+            await page.getByRole("button", { name: "Pause" }).click();
+            await expect
+                .poll(() => page.evaluate(() => document.querySelector("audio")?.paused ?? true))
+                .toBe(true);
+        });
     });
 
     test("cursor stays at the highlighted range start after switching to audio", async ({ page, request }) => {

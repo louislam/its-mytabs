@@ -332,6 +332,13 @@ export async function updateTabFav(tab: TabInfo, data: UpdateTabFav) {
     await writeTabInfo(tab);
 }
 
+/** Record the last time a tab was opened so the home page can show recents. */
+export async function recordTabAccess(id: string, timestamp = new Date().toISOString()) {
+    await updateConfigJSON(id, async (config) => {
+        config.tab.lastAccessAt = timestamp;
+    });
+}
+
 export function getTabFilePath(tab: TabInfo) {
     return path.join(tabDir, tab.id.toString(), tab.filename);
 }

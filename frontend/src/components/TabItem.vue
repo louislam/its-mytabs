@@ -60,7 +60,7 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="tab-item p-3 rounded">
+    <div class="tab-item rounded">
         <button
             class="fav-btn"
             @click="toggleFav"
@@ -76,13 +76,14 @@ export default defineComponent({
             <div class="artist" v-if="showArtist">{{ tab.artist }}</div>
         </router-link>
 
-        <button class="btn btn-secondary me-2" @click="handleEdit">
-            Edit
-        </button>
-
-        <button class="btn btn-danger" @click="handleDelete">
-            Delete
-        </button>
+        <div class="btn-group action-buttons" role="group" aria-label="Tab actions">
+            <button class="btn btn-sm btn-secondary" @click="handleEdit" aria-label="Edit">
+                <font-awesome-icon icon="pen" />
+            </button>
+            <button class="btn btn-sm btn-danger" @click="handleDelete" aria-label="Delete">
+                <font-awesome-icon icon="trash" />
+            </button>
+        </div>
     </div>
 </template>
 
@@ -92,6 +93,7 @@ export default defineComponent({
 .tab-item {
     display: flex;
     transition: background-color 0.1s;
+    padding: 10px;
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.05);
@@ -100,7 +102,7 @@ export default defineComponent({
     .fav-btn {
         background: none;
         border: none;
-        font-size: 20px;
+        font-size: 14px;
         color: #9e9e9e;
         cursor: pointer;
         padding: 0;
@@ -124,10 +126,11 @@ export default defineComponent({
         justify-content: center;
 
         .title {
-            font-size: 20px;
+            font-size: 16px;
         }
 
         .artist {
+            font-size: 13px;
             color: $color2-dark;
         }
     }

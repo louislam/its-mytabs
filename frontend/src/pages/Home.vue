@@ -17,6 +17,7 @@ export default defineComponent({
             isLoggedIn: false,
             searchQuery: "",
             setting: {},
+            recentLimit: 20,
         };
     },
 
@@ -32,7 +33,9 @@ export default defineComponent({
         try {
             const res = await fetch(baseURL + "/api/tabs", { credentials: "include" });
             const data = await res.json();
-            this.tabList = data.tabs;
+            // The API can return { ok: false } without a tabs array (e.g. an
+            // expired session), so guard against assigning undefined.
+            this.tabList = Array.isArray(data.tabs) ? data.tabs : [];
             this.ready = true;
 
             await this.$nextTick();
@@ -60,6 +63,14 @@ export default defineComponent({
 
         favoritedTabs() {
             return this.tabList.filter((tab) => tab.fav);
+        },
+
+        // Tabs the user opened most recently (tracked via lastAccessAt in KV).
+        recentTabs() {
+            const opened = this.tabList
+                .filter((tab) => tab.lastAccessAt)
+                .sort((a, b) => new Date(b.lastAccessAt).getTime() - new Date(a.lastAccessAt).getTime());
+            return opened.slice(0, this.recentLimit);
         },
 
         groupedTabs() {
@@ -131,88 +142,121 @@ export default defineComponent({
 </script>
 
 <template>
-    <div class="container my-container">
-        <!-- Favorites Section -->
-        <div class="favorites-section" v-if="ready && favoritedTabs.length > 0">
-            <TabItem
-                v-for="tab in favoritedTabs"
-                :key="`fav-${tab.id}`"
-                :tab="tab"
-                :show-artist="true"
-                @delete="deleteTab"
-                @favToggled="handleFavToggled"
-            />
-        </div>
+    <div class="container-fluid home-container">
+        <div class="row" v-if="ready">
+            <!-- Column 1: Tab List with search -->
+            <div class="col-md-12 col-lg-4 order-3 order-lg-0 home-col-tablist">
+                <div class="search-section mb-3 pe-3 ps-3">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <font-awesome-icon icon="magnifying-glass" />
+                        </span>
 
-        <div class="search-section mb-3 mt-4 pe-3 ps-3" v-if="ready">
-            <div class="input-group">
-                <span class="input-group-text">
-                    <font-awesome-icon icon="magnifying-glass" />
-                </span>
+                        <input
+                            type="text"
+                            class="form-control search-input"
+                            v-model="searchQuery"
+                            placeholder="Search by title or artist..."
+                            ref="searchInput"
+                            aria-label="Search tabs"
+                        />
 
-                <input
-                    type="text"
-                    class="form-control search-input"
-                    v-model="searchQuery"
-                    placeholder="Search by title or artist..."
-                    ref="searchInput"
-                    aria-label="Search tabs"
-                />
+                        <button
+                            class="input-group-text bg-transparent border-0 cursor-pointer"
+                            type="button"
+                            @click='searchQuery = ""'
+                            v-if="searchQuery"
+                            aria-label="Clear search"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
 
-                <button
-                    class="input-group-text bg-transparent border-0 cursor-pointer"
-                    type="button"
-                    @click='searchQuery = ""'
-                    v-if="searchQuery"
-                    aria-label="Clear search"
+                <div class="mb-2 ms-3">
+                    Total Tabs: {{ tabList.length }}
+                    <span v-if="searchQuery" class="text-muted">
+                        ({{ filteredTabList.length }} shown)
+                    </span>
+                </div>
+
+                <template v-if="this.setting.groupByArtist && groupedTabs">
+                    <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
+                        <h4>{{ group.displayName }}</h4>
+
+                        <TabItem
+                            v-for="tab in group.tabs"
+                            :key="tab.id"
+                            :tab="tab"
+                            :show-artist="false"
+                            @delete="deleteTab"
+                            @favToggled="handleFavToggled"
+                        />
+                    </div>
+                </template>
+
+                <template v-else>
+                    <TabItem
+                        v-for="tab in filteredTabList"
+                        :key="tab.id"
+                        :tab="tab"
+                        :show-artist="true"
+                        @delete="deleteTab"
+                        @favToggled="handleFavToggled"
+                    />
+                </template>
+
+                <div
+                    v-if="filteredTabList.length === 0 && searchQuery"
+                    class="empty-state text-center py-5 mb-4 fs-5"
                 >
-                    ✕
-                </button>
+                    <p class="text-muted">No tabs found for "{{ searchQuery }}"</p>
+
+                    <button class="btn btn-sm btn-outline-secondary" @click='searchQuery = ""'>
+                        Clear search
+                    </button>
+                </div>
             </div>
-        </div>
 
-        <div class="mb-4 ms-3" v-if="ready">
-            Total Tabs: {{ filteredTabList.length }}
-            <span v-if="searchQuery" class="text-muted">
-                (of {{ tabList.length }})
-            </span>
-        </div>
+            <!-- Column 2: Recent Tabs -->
+            <div class="col-md-12 col-lg-4 order-1 order-lg-0 box box-left">
+                <div class="ms-3 mb-2">
+                    <h4>Recent Tabs</h4>
+                </div>
 
-        <template v-if="this.setting.groupByArtist && groupedTabs">
-            <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
-                <h4>{{ group.displayName }}</h4>
+                <div v-if="recentTabs.length === 0" class="empty-msg">
+                    No Recent Tabs
+                </div>
 
                 <TabItem
-                    v-for="tab in group.tabs"
-                    :key="tab.id"
+                    v-for="tab in recentTabs"
+                    :key="`recent-${tab.id}`"
                     :tab="tab"
-                    :show-artist="false"
+                    :show-artist="true"
                     @delete="deleteTab"
                     @favToggled="handleFavToggled"
                 />
             </div>
-        </template>
 
-        <template v-else>
-            <TabItem
-                v-for="tab in filteredTabList"
-                :key="tab.id"
-                :tab="tab"
-                :show-artist="true"
-                @delete="deleteTab"
-                @favToggled="handleFavToggled"
-            />
-        </template>
+            <!-- Column 3: Fav Tabs -->
+            <div class="col-md-12 col-lg-4 order-2 order-lg-0 box box-right">
+                <div class="ms-3 mb-2">
+                    <h4>Favorite Tabs</h4>
+                </div>
 
-        <div
-            v-if="ready && filteredTabList.length === 0 && searchQuery"
-            class="empty-state text-center py-5 mb-4 fs-5"
-        >
-            <p class="text-muted">No tabs found for "{{ searchQuery }}"</p>
+                <div v-if="favoritedTabs.length === 0" class="empty-msg">
+                    No Favorite Tabs
+                </div>
 
-            <button class="btn btn-sm btn-outline-secondary" @click='searchQuery = ""'>
-                Clear search
-            </button>
+                <TabItem
+                    v-for="tab in favoritedTabs"
+                    :key="`fav-${tab.id}`"
+                    :tab="tab"
+                    :show-artist="true"
+                    @delete="deleteTab"
+                    @favToggled="handleFavToggled"
+                />
+            </div>
         </div>
     </div>
 </template>
@@ -229,5 +273,43 @@ export default defineComponent({
 
 h4 {
     color: $color2-dark;
+}
+
+.box {
+    background-color: rgba(0, 0, 0, 0.16);
+    padding: 25px;
+
+    // Not Mobile
+    .desktop & {
+        position: sticky;
+        top: 20px;
+        align-self: flex-start;
+        height: calc(100vh - 160px);
+        overflow-y: auto;
+
+        &.box-left {
+            border-radius: 25px 0 0 25px;
+            border-right: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        &.box-right {
+            border-radius: 0 25px 25px 0;
+        }
+    }
+
+    .mobile & {
+        margin-bottom: 25px;
+    }
+}
+
+.empty-msg {
+    text-align: center;
+    color: $color2-dark;
+    font-size: 1.1rem;
+    margin-top: 20px;
+}
+
+.desktop .home-container {
+    padding-right: 26px;
 }
 </style>
