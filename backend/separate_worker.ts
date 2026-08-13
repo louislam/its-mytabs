@@ -31,6 +31,7 @@ interface SeparateWorkerProgressBase {
 }
 
 export type SeparateWorkerMessage =
+    | { type: "ready" }
     | (SeparateWorkerProgressBase & { elapsedMs: number })
     | { type: "result"; result: Record<string, string>; elapsedMs: number }
     | { type: "error"; error: string; elapsedMs: number };
@@ -80,6 +81,12 @@ self.onmessage = async (e: MessageEvent<SeparateWorkerRequest>): Promise<void> =
         self.postMessage({ type: "error", error, elapsedMs: performance.now() - startedAt });
     }
 };
+
+// Posting a request from the main thread before this handler is registered is
+// silently dropped (module workers evaluate top-level awaits before the
+// handler exists). Signal readiness so the main thread knows it is safe to
+// send the job request.
+self.postMessage({ type: "ready" });
 
 interface DownloadProgress {
     current: number;

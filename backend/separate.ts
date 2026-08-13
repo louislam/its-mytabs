@@ -28,6 +28,8 @@ export interface SeparateJob {
 
 let currentJob: SeparateJob | null = null;
 let currentWorker: Worker | null = null;
+/** Request waiting to be sent once the worker signals it is ready. */
+let pendingRequest: SeparateWorkerRequest | null = null;
 
 /** Whether a separation job is currently running (not done/error). */
 export function isSeparateBusy(): boolean {
@@ -80,6 +82,17 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
     const worker = new Worker(new URL("./separate_worker.ts", import.meta.url), { type: "module" });
     currentWorker = worker;
     worker.onmessage = (e: MessageEvent<SeparateWorkerMessage>) => {
+        // The worker signals readiness after its module (with all its
+        // top-level awaits) has been evaluated. Messages posted to a module
+        // worker before that point are silently dropped, so hold the request
+        // until the "ready" handshake completes.
+        if (e.data.type === "ready") {
+            if (pendingRequest) {
+                worker.postMessage(pendingRequest);
+                pendingRequest = null;
+            }
+            return;
+        }
         handleWorkerMessage(e.data).catch((err) => {
             console.error("[separate] Failed to handle worker message:", err);
         });
@@ -97,8 +110,7 @@ export function startSeparate(tabID: string, filename: string, sourcePath: strin
         cleanupWorker();
     };
 
-    const request: SeparateWorkerRequest = { sourcePath, tabID, downloadModel };
-    worker.postMessage(request);
+    pendingRequest = { sourcePath, tabID, downloadModel };
 }
 
 // Log throttling for console progress output
