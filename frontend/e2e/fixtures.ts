@@ -9,6 +9,8 @@ const IGNORED_CONSOLE_ERRORS: RegExp[] = [
     /websocket|socket\.io|websocket error/i,
     // Failed media loads are surfaced by the browser, not the app.
     /media element.*(error|fail)|notallowed|networkerror/i,
+    // WebKit reports navigation-aborted fetches as load failures.
+    /load failed/i,
 ];
 
 // Uncaught exceptions that are expected and should not fail the test.
