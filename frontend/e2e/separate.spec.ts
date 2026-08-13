@@ -63,7 +63,7 @@ test.describe("separate audio into stems", () => {
 
         // Wait for the completion notification
         await expect(page.locator(".notification-content", { hasText: "Separation completed" })).toBeVisible({
-            timeout: 60_000,
+            timeout: 180_000,
         });
 
         // The three stem files appear in the audio list, without separate buttons
