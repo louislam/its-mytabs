@@ -886,6 +886,16 @@ export default defineComponent({
                     if (trackID < 0 || trackID >= score.tracks.length) {
                         trackID = 0;
                     }
+
+                    this.selectedTrack = trackID;
+                    
+                    if (this.isDrum()) {
+                        this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
+                    } else {
+                        // This will break drum score
+                        this.overrideHiddenStaves(score);
+                    }
+
                     this.api.renderTracks([this.api.score.tracks[trackID]]);
 
                     // Always show tempo automation on the master bar
@@ -933,15 +943,6 @@ export default defineComponent({
                     });
 
                     this.selectedTrack = trackID;
-
-                    // Force score+tab if the current track program = 0 (probably drums)
-                    if (this.isDrum()) {
-                        this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
-                        this.api.updateSettings();
-                    } else {
-                        // This will break drum score
-                        this.overrideHiddenStaves(score);
-                    }
 
                     this.enableBackingTrack = this.hasBackingTrack();
 
