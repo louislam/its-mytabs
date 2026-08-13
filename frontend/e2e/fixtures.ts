@@ -30,12 +30,23 @@ export const test = base.extend({
             if (IGNORED_PAGE_ERRORS.some((re) => re.test(text))) return;
             errors.push(`Uncaught: ${text}`);
         });
-        page.on("console", (msg) => {
+        page.on("console", async (msg) => {
             if (msg.type() !== "error") return;
-            const text = msg.text();
+            let text = msg.text();
+            if (text === "JSHandle@object") {
+                const values = await Promise.all(
+                    msg.args().map((a) => a.jsonValue().catch(() => null)),
+                );
+                text = values.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(" ");
+            }
             const url = msg.location().url;
             if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(text) || re.test(url))) return;
             errors.push(`Console error: ${text} @ ${url}`);
+        });
+        page.on("requestfailed", (req) => {
+            const url = req.url();
+            if (IGNORED_CONSOLE_ERRORS.some((re) => re.test(url))) return;
+            errors.push(`Request failed: ${url} (${req.failure()?.errorText ?? ""})`);
         });
         await use(page);
         if (!expectErrors && errors.length > 0) {
