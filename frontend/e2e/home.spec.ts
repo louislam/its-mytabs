@@ -1,4 +1,4 @@
-import { Page, expect, test } from "@playwright/test";
+import { expect, Page, test } from "@playwright/test";
 import { login, TAB_ID, waitForDemoTab } from "./helpers.ts";
 
 const DEMO_TAB_TITLE = "Hare no Hi ni (Bass Only)";
