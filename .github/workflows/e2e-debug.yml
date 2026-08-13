@@ -1,10 +1,17 @@
 name: e2e-debug
-# TEMP: fast iteration job for the failing webkit specs. Delete after use.
+# Fast iteration job for flaky/failing specs, kept for future use.
+#
+# Usage:
+#   - To run on a branch: uncomment the push trigger (or use the web UI
+#     "Run workflow" button - workflow_dispatch works on any branch).
+#   - Adjust the spec list + --repeat-each to target the current flake.
+#   - Browsers: swap webkit for chromium/firefox as needed.
+#   - Main suite lives in deno-check.yml (e2e jobs).
 on:
-    push:
-        branches:
-            - dev-default
     workflow_dispatch:
+    # push:
+    #     branches:
+    #         - dev-default
 
 jobs:
     e2e-webkit:
