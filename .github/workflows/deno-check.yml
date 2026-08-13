@@ -18,13 +18,39 @@ jobs:
               uses: denoland/setup-deno@v2
               with:
                   deno-version: v2.x
+
             - run: deno task check
             - run: deno task test
+
+    e2e:
+        needs: deno-check
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - { os: ubuntu-latest, browser: chromium }
+                    - { os: ubuntu-latest, browser: firefox }
+                    - { os: macos-latest, browser: webkit }
+        runs-on: ${{ matrix.os }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Set up Deno
+              uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
 
             - name: Install frontend dependencies
               run: deno task install-frontend-deps
 
             - name: Install Playwright browser
-              run: cd frontend && deno run -A npm:@playwright/test install --with-deps chromium
+              if: matrix.browser
+              run: cd frontend && deno run -A npm:@playwright/test install --with-deps ${{ matrix.browser }}
 
-            - run: deno task e2e
+            - name: Run e2e
+              if: matrix.browser
+              env:
+                  # YouTube needs real network + the embed player; skip on CI
+                  MYTABS_SKIP_YOUTUBE: 1
+              run: cd frontend && deno run -A npm:@playwright/test test --project=${{ matrix.browser }}

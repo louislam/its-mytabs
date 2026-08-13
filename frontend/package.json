@@ -6,9 +6,11 @@
         "dev": "cd .. && deno task dev",
         "build": "vite build",
         "preview": "vite preview",
-        "e2e": "playwright test"
+        "e2e": "playwright test --project=chromium",
+        "e2e-all": "playwright test"
     },
     "dependencies": {
+        "@foleyjs/core": "~2.7.0",
         "better-auth": "~1.4.17",
         "private-ip": "~3.0.2",
         "rollup-plugin-visualizer": "^6.0.3",
