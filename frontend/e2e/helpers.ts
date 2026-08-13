@@ -1,4 +1,4 @@
-import { type APIRequestContext, expect, type Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 
 export const TAB_ID = "1";
 export const AUDIO_FILENAME = "e2e-silence.ogg";
@@ -22,7 +22,7 @@ export async function login(page: Page): Promise<void> {
     await page.waitForURL("/");
     // Wait for the home page fetches to finish so a later goto() does not
     // abort them (aborted fetches surface as console errors on webkit/firefox).
-    await expect(page.locator(".home-col-tablist")).toBeVisible();
+    await page.waitForSelector(".home-col-tablist");
 }
 
 /**
