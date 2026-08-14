@@ -206,7 +206,7 @@ export default defineComponent({
 
         <!-- Note Color refer to SettingSchema   noteColor: z.enum(["rocksmith", "none"]).default("none"), -->
         <div class="mb-3">
-            <label for="noteColor" class="form-label">Note Color</label>
+            <label for="noteColor" class="form-label">Tab Number Color</label>
             <select id="noteColor" class="form-select" v-model="setting.noteColor">
                 <option value="none">No Color</option>
                 <option value="rocksmith">Rocksmith 2014 Color Scheme</option>
