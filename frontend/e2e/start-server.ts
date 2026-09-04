@@ -162,11 +162,11 @@ console.log("[e2e] Added youtube fixture video M7lc1UVf-VE to demo tab");
 // Used to test the "Embedded Backing Track" audio source. Make it public so
 // the unauthenticated e2e tests can open it.
 const backingTabId = await createTab(
-    await Deno.readFile("./extra/backing-track-tab.gp"),
+    await Deno.readFile("./extra/e2e-test.gp"),
     "gp",
     "Backing Track Test",
     "e2e",
-    "backing-track-tab.gp",
+    "e2e-test.gp",
 );
 await updateConfigJSON(backingTabId, async (config) => {
     config.tab.public = true;
