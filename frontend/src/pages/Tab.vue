@@ -934,9 +934,16 @@ export default defineComponent({
 
                     // List all tracks
                     score.tracks.forEach((track) => {
+                        let name = (track.name ?? "").trim();
+                        if (!name) {
+                            name = (track.shortName ?? "").trim();
+                        }
+                        if (!name) {
+                            name = getInstrumentName(track.playbackInfo.program);
+                        }
                         this.tracks.push({
                             id: track.index,
-                            name: getInstrumentName(track.playbackInfo.program),
+                            name,
                             program: track.playbackInfo.program,
                         });
                     });
