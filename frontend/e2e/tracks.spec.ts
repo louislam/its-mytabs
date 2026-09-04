@@ -19,17 +19,15 @@ test.describe("track controls", () => {
         await expect(page.locator(".track-list")).toBeHidden();
     });
 
-    test("switching track updates the toolbar", async ({ page, request }) => {
+    test("switching track updates the selected track", async ({ page, request }) => {
         await waitForDemoTab(request);
         await openTab(page, "synth");
 
-        const first = (await page.locator(".track-selector .button").innerText()).trim();
-
         await page.click(".track-selector .button");
         await page.locator(".track-list .track .name").nth(1).click();
-
-        const second = (await page.locator(".track-selector .button").innerText()).trim();
-        expect(second).not.toBe(first);
+        await page.click(".track-selector .button");
+        await expect(page.locator(".track-list .track").nth(0)).not.toHaveClass(/active/);
+        await expect(page.locator(".track-list .track").nth(1)).toHaveClass(/active/);
     });
 
     test("solo mutes the other tracks and can be undone", async ({ page, request }) => {
