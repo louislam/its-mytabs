@@ -768,8 +768,17 @@ export default defineComponent({
 
                 let layoutMode = undefined;
 
+                // alphaTab only appends the render partials it believes are on screen.
+                // That visibility detection assumes a vertically scrolling page, so in
+                // the horizontal layout most partials are never filled and the tab is
+                // cut off mid-staff while the cursor keeps moving past it. Appending
+                // everything up front is the fix alphaTab documents for such layouts.
+                // Left unset elsewhere, so the page layout keeps the default (on).
+                let lazyLoadingOverride = {};
+
                 if (this.setting.scoreStyle === "horizontal-tab") {
                     layoutMode = alphaTab.LayoutMode.Horizontal;
+                    lazyLoadingOverride = { enableLazyLoading: false };
                     this.$emit("setFixedHeader", true);
                 }
 
@@ -793,6 +802,7 @@ export default defineComponent({
                         //tracks: [trackID],
                         fontDirectory: "/font/",
                         engine: "html5",
+                        ...lazyLoadingOverride,
                     },
                     player: {
                         enablePlayer: true,
