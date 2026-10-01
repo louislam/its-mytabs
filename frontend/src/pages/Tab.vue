@@ -70,6 +70,7 @@ export default defineComponent({
             selectedTrack: 0,
             soloTrackID: -1,
             muteTrackList: {},
+            trackVolumeList: {},
             currentAudio: "synth",
             youtubeList: [],
             audioList: [],
@@ -993,6 +994,7 @@ export default defineComponent({
             this.youtube = {};
             this.simpleSyncSecond = -1;
             this.muteTrackList = {};
+            this.trackVolumeList = {};
             this.playbackRange = null;
             this.savedPlaybackRange = null;
             clearTimeout(this.playbackRangeRestoreTimer);
@@ -1663,6 +1665,7 @@ export default defineComponent({
             if (!this.api) {
                 return;
             }
+            this.trackVolumeList[trackID] = volume;
             const track = this.api.score.tracks.find(({ index }) => index === trackID);
             this.api.changeTrackVolume(track, volume / 100);
         },
@@ -1843,7 +1846,7 @@ export default defineComponent({
                     <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
                     <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
                     <div class="list-button select-percentage">
-                        Volume: <input type="number" min="0" max="1000" step="1" value="100" @change="toggleVolume(track.id, $event.target.value)" /> (%)
+                        Volume: <input type="number" min="0" max="1000" step="1" :value="this.trackVolumeList[track.id] ?? 100" @change="toggleVolume(track.id, $event.target.valueAsNumber)" /> (%)
                     </div>
                 </div>
             </div>
