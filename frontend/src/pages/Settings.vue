@@ -23,6 +23,7 @@ export default defineComponent({
                 scale: 1,
                 toolbarAutoHide: false,
                 preferredInstrument: "none",
+                unfocusedInstrumentVolume: 1,
             },
             isProcessing: false,
         };
@@ -152,6 +153,23 @@ export default defineComponent({
                 <option value="none">None</option>
                 <option value="bass">Bass</option>
                 <option value="guitar">Guitar</option>
+            </select>
+        </div>
+
+        <!-- Unfocused Instrument Volume -->
+        <div class="mb-3">
+            <label for="unfocusedInstrumentVolume" class="form-label">Unfocused Instrument Volume</label>
+            <select id="unfocusedInstrumentVolume" class="form-select" v-model.number="setting.unfocusedInstrumentVolume">
+                <option :value="0.1">10%</option>
+                <option :value="0.2">20%</option>
+                <option :value="0.3">30%</option>
+                <option :value="0.4">40%</option>
+                <option :value="0.5">50%</option>
+                <option :value="0.6">60%</option>
+                <option :value="0.7">70%</option>
+                <option :value="0.8">80%</option>
+                <option :value="0.9">90%</option>
+                <option :value="1">100%</option>
             </select>
         </div>
 

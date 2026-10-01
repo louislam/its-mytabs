@@ -889,6 +889,8 @@ export default defineComponent({
 
                     this.selectedTrack = trackID;
 
+                    this.setUnfocusedTrackVolume(trackID);
+
                     if (this.isDrum()) {
                         this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
                     } else {
@@ -948,8 +950,6 @@ export default defineComponent({
                             program: track.playbackInfo.program,
                         });
                     });
-
-                    this.selectedTrack = trackID;
 
                     this.enableBackingTrack = this.hasBackingTrack();
 
@@ -1577,6 +1577,19 @@ export default defineComponent({
             return track.playbackInfo.program === 0;
         },
 
+        setUnfocusedTrackVolume(trackID) {
+            if (!this.api || !this.api.score) {
+                return;
+            }
+
+            const changedVolume = this.setting.unfocusedInstrumentVolume ?? 1;
+            for (const track of this.api.score.tracks) {
+                const volume = (track.index === trackID ? 1 : changedVolume);
+                this.api.changeTrackVolume(track, volume);
+                this.trackVolumeList[track.index] = volume * 100;
+            }
+        },
+
         /**
          * Change the displayed track.
          * @param trackID
@@ -1584,8 +1597,8 @@ export default defineComponent({
          */
         async changeTrack(trackID) {
             const fromDrum = this.isDrum();
-            this.selectedTrack = trackID;
             const isDrum = this.isDrum();
+            this.selectedTrack = trackID;
 
             // If switching from/to drum track, need to re-render the whole score
             // Due to the bug that Drum is not able to render in Tab View
@@ -1595,6 +1608,9 @@ export default defineComponent({
                 this.api.renderTracks([this.api.score.tracks[trackID]]);
                 this.setConfig("trackID", trackID);
             }
+
+            // Lower the other instruments to the unfocusedInstrumentVolume value in userSettings
+	        this.setUnfocusedTrackVolume(trackID);
 
             // A practice range is tied to the previous instrument's bars, so it
             // must not carry over to the newly selected track.
