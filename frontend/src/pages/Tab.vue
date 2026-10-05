@@ -775,8 +775,8 @@ export default defineComponent({
 
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
-                        rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
-                        //rhythmHeight: 30,
+                        // Hide tab rhythm when the score staff is visible (Tab + Score)
+                        rhythmMode: alphaTab.TabRhythmMode.Automatic,
                         elements: {
                             scoreTitle: false,
                             scoreSubTitle: false,
@@ -1050,20 +1050,6 @@ export default defineComponent({
                     for (const bar of staff.bars) {
                         for (const voice of bar.voices) {
                             for (const beat of voice.beats) {
-                                // on tuplets colors beam and tuplet bracket
-                                if (beat.hasTuplet) {
-                                    beat.style = new alphaTab.model.BeatStyle();
-                                    const color = alphaTab.model.Color.fromJson("#00DD00");
-                                    beat.style.colors.set(
-                                        alphaTab.model.BeatSubElement.StandardNotationTuplet,
-                                        color,
-                                    );
-                                    beat.style.colors.set(
-                                        alphaTab.model.BeatSubElement.StandardNotationBeams,
-                                        color,
-                                    );
-                                }
-
                                 for (const note of beat.notes) {
                                     note.style = new alphaTab.model.NoteStyle();
                                     if (this.setting.noteColor !== "none") {
