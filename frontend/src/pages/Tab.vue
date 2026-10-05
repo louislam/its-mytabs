@@ -775,8 +775,8 @@ export default defineComponent({
 
                 this.api = new alphaTab.AlphaTabApi(this.$refs.bassTabContainer, {
                     notation: {
-                        rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
-                        //rhythmHeight: 30,
+                        // Hide tab rhythm when the score staff is visible (Tab + Score)
+                        rhythmMode: alphaTab.TabRhythmMode.Automatic,
                         elements: {
                             scoreTitle: false,
                             scoreSubTitle: false,
