@@ -74,6 +74,7 @@ export default defineComponent({
             youtubeList: [],
             audioList: [],
             audio: {},
+            versionSong: null,
             scrollMode: ScrollMode.Continuous,
             keySignature: "",
             playbackRange: null,
@@ -128,9 +129,37 @@ export default defineComponent({
                 return undefined;
             }
         },
+
+        currentVersion() {
+            if (!this.versionSong) {
+                return null;
+            }
+            return this.versionSong.versions.find((version) => version.id === this.tabID) || null;
+        },
+
+        canSwitchVersions() {
+            return this.versionSong && this.versionSong.versions.length > 1;
+        },
+
+        isCurrentPreferredVersion() {
+            return !!this.currentVersion?.preferred;
+        },
+
+        displayAlbum() {
+            return this.currentVersion?.album || this.tab.album || "";
+        },
     },
 
     watch: {
+        async "$route.params.id"(newId, oldId) {
+            if (!newId || newId === oldId) {
+                return;
+            }
+            this.tabID = newId;
+            const trackID = this.getConfig("trackID", 0);
+            await this.load(trackID);
+        },
+
         async simpleSyncSecond(newVal, oldVal) {
             if (!this.api) {
                 return;
@@ -460,6 +489,7 @@ export default defineComponent({
                 this.youtubeList = data.youtubeList;
                 this.audioList = data.audioList;
             }
+            await this.loadVersions();
 
             const tempToken = await this.getTempToken();
 
@@ -467,6 +497,65 @@ export default defineComponent({
             trackID = await this.initContainer(tempToken, trackID);
 
             this.setConfig("trackID", trackID);
+        },
+
+        async loadVersions() {
+            const res = await fetch(baseURL + `/api/tab/${this.tabID}/versions`, {
+                credentials: "include",
+            });
+            await checkFetch(res);
+            const data = await res.json();
+            this.versionSong = data.song || null;
+        },
+
+        switchVersion(tabId) {
+            if (!tabId || tabId === this.tabID) {
+                return;
+            }
+            this.pause();
+            this.$router.push(`/tab/${tabId}`);
+        },
+
+        async setPreferredVersion(tabId) {
+            if (!this.versionSong || !tabId) {
+                return;
+            }
+
+            try {
+                const res = await fetch(baseURL + `/api/songs/${this.versionSong.id}/preferred-tab`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ tabId }),
+                });
+                await checkFetch(res);
+                await this.loadVersions();
+            } catch (e) {
+                generalError(e);
+            }
+        },
+
+        versionTitle(version) {
+            return version.versionLabel || `Version ${version.version}`;
+        },
+
+        versionDescription(version) {
+            const parts = [];
+            if (version.ext) {
+                parts.push(version.ext.toUpperCase());
+            }
+            if (version.preferred) {
+                parts.push("Preferred");
+            }
+            if (version.hasAudio) {
+                parts.push("Audio");
+            }
+            if (version.hasYoutube) {
+                parts.push("YouTube");
+            }
+            return parts.join(" / ");
         },
 
         countIn() {
@@ -991,6 +1080,7 @@ export default defineComponent({
             this.scrollMode = ScrollMode.Continuous;
             this.soloTrackID = -1;
             this.youtube = {};
+            this.versionSong = null;
             this.simpleSyncSecond = -1;
             this.muteTrackList = {};
             this.playbackRange = null;
@@ -1757,6 +1847,45 @@ export default defineComponent({
     <div class="main" :class='{ "light": this.setting.scoreColor === "light" }'>
         <h1>{{ tab.title }}</h1>
         <h2>{{ tab.artist }}</h2>
+        <div v-if="displayAlbum" class="tab-album">
+            <span>Album</span>
+            {{ displayAlbum }}
+        </div>
+        <div class="version-switcher" v-if="versionSong">
+            <BDropdown
+                v-if="canSwitchVersions"
+                variant="secondary"
+                size="sm"
+                :text="currentVersion ? versionTitle(currentVersion) : 'Versions'"
+            >
+                <BDropdownItem
+                    v-for="version in versionSong.versions"
+                    :key="version.id"
+                    :active="version.id === tabID"
+                    @click="switchVersion(version.id)"
+                >
+                    <span class="version-option-title">
+                        {{ versionTitle(version) }}
+                        <font-awesome-icon v-if="version.preferred" icon="check" />
+                    </span>
+                    <span class="version-option-meta">{{ versionDescription(version) }}</span>
+                </BDropdownItem>
+            </BDropdown>
+
+            <span v-else class="single-version">{{ currentVersion ? versionTitle(currentVersion) : "Version 1" }}</span>
+
+            <button
+                class="btn btn-sm btn-outline-secondary"
+                type="button"
+                v-if="isLoggedIn && currentVersion"
+                :class="{ active: isCurrentPreferredVersion }"
+                @click="setPreferredVersion(currentVersion.id)"
+                :disabled="isCurrentPreferredVersion"
+            >
+                <font-awesome-icon :icon='isCurrentPreferredVersion ? ["fas", "check"] : ["far", "star"]' />
+                Preferred
+            </button>
+        </div>
         <div class="key-signature badge bg-secondary" v-if="keySignature && setting.showKeySignature">
             {{ keySignature }}
         </div>
@@ -1907,10 +2036,38 @@ $youtube-height: 200px;
         padding-top: 30px;
 
         h1,
-        h2 {
+        h2,
+        .tab-album {
             color: #333;
         }
     }
+}
+
+.version-switcher {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px 0 12px;
+}
+
+.single-version {
+    color: #aeb4bb;
+    font-size: 14px;
+}
+
+.version-option-title,
+.version-option-meta {
+    display: block;
+}
+
+.version-option-title {
+    font-weight: 600;
+}
+
+.version-option-meta {
+    color: #6c757d;
+    font-size: 12px;
 }
 
 .yt-margin {
@@ -2019,6 +2176,22 @@ h1 {
 h2 {
     text-align: center;
     margin-bottom: 0;
+}
+
+.tab-album {
+    text-align: center;
+    color: #aeb4bb;
+    font-size: 16px;
+    margin-top: 6px;
+
+    span {
+        color: #7f8a93;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        margin-right: 8px;
+        text-transform: uppercase;
+    }
 }
 
 $color: #32393e;
@@ -2131,6 +2304,10 @@ $padding: 20px;
 
     h2 {
         font-size: 16px;
+    }
+
+    .tab-album {
+        font-size: 14px;
     }
 
     .list {

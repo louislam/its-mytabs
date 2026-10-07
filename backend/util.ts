@@ -10,6 +10,7 @@ import { supportedAudioFormatList } from "./common.ts";
 const denoJSONCPath = path.join(getSourceDir(), "./deno.jsonc");
 export const denoJSONC = jsonc.parse(await Deno.readTextFile(denoJSONCPath));
 export const isDemoMode = Deno.env.get("MYTABS_DEMO_MODE") === "true";
+export const isAuthDisabled = Deno.env.get("MYTABS_DISABLE_AUTH") === "true";
 
 let version = "unknown";
 if (denoJSONC && typeof denoJSONC === "object" && !Array.isArray(denoJSONC) && typeof denoJSONC.version === "string") {

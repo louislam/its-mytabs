@@ -16,8 +16,12 @@
             }
             const config = JSON.parse(appConfigElement.textContent);
             window.isDemo = config.isDemo;
+            window.authDisabled = config.authDisabled;
+            window.defaultImportRoot = config.defaultImportRoot;
         } catch (e) {
             window.isDemo = false;
+            window.authDisabled = false;
+            window.defaultImportRoot = "";
         }
         </script>
         <script type="module" src="/src/main.ts"></script>

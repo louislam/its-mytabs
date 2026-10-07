@@ -3,6 +3,7 @@
 node_modules
 /data/
 /dist/
+/import/
 /private/
 /*.exe
 .env

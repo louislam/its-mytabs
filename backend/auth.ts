@@ -8,6 +8,7 @@ import { createAuthMiddleware } from "better-auth/api";
 import * as path from "@std/path";
 import { dataDir } from "./util.ts";
 import { Context } from "@hono/hono";
+import { isAuthDisabled } from "./util.ts";
 
 const configJSONPath = path.join(dataDir, "config.json");
 
@@ -64,11 +65,11 @@ async function getSecretKey() {
 }
 
 export function isFinishSetup() {
-    return hasUser();
+    return isAuthDisabled || hasUser();
 }
 
 export function isDisableSignUp() {
-    return hasUser();
+    return isAuthDisabled || hasUser();
 }
 
 export function disableSignUp() {
@@ -76,10 +77,18 @@ export function disableSignUp() {
 }
 
 export async function checkLogin(c: Context) {
+    if (isAuthDisabled) {
+        return;
+    }
+
     await getCurrentSession(c);
 }
 
 export async function isLoggedIn(c: Context) {
+    if (isAuthDisabled) {
+        return true;
+    }
+
     const session = await auth.api.getSession(c.req.raw);
     return !!session;
 }
@@ -89,6 +98,19 @@ export async function isLoggedIn(c: Context) {
  * @param c
  */
 export async function getCurrentSession(c: Context) {
+    if (isAuthDisabled) {
+        return {
+            user: {
+                id: "auth-disabled",
+                email: "auth-disabled@localhost",
+                name: "Auth Disabled",
+            },
+            session: {
+                id: "auth-disabled",
+            },
+        };
+    }
+
     const session = await auth.api.getSession(c.req.raw);
     if (!session) {
         throw new Error("Not logged in");

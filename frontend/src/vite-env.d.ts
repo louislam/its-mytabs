@@ -13,6 +13,12 @@ declare global {
          * When true, navigation is restricted to demo tab, settings, and register pages.
          */
         isDemo: boolean;
+        /**
+         * Indicates if built-in authentication is disabled.
+         * Set by the backend based on the MYTABS_DISABLE_AUTH environment variable.
+         */
+        authDisabled: boolean;
+        defaultImportRoot?: string;
 
         /**
          * The alphaTab API instance exposed for debugging on the tab page.

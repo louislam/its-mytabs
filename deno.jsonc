@@ -20,6 +20,8 @@
         "backend-dev": "NODE_ENV=development deno run --allow-all --watch --watch-exclude=dist backend/main.ts",
         "install-deps": "cd frontend && deno install",
         "test": "deno test --allow-all",
+        "test-batch-import-quality": "deno test --allow-all backend/import_quality_test.ts",
+        "batch-import-real-library-dry-run": "deno run --allow-all extra/batch-import-real-library-dry-run.ts",
         "e2e": "cd frontend && deno run -A npm:@playwright/test test --project=chromium",
         "e2e-all": "cd frontend && deno run -A npm:@playwright/test test",
         "fmt": "deno fmt && deno lint --fix && cd frontend && deno fmt",
@@ -69,6 +71,7 @@
     },
 
     "imports": {
+        "@coderline/alphatab": "npm:@coderline/alphatab@~1.8.3",
         "@foleyjs/core": "npm:@foleyjs/core@~2.7.0",
         "@hono/hono": "jsr:@hono/hono@~4.9.12",
         "@hono/node-server": "npm:@hono/node-server@~1.19.9",
