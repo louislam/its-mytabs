@@ -1655,18 +1655,18 @@ export default defineComponent({
 
         print(scoreTitle, scoreArtist) {
             if (!this.api || !this.api.score) {
-                return
+                return;
             }
 
-            const black = '#000000';
+            const black = "#000000";
             const previousNoteColorScheme = this.setting.noteColor;
-            this.api.score.title = scoreTitle
-            this.api.score.artist = scoreArtist
+            this.api.score.title = scoreTitle;
+            this.api.score.artist = scoreArtist;
 
             try {
                 // Set note colors to black
                 this.setting.noteColor = "none";
-                this.applyColors(this.api.score)
+                this.applyColors(this.api.score);
 
                 // Print the tab, set all other sheet notation to black
                 this.api.print(undefined, {
@@ -1677,8 +1677,8 @@ export default defineComponent({
                             barNumberColor: black,
                             mainGlyphColor: black,
                             secondaryGlyphColor: black,
-                            scoreInfoColor: black
-                        }
+                            scoreInfoColor: black,
+                        },
                     },
                     notation: {
                         elements: {
@@ -1690,17 +1690,17 @@ export default defineComponent({
                             scoreMusic: true,
                             scoreWordsAndMusic: true,
                             scoreCopyright: true,
-                        }
-                    }
-                })
+                        },
+                    },
+                });
             } catch (e) {
                 generalError(e);
             } finally {
                 // Restore the note color setting and reapply the color scheme
                 this.setting.noteColor = previousNoteColorScheme;
                 setTimeout(() => {
-                    this.applyColors(this.api.score)
-                })
+                    this.applyColors(this.api.score);
+                });
             }
         },
 
@@ -1866,7 +1866,7 @@ export default defineComponent({
                 <button class="btn btn-secondary btn-right" @click="print(tab.title, tab.artist)">
                     Print
                 </button>
-                
+
                 <div v-if="isLoggedIn">
                     <button class="btn btn-secondary btn-right" @click="edit()">
                         Edit
