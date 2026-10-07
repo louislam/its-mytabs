@@ -1584,7 +1584,7 @@ export default defineComponent({
 
             const changedVolume = this.setting.unfocusedInstrumentVolume ?? 1;
             for (const track of this.api.score.tracks) {
-                const volume = (track.index === trackID ? 1 : changedVolume);
+                const volume = track.index === trackID ? 1 : changedVolume;
                 this.api.changeTrackVolume(track, volume);
                 this.trackVolumeList[track.index] = volume * 100;
             }
@@ -1610,7 +1610,7 @@ export default defineComponent({
             }
 
             // Lower the other instruments to the unfocusedInstrumentVolume value in userSettings
-	        this.setUnfocusedTrackVolume(trackID);
+            this.setUnfocusedTrackVolume(trackID);
 
             // A practice range is tied to the previous instrument's bars, so it
             // must not carry over to the newly selected track.
