@@ -107,17 +107,27 @@ export default defineComponent({
             try {
                 // Validate URL
                 const url = this.youtubeURL;
-
                 const obj = new URL(url);
+                const approvedDomains = [
+                    "youtube.com", // Includes subdomains (e.g., music.youtube.com)
+                    "youtube-nocookie.com",
+                    "youtu.be",
+                ];
+                let videoID;
 
-                if (obj.hostname !== "www.youtube.com" && obj.hostname !== "music.youtube.com") {
+                if (!approvedDomains.find((domain) => obj.hostname.includes(domain))) {
                     throw new Error("Invalid YouTube URL");
                 }
 
-                // Get ?v
-                const videoID = obj.searchParams.get("v");
+                // Get ?v=, otherwise split
+                if (obj.href.includes("?v")) {
+                    videoID = obj.searchParams.get("v");
+                } else {
+                    videoID = obj.pathname.split("/").pop();
+                }
+
                 if (!videoID) {
-                    throw new Error("Invalid YouTube URL, no ?v= params?");
+                    throw new Error("Invalid YouTube Video ID");
                 }
 
                 // Send to api (/tab/:id/youtube)
