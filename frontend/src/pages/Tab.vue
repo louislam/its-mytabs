@@ -70,6 +70,7 @@ export default defineComponent({
             selectedTrack: 0,
             soloTrackID: -1,
             muteTrackList: {},
+            trackVolumeList: {},
             currentAudio: "synth",
             youtubeList: [],
             audioList: [],
@@ -888,6 +889,8 @@ export default defineComponent({
 
                     this.selectedTrack = trackID;
 
+                    this.setUnfocusedTrackVolume(trackID);
+
                     if (this.isDrum()) {
                         this.api.settings.display.staveProfile = StaveProfile.ScoreTab;
                     } else {
@@ -948,8 +951,6 @@ export default defineComponent({
                         });
                     });
 
-                    this.selectedTrack = trackID;
-
                     this.enableBackingTrack = this.hasBackingTrack();
 
                     this.ready = true;
@@ -993,6 +994,7 @@ export default defineComponent({
             this.youtube = {};
             this.simpleSyncSecond = -1;
             this.muteTrackList = {};
+            this.trackVolumeList = {};
             this.playbackRange = null;
             this.savedPlaybackRange = null;
             clearTimeout(this.playbackRangeRestoreTimer);
@@ -1561,6 +1563,19 @@ export default defineComponent({
             return track.playbackInfo.program === 0;
         },
 
+        setUnfocusedTrackVolume(trackID) {
+            if (!this.api || !this.api.score) {
+                return;
+            }
+
+            const changedVolume = this.setting.unfocusedInstrumentVolume ?? 1;
+            for (const track of this.api.score.tracks) {
+                const volume = track.index === trackID ? 1 : changedVolume;
+                this.api.changeTrackVolume(track, volume);
+                this.trackVolumeList[track.index] = volume * 100;
+            }
+        },
+
         /**
          * Change the displayed track.
          * @param trackID
@@ -1568,8 +1583,8 @@ export default defineComponent({
          */
         async changeTrack(trackID) {
             const fromDrum = this.isDrum();
-            this.selectedTrack = trackID;
             const isDrum = this.isDrum();
+            this.selectedTrack = trackID;
 
             // If switching from/to drum track, need to re-render the whole score
             // Due to the bug that Drum is not able to render in Tab View
@@ -1579,6 +1594,9 @@ export default defineComponent({
                 this.api.renderTracks([this.api.score.tracks[trackID]]);
                 this.setConfig("trackID", trackID);
             }
+
+            // Lower the other instruments to the unfocusedInstrumentVolume value in userSettings
+            this.setUnfocusedTrackVolume(trackID);
 
             // A practice range is tied to the previous instrument's bars, so it
             // must not carry over to the newly selected track.
@@ -1649,6 +1667,7 @@ export default defineComponent({
             if (!this.api) {
                 return;
             }
+            this.trackVolumeList[trackID] = volume;
             const track = this.api.score.tracks.find(({ index }) => index === trackID);
             this.api.changeTrackVolume(track, volume / 100);
         },
@@ -1829,7 +1848,7 @@ export default defineComponent({
                     <div class="list-button solo" @click="toggleSolo(track.id)" :class="{ active: soloTrackID === track.id }">Solo</div>
                     <div class="list-button mute" @click="toggleMute(track.id)" :class="{ active: muteTrackList[track.id] }">Mute</div>
                     <div class="list-button select-percentage">
-                        Volume: <input type="number" min="0" max="1000" step="1" value="100" @change="toggleVolume(track.id, $event.target.value)" /> (%)
+                        Volume: <input type="number" min="0" max="1000" step="1" :value="this.trackVolumeList[track.id] ?? 100" @change="toggleVolume(track.id, $event.target.valueAsNumber)" /> (%)
                     </div>
                 </div>
             </div>
