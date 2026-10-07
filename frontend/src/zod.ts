@@ -11,6 +11,7 @@ export const SettingSchema = z.object({
     scrollMode: z.enum(ScrollMode).default(ScrollMode.Continuous),
     groupByArtist: z.boolean().default(false),
     showKeySignature: z.boolean().default(false),
+    showSyncOffset: z.boolean().default(true),
     scale: z.number().min(0.1).default(1),
     toolbarAutoHide: z.boolean().default(false),
     preferredInstrument: z.enum(["none", "bass", "guitar"]).default("none"),
