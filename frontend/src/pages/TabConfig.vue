@@ -112,18 +112,18 @@ export default defineComponent({
                     "youtube.com", // Includes subdomains (e.g., music.youtube.com)
                     "youtube-nocookie.com",
                     "youtu.be",
-                ]
+                ];
                 let videoID;
 
-                if (!approvedDomains.find(domain => obj.hostname.includes(domain))) {
+                if (!approvedDomains.find((domain) => obj.hostname.includes(domain))) {
                     throw new Error("Invalid YouTube URL");
-	            }
+                }
 
                 // Get ?v=, otherwise split
                 if (obj.href.includes("?v")) {
-	                videoID = obj.searchParams.get("v");
+                    videoID = obj.searchParams.get("v");
                 } else {
-                    videoID = obj.pathname.split('/').pop()
+                    videoID = obj.pathname.split("/").pop();
                 }
 
                 if (!videoID) {
