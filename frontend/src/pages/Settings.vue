@@ -19,6 +19,7 @@ export default defineComponent({
                 scoreStyle: "",
                 groupByArtist: false,
                 showKeySignature: false,
+                showSyncOffset: true,
                 scrollMode: "",
                 scale: 1,
                 toolbarAutoHide: false,
@@ -188,6 +189,15 @@ export default defineComponent({
         <div class="mb-3">
             <label for="showKeySignature" class="form-label">Show Key Signature</label>
             <select id="showKeySignature" class="form-select" v-model="setting.showKeySignature">
+                <option :value="true">Yes</option>
+                <option :value="false">No</option>
+            </select>
+        </div>
+
+        <!-- Show Sync Offset -->
+        <div class="mb-3">
+            <label for="showSyncOffset" class="form-label">Show Sync Offset in Tab View</label>
+            <select id="showSyncOffset" class="form-select" v-model="setting.showSyncOffset">
                 <option :value="true">Yes</option>
                 <option :value="false">No</option>
             </select>
