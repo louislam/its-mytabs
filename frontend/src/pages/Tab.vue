@@ -1050,9 +1050,9 @@ export default defineComponent({
                     for (const bar of staff.bars) {
                         for (const voice of bar.voices) {
                             for (const beat of voice.beats) {
-                                if (this.setting.noteColor !== "none") {
-                                    for (const note of beat.notes) {
-                                        note.style = new alphaTab.model.NoteStyle();
+                                for (const note of beat.notes) {
+                                    note.style = new alphaTab.model.NoteStyle();
+                                    if (this.setting.noteColor !== "none") {
                                         note.style.colors.set(alphaTab.model.NoteSubElement.GuitarTabFretNumber, stringColors[note.string]);
                                     }
                                 }
@@ -1653,6 +1653,57 @@ export default defineComponent({
             this.api.changeTrackVolume(track, volume / 100);
         },
 
+        print(scoreTitle, scoreArtist) {
+            if (!this.api || !this.api.score) {
+                return;
+            }
+
+            const black = "#000000";
+            const previousNoteColorScheme = this.setting.noteColor;
+            this.api.score.title = scoreTitle;
+            this.api.score.artist = scoreArtist;
+
+            try {
+                // Set note colors to black
+                this.setting.noteColor = "none";
+                this.applyColors(this.api.score);
+
+                // Print the tab, set all other sheet notation to black
+                this.api.print(undefined, {
+                    display: {
+                        resources: {
+                            staffLineColor: black,
+                            barSeparatorColor: black,
+                            barNumberColor: black,
+                            mainGlyphColor: black,
+                            secondaryGlyphColor: black,
+                            scoreInfoColor: black,
+                        },
+                    },
+                    notation: {
+                        elements: {
+                            scoreTitle: true,
+                            scoreSubTitle: true,
+                            scoreArtist: true,
+                            scoreAlbum: true,
+                            scoreWords: true,
+                            scoreMusic: true,
+                            scoreWordsAndMusic: true,
+                            scoreCopyright: true,
+                        },
+                    },
+                });
+            } catch (e) {
+                generalError(e);
+            } finally {
+                // Restore the note color setting and reapply the color scheme
+                this.setting.noteColor = previousNoteColorScheme;
+                setTimeout(() => {
+                    this.applyColors(this.api.score);
+                });
+            }
+        },
+
         edit() {
             this.$router.push(`/tab/${this.tabID}/edit/info`);
         },
@@ -1812,8 +1863,12 @@ export default defineComponent({
                     Speed: <input type="number" class="form-control" min="0" max="1000" step="1" v-model="speed" /> (%)
                 </div>
 
-                <div class="btn-edit" v-if="isLoggedIn">
-                    <button class="btn btn-secondary" @click="edit()">
+                <button class="btn btn-secondary btn-right" @click="print(tab.title, tab.artist)">
+                    Print
+                </button>
+
+                <div v-if="isLoggedIn">
+                    <button class="btn btn-secondary btn-right" @click="edit()">
                         Edit
                     </button>
                 </div>
@@ -1944,14 +1999,7 @@ $youtube-height: 200px;
     .scroll {
         padding: 8px 15px;
         display: flex;
-        align-items: center;
-        flex-grow: 4;
         column-gap: 10px;
-
-        .btn-edit {
-            flex-grow: 1;
-            text-align: right;
-        }
 
         .button,
         .btn {
@@ -1963,6 +2011,10 @@ $youtube-height: 200px;
             &.active {
                 //background-color: lighten($primary, 10%);
             }
+        }
+
+        .btn-right {
+            margin-left: auto;
         }
 
         .close {
@@ -2073,7 +2125,6 @@ $padding: 20px;
         }
 
         .name {
-            flex-grow: 1;
             font-weight: bold;
             padding: $padding;
             height: 100%;

@@ -35,6 +35,7 @@ https://its-mytabs.kuma.pet/tab/1?audio=youtube-VuKSlOT__9s&track=2
 - Dark/Light tab colors
 - Able to show the score view instead of tab view
 - Able to share tabs with others with a link
+- Able to print tabs
 
 ## Installation
 
