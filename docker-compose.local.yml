@@ -1,0 +1,19 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: its-mytabs:local
+        ports:
+            # Host Port:Container Port
+            - "47777:47777"
+        # Fedora&Podman specific
+        security_opt:
+            - label=disable
+        environment:
+            MYTABS_IMPORT_ROOTS: ${MYTABS_IMPORT_ROOTS:-/srv/tabs/import}
+        volumes:
+            # Host Path:Container Path
+            - ./data:/app/data
+            - ./import:${MYTABS_IMPORT_ROOTS:-/srv/tabs/import}:ro
+        restart: unless-stopped

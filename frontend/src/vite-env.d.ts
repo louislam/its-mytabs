@@ -13,6 +13,7 @@ declare global {
          * When true, navigation is restricted to demo tab, settings, and register pages.
          */
         isDemo: boolean;
+        defaultImportRoot?: string;
 
         /**
          * The alphaTab API instance exposed for debugging on the tab page.

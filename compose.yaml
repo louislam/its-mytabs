@@ -4,7 +4,10 @@ services:
         ports:
             # Host Port:Container Port
             - "47777:47777"
+        environment:
+            MYTABS_IMPORT_ROOTS: /srv/tabs/import
         volumes:
             # Host Path:Container Path
             - ./data:/app/data
+            - ./import:/srv/tabs/import:ro
         restart: unless-stopped

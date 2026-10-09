@@ -11,6 +11,8 @@ import {
     faArrowRightFromBracket,
     faArrowRightToBracket,
     faCheck,
+    faChevronDown,
+    faChevronRight,
     faFile,
     faFolder,
     faGear,
@@ -40,6 +42,8 @@ library.add([
     faStar,
     faStarRegular,
     faArrowLeft,
+    faChevronDown,
+    faChevronRight,
     faPen,
     faTrash,
 ]);
