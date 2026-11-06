@@ -159,16 +159,10 @@ Deno.test("getAllTabs", async () => {
     // Get all tabs
     const tabs = await getAllTabs();
 
-    // 5 (from previous tests) + 3 = 8 tabs total
-    assertEquals(tabs.length, 8);
-    assertEquals(tabs[0].id, id3); // Newest
-    assertEquals(tabs[1].id, id2);
-    assertEquals(tabs[2].id, id1); // Oldest
-
-    // Check titles
-    assertEquals(tabs[0].title, "Tab 3");
-    assertEquals(tabs[1].title, "Tab 2");
-    assertEquals(tabs[2].title, "Tab 1");
+    // Other test files may share the data dir, so only assert on our own tabs
+    const ours = tabs.filter((tab) => [id1, id2, id3].includes(tab.id));
+    assertEquals(ours.map((tab) => tab.id), [id3, id2, id1]); // Newest first
+    assertEquals(ours.map((tab) => tab.title), ["Tab 3", "Tab 2", "Tab 1"]);
 });
 
 Deno.test("replaceTab", async () => {
