@@ -4,6 +4,9 @@ import { notify } from "@kyvg/vue3-notification";
 import { baseURL, getSetting } from "../app.js";
 import { isLoggedIn } from "../auth-client.js";
 import TabItem from "../components/TabItem.vue";
+import { LibraryBrowseSchema } from "../zod.ts";
+
+const libraryPageSize = 500;
 
 export default defineComponent({
     components: {
@@ -17,6 +20,12 @@ export default defineComponent({
             isLoggedIn: false,
             searchQuery: "",
             setting: {},
+            library: null,
+            expandedAlbums: {},
+            expandedSongs: {},
+            searchRefreshTimer: null,
+            libraryRequestId: 0,
+            isLoadingMore: false,
             recentLimit: 20,
         };
     },
@@ -31,11 +40,7 @@ export default defineComponent({
         }
 
         try {
-            const res = await fetch(baseURL + "/api/tabs", { credentials: "include" });
-            const data = await res.json();
-            // The API can return { ok: false } without a tabs array (e.g. an
-            // expired session), so guard against assigning undefined.
-            this.tabList = Array.isArray(data.tabs) ? data.tabs : [];
+            await this.refreshLibrary();
             this.ready = true;
 
             await this.$nextTick();
@@ -50,15 +55,7 @@ export default defineComponent({
 
     computed: {
         filteredTabList() {
-            if (!this.searchQuery.trim()) return this.tabList;
-
-            const query = this.searchQuery.trim().toLowerCase();
-
-            return this.tabList.filter((tab) => {
-                const title = (tab.title || "").toLowerCase();
-                const artist = (tab.artist || "").toLowerCase();
-                return title.includes(query) || artist.includes(query);
-            });
+            return this.tabList;
         },
 
         favoritedTabs() {
@@ -102,12 +99,104 @@ export default defineComponent({
 
             return sortedArtists;
         },
+
+        filteredLibrary() {
+            return this.library;
+        },
+
+        useLibraryGrouping() {
+            return this.setting.groupByArtist && this.filteredLibrary && this.filteredLibrary.artists.length > 0;
+        },
+
+        loadedVersionCount() {
+            return this.tabList.length;
+        },
+
+        totalVersionCount() {
+            return this.library?.totalVersionCount ?? this.tabList.length;
+        },
+
+        hasMoreLibraryTabs() {
+            return !!this.library?.hasMore;
+        },
+    },
+
+    watch: {
+        searchQuery() {
+            if (!this.ready) {
+                return;
+            }
+            if (this.searchRefreshTimer) {
+                window.clearTimeout(this.searchRefreshTimer);
+            }
+            this.searchRefreshTimer = window.setTimeout(() => {
+                this.refreshLibrary().catch((error) => {
+                    notify({
+                        text: error.message,
+                        type: "error",
+                    });
+                });
+            }, 250);
+        },
+    },
+
+    beforeUnmount() {
+        if (this.searchRefreshTimer) {
+            window.clearTimeout(this.searchRefreshTimer);
+        }
     },
 
     methods: {
         handleFavToggled() {
             // Force re-render by creating a new array reference
             this.tabList = [...this.tabList];
+        },
+
+        isSongExpanded(song) {
+            return !!this.expandedSongs[song.id];
+        },
+
+        isAlbumExpanded(album) {
+            return this.expandedAlbums[album.id] !== false;
+        },
+
+        toggleAlbum(album) {
+            this.expandedAlbums = {
+                ...this.expandedAlbums,
+                [album.id]: !this.isAlbumExpanded(album),
+            };
+        },
+
+        toggleSong(song) {
+            this.expandedSongs = {
+                ...this.expandedSongs,
+                [song.id]: !this.expandedSongs[song.id],
+            };
+        },
+
+        primaryVersion(song) {
+            return song.preferredVersion || song.versions[0];
+        },
+
+        versionTitle(version) {
+            return version.versionLabel || `Version ${version.version}`;
+        },
+
+        versionMeta(version) {
+            const parts = [];
+            if (version.ext) {
+                parts.push(version.ext.toUpperCase());
+            }
+            if (version.public) {
+                parts.push("Public");
+            }
+            if (version.hasAudio) {
+                parts.push("Audio");
+            }
+            if (version.hasYoutube) {
+                parts.push("YouTube");
+            }
+            return parts.join(" / ");
         },
 
         async deleteTab(id, title, artist) {
@@ -121,6 +210,7 @@ export default defineComponent({
 
                 if (res.status === 200) {
                     this.tabList = this.tabList.filter((tab) => tab.id !== id);
+                    await this.refreshLibrary();
 
                     notify({
                         text: "Tab deleted successfully",
@@ -137,6 +227,130 @@ export default defineComponent({
                 });
             }
         },
+
+        async refreshLibrary(options = {}) {
+            const append = options.append === true;
+            const offset = append ? this.tabList.length : 0;
+            const params = new URLSearchParams({
+                mode: "album",
+                limit: String(libraryPageSize),
+                offset: String(offset),
+            });
+            if (this.searchQuery.trim()) {
+                params.set("search", this.searchQuery.trim());
+            }
+            const requestId = ++this.libraryRequestId;
+            const libraryRes = await fetch(baseURL + `/api/library?${params.toString()}`, { credentials: "include" });
+            const libraryData = await libraryRes.json();
+            if (requestId !== this.libraryRequestId) {
+                return;
+            }
+            const page = LibraryBrowseSchema.parse(libraryData.library);
+            this.library = append && this.library ? this.mergeLibraryPages(this.library, page) : page;
+            this.tabList = append ? [...this.tabList, ...this.flattenLibraryTabs(page)] : this.flattenLibraryTabs(page);
+        },
+
+        async loadMoreLibraryTabs() {
+            if (this.isLoadingMore || !this.hasMoreLibraryTabs) {
+                return;
+            }
+            this.isLoadingMore = true;
+            try {
+                await this.refreshLibrary({ append: true });
+            } catch (error) {
+                notify({
+                    text: error.message,
+                    type: "error",
+                });
+            } finally {
+                this.isLoadingMore = false;
+            }
+        },
+
+        mergeLibraryPages(current, page) {
+            const merged = {
+                ...current,
+                artistCount: current.artistCount + page.artistCount,
+                songCount: current.songCount + page.songCount,
+                versionCount: current.versionCount + page.versionCount,
+                totalVersionCount: page.totalVersionCount,
+                hasMore: page.hasMore,
+                limit: page.limit,
+                artists: current.artists.map((artist) => ({
+                    ...artist,
+                    albums: artist.albums.map((album) => ({ ...album, songs: album.songs.map((song) => ({ ...song, versions: [...song.versions] })) })),
+                    songs: artist.songs.map((song) => ({ ...song, versions: [...song.versions] })),
+                })),
+            };
+
+            for (const pageArtist of page.artists) {
+                const artist = merged.artists.find((candidate) => candidate.id === pageArtist.id);
+                if (!artist) {
+                    merged.artists.push(pageArtist);
+                    continue;
+                }
+                artist.songCount += pageArtist.songCount;
+                artist.versionCount += pageArtist.versionCount;
+                this.mergeAlbumLists(artist.albums, pageArtist.albums);
+                this.mergeSongLists(artist.songs, pageArtist.songs);
+            }
+            return merged;
+        },
+
+        mergeAlbumLists(currentAlbums, pageAlbums) {
+            for (const pageAlbum of pageAlbums) {
+                const album = currentAlbums.find((candidate) => candidate.id === pageAlbum.id);
+                if (!album) {
+                    currentAlbums.push(pageAlbum);
+                    continue;
+                }
+                album.songCount += pageAlbum.songCount;
+                album.versionCount += pageAlbum.versionCount;
+                this.mergeSongLists(album.songs, pageAlbum.songs);
+            }
+        },
+
+        mergeSongLists(currentSongs, pageSongs) {
+            for (const pageSong of pageSongs) {
+                const song = currentSongs.find((candidate) => candidate.id === pageSong.id);
+                if (!song) {
+                    currentSongs.push(pageSong);
+                    continue;
+                }
+                song.versions.push(...pageSong.versions);
+                song.versionCount = song.versions.length;
+                song.publicVersionCount += pageSong.publicVersionCount;
+                song.favVersionCount += pageSong.favVersionCount;
+                song.preferredVersion = song.versions.find((version) => version.preferred) || song.preferredVersion || pageSong.preferredVersion;
+            }
+        },
+
+        flattenLibraryTabs(library) {
+            const tabs = [];
+            const addSongVersions = (song) => {
+                for (const version of song.versions) {
+                    tabs.push({
+                        id: version.id,
+                        title: version.title,
+                        artist: version.artist,
+                        filename: version.filename,
+                        originalFilename: version.originalFilename,
+                        createdAt: version.createdAt,
+                        public: version.public,
+                        fav: version.fav,
+                        lastAccessAt: version.lastAccessAt,
+                    });
+                }
+            };
+
+            for (const artist of library.artists) {
+                for (const album of artist.albums) {
+                    album.songs.forEach(addSongVersions);
+                }
+                artist.songs.forEach(addSongVersions);
+            }
+            return tabs;
+        },
     },
 });
 </script>
@@ -144,8 +358,7 @@ export default defineComponent({
 <template>
     <div class="container-fluid home-container">
         <div class="row" v-if="ready">
-            <!-- Column 1: Tab List with search -->
-            <div class="col-md-12 col-lg-4 order-3 order-lg-0 home-col-tablist">
+            <div class="col-md-12 col-lg-8 order-2 order-lg-1 home-col-tablist">
                 <div class="search-section mb-3 pe-3 ps-3">
                     <div class="input-group">
                         <span class="input-group-text">
@@ -173,14 +386,86 @@ export default defineComponent({
                     </div>
                 </div>
 
-                <div class="mb-2 ms-3">
-                    Total Tabs: {{ tabList.length }}
-                    <span v-if="searchQuery" class="text-muted">
-                        ({{ filteredTabList.length }} shown)
-                    </span>
+                <div class="mb-4 ms-3">
+                    Tabs: {{ loadedVersionCount }} of {{ totalVersionCount }}
                 </div>
 
-                <template v-if="this.setting.groupByArtist && groupedTabs">
+                <template v-if="useLibraryGrouping">
+                    <div v-for="artist in filteredLibrary.artists" :key="artist.id" class="library-artist mb-4 ms-3 me-3">
+                        <h4>{{ artist.name }}</h4>
+
+                        <div v-for="album in artist.albums" :key="album.id" class="library-album mb-3">
+                            <h4 class="album-title">
+                                <button class="album-title-button" type="button" @click="toggleAlbum(album)" :aria-expanded="isAlbumExpanded(album)">
+                                    <font-awesome-icon :icon='isAlbumExpanded(album) ? "chevron-down" : "chevron-right"' />
+                                    <span>{{ album.title }}</span>
+                                </button>
+                            </h4>
+
+                            <div v-for="song in album.songs" v-show="isAlbumExpanded(album)" :key="song.id" class="library-song">
+                                <div class="song-row" :class="{ 'song-row-single': song.versionCount <= 1 }">
+                                    <button
+                                        v-if="song.versionCount > 1"
+                                        class="expand-btn"
+                                        type="button"
+                                        @click="toggleSong(song)"
+                                        :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'"
+                                    >
+                                        <font-awesome-icon :icon='isSongExpanded(song) ? "chevron-down" : "chevron-right"' />
+                                    </button>
+
+                                    <router-link class="song-main" :to="`/tab/${primaryVersion(song).id}`">
+                                        <span class="song-title">{{ song.title }}</span>
+                                        <span v-if="song.versionCount > 1" class="song-meta">{{ song.versionCount }} versions</span>
+                                    </router-link>
+                                </div>
+
+                                <div class="version-list" v-if="song.versionCount > 1 && isSongExpanded(song)">
+                                    <router-link v-for="version in song.versions" :key="version.id" class="version-row" :to="`/tab/${version.id}`">
+                                        <span class="version-name">
+                                            {{ versionTitle(version) }}
+                                            <font-awesome-icon v-if="version.preferred" icon="check" class="preferred-icon" />
+                                            <font-awesome-icon v-if="version.fav" icon="star" class="fav-icon" />
+                                        </span>
+                                        <span class="version-meta">{{ versionMeta(version) }}</span>
+                                    </router-link>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-for="song in artist.songs" :key="song.id" class="library-song">
+                            <div class="song-row" :class="{ 'song-row-single': song.versionCount <= 1 }">
+                                <button
+                                    v-if="song.versionCount > 1"
+                                    class="expand-btn"
+                                    type="button"
+                                    @click="toggleSong(song)"
+                                    :aria-label="isSongExpanded(song) ? 'Collapse versions' : 'Expand versions'"
+                                >
+                                    <font-awesome-icon :icon='isSongExpanded(song) ? "chevron-down" : "chevron-right"' />
+                                </button>
+
+                                <router-link class="song-main" :to="`/tab/${primaryVersion(song).id}`">
+                                    <span class="song-title">{{ song.title }}</span>
+                                    <span v-if="song.versionCount > 1" class="song-meta">{{ song.versionCount }} versions</span>
+                                </router-link>
+                            </div>
+
+                            <div class="version-list" v-if="song.versionCount > 1 && isSongExpanded(song)">
+                                <router-link v-for="version in song.versions" :key="version.id" class="version-row" :to="`/tab/${version.id}`">
+                                    <span class="version-name">
+                                        {{ versionTitle(version) }}
+                                        <font-awesome-icon v-if="version.preferred" icon="check" class="preferred-icon" />
+                                        <font-awesome-icon v-if="version.fav" icon="star" class="fav-icon" />
+                                    </span>
+                                    <span class="version-meta">{{ versionMeta(version) }}</span>
+                                </router-link>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <template v-else-if="this.setting.groupByArtist && groupedTabs">
                     <div v-for="group in groupedTabs" :key="group.displayName" class="mb-4 ms-3">
                         <h4>{{ group.displayName }}</h4>
 
@@ -206,6 +491,12 @@ export default defineComponent({
                     />
                 </template>
 
+                <div v-if="hasMoreLibraryTabs" class="load-more-section text-center my-4">
+                    <button class="btn btn-outline-secondary" type="button" :disabled="isLoadingMore" @click="loadMoreLibraryTabs">
+                        {{ isLoadingMore ? "Loading..." : "Load more" }}
+                    </button>
+                </div>
+
                 <div
                     v-if="filteredTabList.length === 0 && searchQuery"
                     class="empty-state text-center py-5 mb-4 fs-5"
@@ -218,44 +509,44 @@ export default defineComponent({
                 </div>
             </div>
 
-            <!-- Column 2: Recent Tabs -->
-            <div class="col-md-12 col-lg-4 order-1 order-lg-0 box box-left">
-                <div class="ms-3 mb-2">
-                    <h4>Recent Tabs</h4>
+            <div class="col-md-12 col-lg-4 order-1 order-lg-2 home-sidebar">
+                <div class="box box-top">
+                    <div class="ms-3 mb-2">
+                        <h4>Recent Tabs</h4>
+                    </div>
+
+                    <div v-if="recentTabs.length === 0" class="empty-msg">
+                        No Recent Tabs
+                    </div>
+
+                    <TabItem
+                        v-for="tab in recentTabs"
+                        :key="`recent-${tab.id}`"
+                        :tab="tab"
+                        :show-artist="true"
+                        @delete="deleteTab"
+                        @favToggled="handleFavToggled"
+                    />
                 </div>
 
-                <div v-if="recentTabs.length === 0" class="empty-msg">
-                    No Recent Tabs
+                <div class="box box-bottom">
+                    <div class="ms-3 mb-2">
+                        <h4>Favorite Tabs</h4>
+                    </div>
+
+                    <div v-if="favoritedTabs.length === 0" class="empty-msg">
+                        No Favorite Tabs
+                    </div>
+
+                    <TabItem
+                        v-for="tab in favoritedTabs"
+                        :key="`fav-${tab.id}`"
+                        :tab="tab"
+                        :show-artist="true"
+                        @delete="deleteTab"
+                        @favToggled="handleFavToggled"
+                    />
                 </div>
-
-                <TabItem
-                    v-for="tab in recentTabs"
-                    :key="`recent-${tab.id}`"
-                    :tab="tab"
-                    :show-artist="true"
-                    @delete="deleteTab"
-                    @favToggled="handleFavToggled"
-                />
-            </div>
-
-            <!-- Column 3: Fav Tabs -->
-            <div class="col-md-12 col-lg-4 order-2 order-lg-0 box box-right">
-                <div class="ms-3 mb-2">
-                    <h4>Favorite Tabs</h4>
-                </div>
-
-                <div v-if="favoritedTabs.length === 0" class="empty-msg">
-                    No Favorite Tabs
-                </div>
-
-                <TabItem
-                    v-for="tab in favoritedTabs"
-                    :key="`fav-${tab.id}`"
-                    :tab="tab"
-                    :show-artist="true"
-                    @delete="deleteTab"
-                    @favToggled="handleFavToggled"
-                />
             </div>
         </div>
     </div>
@@ -275,31 +566,138 @@ h4 {
     color: $color2-dark;
 }
 
+.library-album {
+    padding-left: 10px;
+}
+
+.album-title {
+    color: $color2-dark;
+    font-weight: 600;
+    margin: 10px 0;
+}
+
+.album-title-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.library-song {
+    border-radius: 6px;
+
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+    }
+}
+
+.song-row,
+.version-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.song-row {
+    min-height: 44px;
+}
+
+.song-row-single {
+    padding-left: 42px;
+}
+
+.expand-btn {
+    width: 32px;
+    height: 32px;
+    border: 0;
+    background: transparent;
+    color: $color2-dark;
+}
+
+.song-main,
+.version-row {
+    flex: 1;
+    min-width: 0;
+    text-decoration: none;
+}
+
+.song-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding-right: 12px;
+}
+
+.song-title,
+.version-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.song-title {
+    font-size: 18px;
+}
+
+.song-meta,
+.version-meta {
+    color: $color2-dark;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.version-list {
+    margin-left: 42px;
+    padding: 0 12px 8px 0;
+}
+
+.version-row {
+    justify-content: space-between;
+    min-height: 32px;
+    padding: 4px 0;
+    color: inherit;
+}
+
+.preferred-icon {
+    color: #198754;
+    margin-left: 6px;
+}
+
+.fav-icon {
+    color: #ffa500;
+    margin-left: 6px;
+}
+
 .box {
     background-color: rgba(0, 0, 0, 0.16);
     padding: 25px;
 
-    // Not Mobile
-    .desktop & {
-        position: sticky;
-        top: 20px;
-        align-self: flex-start;
-        height: calc(100vh - 160px);
-        overflow-y: auto;
-
-        &.box-left {
-            border-radius: 25px 0 0 25px;
-            border-right: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        &.box-right {
-            border-radius: 0 25px 25px 0;
-        }
+    &.box-top {
+        border-radius: 25px 25px 0 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     }
 
-    .mobile & {
-        margin-bottom: 25px;
+    &.box-bottom {
+        border-radius: 0 0 25px 25px;
     }
+}
+
+.desktop .home-sidebar {
+    position: sticky;
+    top: 20px;
+    align-self: flex-start;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+}
+
+.mobile .home-sidebar {
+    margin-bottom: 25px;
 }
 
 .empty-msg {
