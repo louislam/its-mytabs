@@ -9,6 +9,7 @@ import {
     generalError,
     getInstrumentName,
     getSetting,
+    isFirefox,
     releaseWakeLock,
     requestWakeLock,
 } from "../app.js";
@@ -80,6 +81,7 @@ export default defineComponent({
             savedPlaybackRange: null,
             playbackRangeRestoreTimer: undefined,
             selectionController: null,
+            keepAwakeContext: null,
 
             keyEvents: (e) => {
                 // Do not handle these tagName, because the only input is sync point, it is weird when play space to test the sync point
@@ -209,6 +211,9 @@ export default defineComponent({
             }
 
             if (this.playing) {
+                // Keep the endpoint open for keyboard play (no pointerdown)
+                this.keepAudioDeviceAwake();
+
                 this.api.settings.player.scrollMode = this.scrollMode;
                 this.api.updateSettings();
 
@@ -384,6 +389,9 @@ export default defineComponent({
 
             window.addEventListener("keydown", this.keyEvents);
 
+            // Warm up the audio device on first interaction
+            window.addEventListener("pointerdown", this.keepAudioDeviceAwake, { once: true });
+
             // Close open lists when clicking outside
             this._onDocumentClick = (e) => {
                 try {
@@ -425,6 +433,8 @@ export default defineComponent({
         console.log("Before unmount");
         this.destroyContainer();
         window.removeEventListener("keydown", this.keyEvents);
+        window.removeEventListener("pointerdown", this.keepAudioDeviceAwake);
+        this.closeKeepAwakeContext();
 
         if (this._onDocumentClick) {
             window.removeEventListener("click", this._onDocumentClick);
@@ -558,6 +568,48 @@ export default defineComponent({
                 return null;
             }
             return `${bar.index}:${modelBeat.index}:${modelBeat.absolutePlaybackStart}`;
+        },
+
+        /**
+         * Keep the audio endpoint awake with a silent WebAudio graph.
+         * Firefox drops the device while external audio is paused (~0.5-1s to wake).
+         */
+        keepAudioDeviceAwake() {
+            if (!isFirefox()) {
+                return;
+            }
+
+            try {
+                if (!this.keepAwakeContext) {
+                    // eslint-disable-next-line no-undef
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioContextClass) {
+                        return;
+                    }
+
+                    const context = new AudioContextClass();
+                    const oscillator = context.createOscillator();
+                    const gain = context.createGain();
+                    gain.gain.value = 0.00001;
+                    oscillator.connect(gain);
+                    gain.connect(context.destination);
+                    oscillator.start();
+                    this.keepAwakeContext = context;
+                }
+
+                this.keepAwakeContext.resume?.();
+            } catch (e) {
+                console.error("Failed to keep the audio device awake", e);
+            }
+        },
+
+        closeKeepAwakeContext() {
+            try {
+                this.keepAwakeContext?.close();
+            } catch {
+                // Already closed
+            }
+            this.keepAwakeContext = null;
         },
 
         /**

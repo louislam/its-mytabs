@@ -34,6 +34,11 @@ export function getInstrumentName(midiProgram: number) {
     return midiProgramCodeList[midiProgram] || "Unknown";
 }
 
+/** Firefox drops the audio output device while media is paused. */
+export function isFirefox(): boolean {
+    return typeof navigator !== "undefined" && navigator.userAgent.includes("Firefox");
+}
+
 /** MIDI program ranges for the preferred instrument auto-selection. */
 export const PREFERRED_INSTRUMENT_PROGRAM_RANGES: Record<"bass" | "guitar", [number, number]> = {
     bass: [32, 39],
