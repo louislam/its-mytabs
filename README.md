@@ -195,7 +195,8 @@ deno task dev
 
 ## Release (Maintainers)
 
-Use the [Release workflow](https://github.com/louislam/its-mytabs/actions/workflows/release.yml) with a semver version greater than the latest one, or run the same script locally when Actions is unavailable:
+Use the [Release workflow](https://github.com/louislam/its-mytabs/actions/workflows/release.yml) with a semver version greater than the latest one, or run the same script locally when Actions is
+unavailable:
 
 ```bash
 # Everything: Windows zip, Docker image, tag and GitHub release
