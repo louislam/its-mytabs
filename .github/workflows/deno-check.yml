@@ -24,6 +24,8 @@ jobs:
 
     e2e:
         needs: deno-check
+        # A stuck browser install once blocked a run for 14 hours
+        timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
@@ -44,9 +46,53 @@ jobs:
             - name: Install frontend dependencies
               run: deno task install-deps
 
+            # Keep the .debs so `--with-deps` can reuse them instead of hitting the apt mirrors
+            - name: Point apt at a cacheable archive dir
+              if: runner.os == 'Linux'
+              run: |
+                  mkdir -p "$HOME/.apt-archives/partial"
+                  chmod 777 "$HOME/.apt-archives/partial"
+                  sudo tee /etc/apt/apt.conf.d/99-playwright-cache >/dev/null <<EOF
+                  Dir::Cache::archives "$HOME/.apt-archives";
+                  APT::Keep-Downloaded-Packages "true";
+                  EOF
+
+            - name: Compute weekly cache key
+              id: week
+              run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+            - name: Cache apt packages
+              if: runner.os == 'Linux'
+              uses: actions/cache@v6
+              with:
+                  path: ~/.apt-archives
+                  key: apt-playwright-${{ runner.os }}-${{ steps.week.outputs.week }}
+                  restore-keys: |
+                      apt-playwright-${{ runner.os }}-
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v6
+              with:
+                  path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+                  key: playwright-${{ runner.os }}-${{ matrix.browser }}-${{ steps.week.outputs.week }}
+                  restore-keys: |
+                      playwright-${{ runner.os }}-${{ matrix.browser }}-
+
             - name: Install Playwright browser
               if: matrix.browser
               run: cd frontend && deno run -A npm:@playwright/test install --with-deps ${{ matrix.browser }}
+
+            # apt runs as root; the cache tar cannot read root-owned files
+            - name: Hand the apt archives back to the cache
+              if: always() && runner.os == 'Linux'
+              run: sudo chown -R "$USER" "$HOME/.apt-archives"
+
+            - name: Run e2e
+              if: matrix.browser
+              env:
+                  # YouTube needs real network + the embed player; skip on CI
+                  MYTABS_SKIP_YOUTUBE: 1
+              run: cd frontend && deno run -A npm:@playwright/test test --project=${{ matrix.browser }}
 
             - name: Run e2e
               if: matrix.browser
