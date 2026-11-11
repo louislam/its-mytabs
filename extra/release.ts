@@ -140,40 +140,8 @@ export async function dockerStep(version: string): Promise<void> {
     await setVersion(version);
     run("deno", ["task", "install-deps"]);
     run("deno", ["task", "build-frontend"]);
-
-    const repoNames = (Deno.env.get("RELEASE_REPO_NAMES") ?? "louislam/its-mytabs,ghcr.io/louislam/its-mytabs")
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean);
-    const dockerHubNames = repoNames.filter((name) => !name.startsWith("ghcr.io/"));
-    const ghcrNames = repoNames.filter((name) => name.startsWith("ghcr.io/"));
-
-    // Docker Hub is the published image, its failure must fail the release
-    if (dockerHubNames.length > 0) {
-        pushImages(dockerHubNames);
-    }
-
-    // GHCR needs the package linked to the repo, or a PAT in GHCR_TOKEN
-    for (const name of ghcrNames) {
-        try {
-            pushImages([name]);
-        } catch (error) {
-            console.warn(`::warning::Skipped ${name}: ${error instanceof Error ? error.message : error}`);
-        }
-    }
-}
-
-/**
- * build-docker.ts tags 1, latest and the version from deno.jsonc
- */
-function pushImages(repoNames: string[]): void {
-    const result = childProcess.spawnSync("deno", ["run", "--allow-all", "./extra/build-docker.ts"], {
-        stdio: "inherit",
-        env: { ...process.env, RELEASE_REPO_NAMES: repoNames.join(",") },
-    });
-    if (result.status !== 0) {
-        throw new Error(`Docker build failed for ${repoNames.join(",")}`);
-    }
+    // build-docker.ts tags 1, latest and the version from deno.jsonc
+    run("deno", ["run", "--allow-all", "./extra/build-docker.ts"]);
 }
 
 export async function publishStep(version: string): Promise<void> {
