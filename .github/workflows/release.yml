@@ -5,6 +5,7 @@ name: Release
 #
 # Usage: Actions -> Release -> Run workflow, enter the version (e.g. 1.8.0).
 # The version must be plain semver and greater than the latest version.
+# `steps` re-runs one part only, e.g. `docker` to re-push an image.
 #
 # Every step is a thin wrapper around extra/release.ts, so the same release
 # can be run locally when Actions is unavailable: deno task release 1.8.0
@@ -16,6 +17,17 @@ on:
                 description: "Version to release (MAJOR.MINOR.PATCH, e.g. 1.8.0). Must be greater than the latest version"
                 required: true
                 type: string
+            steps:
+                description: "Which steps to run"
+                required: false
+                type: choice
+                options:
+                    - all
+                    - check
+                    - windows
+                    - docker
+                    - publish
+                default: all
 
 concurrency:
     group: release
@@ -29,8 +41,8 @@ jobs:
     prepare:
         runs-on: ubuntu-latest
         outputs:
-            version: ${{ steps.validate.outputs.version }}
-            dockerhub: ${{ steps.validate.outputs.dockerhub }}
+            version: ${{ steps.version.outputs.version }}
+            dockerhub: ${{ steps.version.outputs.dockerhub }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v6
@@ -44,13 +56,17 @@ jobs:
                   deno-version: v2.x
 
             - name: Validate version
-              id: validate
+              if: inputs.steps == 'all' || inputs.steps == 'check'
               env:
                   VERSION: ${{ inputs.version }}
+              run: deno run --allow-all extra/release.ts "$VERSION" --check
+
+            - name: Detect Docker Hub credentials
+              id: version
+              env:
                   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
               run: |
-                  deno run --allow-all extra/release.ts "$VERSION" --check
-                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+                  echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
                   if [ -n "$DOCKERHUB_TOKEN" ]; then
                       echo "dockerhub=true" >> "$GITHUB_OUTPUT"
                   else
@@ -59,6 +75,7 @@ jobs:
 
     build-windows:
         needs: prepare
+        if: inputs.steps == 'all' || inputs.steps == 'windows'
         runs-on: windows-latest
         steps:
             - name: Checkout repository
@@ -81,6 +98,7 @@ jobs:
 
     release-docker:
         needs: prepare
+        if: inputs.steps == 'all' || inputs.steps == 'docker'
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repository
@@ -120,6 +138,7 @@ jobs:
 
     publish:
         needs: [prepare, build-windows, release-docker]
+        if: ${{ !cancelled() && !failure() && (inputs.steps == 'all' || inputs.steps == 'publish') }}
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repository
