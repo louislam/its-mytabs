@@ -59,8 +59,21 @@ jobs:
                   Acquire::http::Timeout "15";
                   Acquire::https::Timeout "15";
                   EOF
-                  # The Azure node is the slow one; leave archive/security in the list
-                  sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt || true
+
+            # The runner's default mirrors go stale; use the first one that answers
+            - name: Point apt at a fast mirror
+              if: runner.os == 'Linux'
+              timeout-minutes: 3
+              run: |
+                  codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-noble}")
+                  for mirror in https://mirrors.edge.kernel.org/ubuntu https://mirror.math.princeton.edu/pub/ubuntu https://archive.ubuntu.com/ubuntu; do
+                      if curl -fsS -o /dev/null --max-time 5 "$mirror/dists/$codename/InRelease"; then
+                          echo "Using apt mirror: $mirror"
+                          sudo sed -i -E "s|^URIs:.*|URIs: $mirror|" /etc/apt/sources.list.d/ubuntu.sources
+                          sudo sed -i -E "s|https?://[a-z.]*archive\.ubuntu\.com/ubuntu|$mirror|g" /etc/apt/sources.list 2>/dev/null || true
+                          break
+                      fi
+                  done
 
             - name: Compute weekly cache key
               id: week
