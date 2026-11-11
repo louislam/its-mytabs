@@ -70,9 +70,7 @@ jobs:
                   deno-version: v2.x
 
             - name: Build Windows zip
-              env:
-                  VERSION: ${{ needs.prepare.outputs.version }}
-              run: deno run --allow-all extra/release.ts "$VERSION" --windows
+              run: deno run --allow-all extra/release.ts "${{ needs.prepare.outputs.version }}" --windows
 
             - name: Upload artifact
               uses: actions/upload-artifact@v4
@@ -115,10 +113,9 @@ jobs:
 
             - name: Build and push Docker image
               env:
-                  VERSION: ${{ needs.prepare.outputs.version }}
                   # Docker Hub first, then GHCR
                   RELEASE_REPO_NAMES: ${{ needs.prepare.outputs.dockerhub == 'true' && format('{0}/its-mytabs,ghcr.io/{1}', github.repository_owner, github.repository) || format('ghcr.io/{0}', github.repository) }}
-              run: deno run --allow-all extra/release.ts "$VERSION" --docker
+              run: deno run --allow-all extra/release.ts "${{ needs.prepare.outputs.version }}" --docker
 
     publish:
         needs: [prepare, build-windows, release-docker]
@@ -139,9 +136,8 @@ jobs:
 
             - name: Bump, tag and create the release
               env:
-                  VERSION: ${{ needs.prepare.outputs.version }}
                   GH_TOKEN: ${{ github.token }}
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  deno run --allow-all extra/release.ts "$VERSION" --publish
+                  deno run --allow-all extra/release.ts "${{ needs.prepare.outputs.version }}" --publish

@@ -125,6 +125,7 @@ export async function checkStep(version: string): Promise<void> {
 
 export async function windowsStep(version: string): Promise<string> {
     await setVersion(version);
+    run("deno", ["task", "install-deps"]);
     run("deno", ["task", "build-binary"]);
 
     const zip = new JSZip();
@@ -137,6 +138,7 @@ export async function windowsStep(version: string): Promise<string> {
 
 export async function dockerStep(version: string): Promise<void> {
     await setVersion(version);
+    run("deno", ["task", "install-deps"]);
     run("deno", ["task", "build-frontend"]);
     // build-docker.ts tags 1, latest and the version from deno.jsonc
     run("deno", ["run", "--allow-all", "./extra/build-docker.ts"]);
