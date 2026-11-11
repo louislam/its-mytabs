@@ -47,7 +47,7 @@ jobs:
               run: deno task install-deps
 
             # Keep the .debs so `--with-deps` can reuse them instead of hitting the apt mirrors
-            - name: Point apt at a cacheable archive dir
+            - name: Bound and cache apt
               if: runner.os == 'Linux'
               run: |
                   mkdir -p "$HOME/.apt-archives/partial"
@@ -55,7 +55,12 @@ jobs:
                   sudo tee /etc/apt/apt.conf.d/99-playwright-cache >/dev/null <<EOF
                   Dir::Cache::archives "$HOME/.apt-archives";
                   APT::Keep-Downloaded-Packages "true";
+                  Acquire::Retries "3";
+                  Acquire::http::Timeout "15";
+                  Acquire::https::Timeout "15";
                   EOF
+                  # The Azure node is the slow one; leave archive/security in the list
+                  sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt || true
 
             - name: Compute weekly cache key
               id: week
@@ -78,21 +83,23 @@ jobs:
                   restore-keys: |
                       playwright-${{ runner.os }}-${{ matrix.browser }}-
 
+            # Browsers come from Playwright's CDN, not apt, so they must not wait on a mirror
             - name: Install Playwright browser
               if: matrix.browser
-              run: cd frontend && deno run -A npm:@playwright/test install --with-deps ${{ matrix.browser }}
+              timeout-minutes: 10
+              run: cd frontend && deno run -A npm:@playwright/test install ${{ matrix.browser }}
+
+            # Mostly fonts on the runner image; never let the apt mirror block the tests
+            - name: Install Playwright system deps
+              if: matrix.browser
+              timeout-minutes: 8
+              continue-on-error: true
+              run: cd frontend && deno run -A npm:@playwright/test install-deps ${{ matrix.browser }}
 
             # apt runs as root; the cache tar cannot read root-owned files
             - name: Hand the apt archives back to the cache
               if: always() && runner.os == 'Linux'
               run: sudo chown -R "$USER" "$HOME/.apt-archives"
-
-            - name: Run e2e
-              if: matrix.browser
-              env:
-                  # YouTube needs real network + the embed player; skip on CI
-                  MYTABS_SKIP_YOUTUBE: 1
-              run: cd frontend && deno run -A npm:@playwright/test test --project=${{ matrix.browser }}
 
             - name: Run e2e
               if: matrix.browser
