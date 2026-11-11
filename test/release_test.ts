@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@^1.0.17";
-import { compareVersion, highestVersion, isValidVersion, readVersion, setVersion, validateVersion } from "../extra/release-version.ts";
+import { compareVersion, highestVersion, isValidVersion, readVersion, setVersion, validateVersion } from "../extra/release.ts";
 
 Deno.test("isValidVersion accepts plain semver only", () => {
     assertEquals(isValidVersion("1.8.0"), true);

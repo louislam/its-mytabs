@@ -192,3 +192,20 @@ cd ..
 # Start development server (Hot Reload enabled)
 deno task dev
 ```
+
+## Release (Maintainers)
+
+Use the [Release workflow](https://github.com/louislam/its-mytabs/actions/workflows/release.yml) with a semver version greater than the latest one, or run the same script locally when Actions is unavailable:
+
+```bash
+# Everything: Windows zip, Docker image, tag and GitHub release
+deno task release 1.8.0
+
+# Or one step at a time
+deno task release 1.8.0 --check
+deno task release 1.8.0 --windows
+deno task release 1.8.0 --docker
+deno task release 1.8.0 --publish
+```
+
+Local runs need `docker login` for Docker Hub and ghcr.io, plus an authenticated `gh` CLI.

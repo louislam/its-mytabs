@@ -4,7 +4,10 @@ name: Release
 # (Docker Hub + GHCR), then bump deno.jsonc, tag and create the GitHub release.
 #
 # Usage: Actions -> Release -> Run workflow, enter the version (e.g. 1.8.0).
-# The version must be plain semver and greater than the latest version/tag.
+# The version must be plain semver and greater than the latest version.
+#
+# Every step is a thin wrapper around extra/release.ts, so the same release
+# can be run locally when Actions is unavailable: deno task release 1.8.0
 
 on:
     workflow_dispatch:
@@ -46,7 +49,7 @@ jobs:
                   VERSION: ${{ inputs.version }}
                   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
               run: |
-                  deno run --allow-read --allow-run --allow-env extra/release-version.ts validate "$VERSION"
+                  deno run --allow-all extra/release.ts "$VERSION" --check
                   echo "version=$VERSION" >> "$GITHUB_OUTPUT"
                   if [ -n "$DOCKERHUB_TOKEN" ]; then
                       echo "dockerhub=true" >> "$GITHUB_OUTPUT"
@@ -66,18 +69,10 @@ jobs:
               with:
                   deno-version: v2.x
 
-            - name: Set version
-              run: deno run --allow-read --allow-write extra/release-version.ts set ${{ needs.prepare.outputs.version }}
-
-            - name: Install frontend dependencies
-              run: deno task install-deps
-
-            - name: Build binary
-              run: deno task build-binary
-
-            - name: Package
-              shell: pwsh
-              run: Compress-Archive -Path its-mytabs.exe -DestinationPath "its-mytabs-v${{ needs.prepare.outputs.version }}-windows.zip"
+            - name: Build Windows zip
+              env:
+                  VERSION: ${{ needs.prepare.outputs.version }}
+              run: deno run --allow-all extra/release.ts "$VERSION" --windows
 
             - name: Upload artifact
               uses: actions/upload-artifact@v4
@@ -97,9 +92,6 @@ jobs:
               uses: denoland/setup-deno@v2
               with:
                   deno-version: v2.x
-
-            - name: Set version
-              run: deno run --allow-read --allow-write extra/release-version.ts set ${{ needs.prepare.outputs.version }}
 
             - name: Set up QEMU
               uses: docker/setup-qemu-action@v3
@@ -121,14 +113,12 @@ jobs:
                   username: ${{ secrets.DOCKERHUB_USERNAME }}
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-            - name: Install frontend dependencies
-              run: deno task install-deps
-
-            - name: Build and push image
+            - name: Build and push Docker image
               env:
-                  # Docker Hub first, then GHCR (build-docker.ts tags 1, latest and the version)
+                  VERSION: ${{ needs.prepare.outputs.version }}
+                  # Docker Hub first, then GHCR
                   RELEASE_REPO_NAMES: ${{ needs.prepare.outputs.dockerhub == 'true' && format('{0}/its-mytabs,ghcr.io/{1}', github.repository_owner, github.repository) || format('ghcr.io/{0}', github.repository) }}
-              run: deno task build-frontend && deno run --allow-all extra/build-docker.ts
+              run: deno run --allow-all extra/release.ts "$VERSION" --docker
 
     publish:
         needs: [prepare, build-windows, release-docker]
@@ -147,23 +137,11 @@ jobs:
               with:
                   name: windows
 
-            - name: Bump version
-              run: deno run --allow-read --allow-write extra/release-version.ts set ${{ needs.prepare.outputs.version }}
-
-            - name: Commit and tag
+            - name: Bump, tag and create the release
               env:
                   VERSION: ${{ needs.prepare.outputs.version }}
-                  BRANCH: ${{ github.event.repository.default_branch }}
+                  GH_TOKEN: ${{ github.token }}
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  git commit -am "Update to $VERSION"
-                  git tag "$VERSION"
-                  git push origin "HEAD:$BRANCH"
-                  git push origin "refs/tags/$VERSION"
-
-            - name: Create GitHub release
-              env:
-                  GH_TOKEN: ${{ github.token }}
-                  VERSION: ${{ needs.prepare.outputs.version }}
-              run: gh release create "$VERSION" --title "$VERSION" --verify-tag --generate-notes "its-mytabs-v$VERSION-windows.zip"
+                  deno run --allow-all extra/release.ts "$VERSION" --publish
