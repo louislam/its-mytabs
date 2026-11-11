@@ -48,7 +48,10 @@ export function buildImages(repoNames: string[], tags: string[], target: string,
     ];
 
     if (!dryRun) {
-        childProcess.spawnSync("docker", args, { stdio: "inherit" });
+        const result = childProcess.spawnSync("docker", args, { stdio: "inherit" });
+        if (result.status !== 0) {
+            throw new Error(`Docker build failed (exit code: ${result.status})`);
+        }
     } else {
         console.log(`[DRY RUN] docker ${args.join(" ")}`);
     }

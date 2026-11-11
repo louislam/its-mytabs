@@ -24,6 +24,8 @@ jobs:
 
     e2e:
         needs: deno-check
+        # A stuck browser install once blocked a run for 14 hours
+        timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
@@ -44,9 +46,73 @@ jobs:
             - name: Install frontend dependencies
               run: deno task install-deps
 
+            # Keep the .debs so `--with-deps` can reuse them instead of hitting the apt mirrors
+            - name: Bound and cache apt
+              if: runner.os == 'Linux'
+              run: |
+                  mkdir -p "$HOME/.apt-archives/partial"
+                  chmod 777 "$HOME/.apt-archives/partial"
+                  sudo tee /etc/apt/apt.conf.d/99-playwright-cache >/dev/null <<EOF
+                  Dir::Cache::archives "$HOME/.apt-archives";
+                  APT::Keep-Downloaded-Packages "true";
+                  Acquire::Retries "3";
+                  Acquire::http::Timeout "15";
+                  Acquire::https::Timeout "15";
+                  EOF
+
+            # The runner's default mirrors go stale; use the first one that answers
+            - name: Point apt at a fast mirror
+              if: runner.os == 'Linux'
+              timeout-minutes: 3
+              run: |
+                  codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-noble}")
+                  for mirror in https://mirrors.edge.kernel.org/ubuntu https://mirror.math.princeton.edu/pub/ubuntu https://archive.ubuntu.com/ubuntu; do
+                      if curl -fsS -o /dev/null --max-time 5 "$mirror/dists/$codename/InRelease"; then
+                          echo "Using apt mirror: $mirror"
+                          sudo sed -i -E "s|^URIs:.*|URIs: $mirror|" /etc/apt/sources.list.d/ubuntu.sources
+                          sudo sed -i -E "s|https?://[a-z.]*archive\.ubuntu\.com/ubuntu|$mirror|g" /etc/apt/sources.list 2>/dev/null || true
+                          break
+                      fi
+                  done
+
+            - name: Compute weekly cache key
+              id: week
+              run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+            - name: Cache apt packages
+              if: runner.os == 'Linux'
+              uses: actions/cache@v6
+              with:
+                  path: ~/.apt-archives
+                  key: apt-playwright-${{ runner.os }}-${{ steps.week.outputs.week }}
+                  restore-keys: |
+                      apt-playwright-${{ runner.os }}-
+
+            - name: Cache Playwright browsers
+              uses: actions/cache@v6
+              with:
+                  path: ${{ runner.os == 'macOS' && '~/Library/Caches/ms-playwright' || '~/.cache/ms-playwright' }}
+                  key: playwright-${{ runner.os }}-${{ matrix.browser }}-${{ steps.week.outputs.week }}
+                  restore-keys: |
+                      playwright-${{ runner.os }}-${{ matrix.browser }}-
+
+            # Browsers come from Playwright's CDN, not apt, so they must not wait on a mirror
             - name: Install Playwright browser
               if: matrix.browser
-              run: cd frontend && deno run -A npm:@playwright/test install --with-deps ${{ matrix.browser }}
+              timeout-minutes: 10
+              run: cd frontend && deno run -A npm:@playwright/test install ${{ matrix.browser }}
+
+            # Mostly fonts on the runner image; never let the apt mirror block the tests
+            - name: Install Playwright system deps
+              if: matrix.browser
+              timeout-minutes: 8
+              continue-on-error: true
+              run: cd frontend && deno run -A npm:@playwright/test install-deps ${{ matrix.browser }}
+
+            # apt runs as root; the cache tar cannot read root-owned files
+            - name: Hand the apt archives back to the cache
+              if: always() && runner.os == 'Linux'
+              run: sudo chown -R "$USER" "$HOME/.apt-archives"
 
             - name: Run e2e
               if: matrix.browser
